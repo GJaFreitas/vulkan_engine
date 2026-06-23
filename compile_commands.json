@@ -1,0 +1,48 @@
+[
+  {
+    "file": "src/main.c",
+    "arguments": [
+      "/bin/clang",
+      "-Iinclude",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/main.c",
+      "-o",
+      "obj/c/main.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine",
+    "output": "obj/c/main.o"
+  },
+  {
+    "file": "src/vulkan.c",
+    "arguments": [
+      "/bin/clang",
+      "-Iinclude",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/vulkan.c",
+      "-o",
+      "obj/c/vulkan.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine",
+    "output": "obj/c/vulkan.o"
+  },
+  {
+    "file": "cpp_layer/vma.cpp",
+    "arguments": [
+      "/bin/g++",
+      "-Iinclude",
+      "-g",
+      "-c",
+      "cpp_layer/vma.cpp",
+      "-o",
+      "obj/cpp/vma.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine",
+    "output": "obj/cpp/vma.o"
+  }
+]
