@@ -703,7 +703,7 @@ static void	initSdl(GraphicsContext *ctx)
 	}
 }
 
-static void	render(GraphicsContext *ctx)
+void	render(GraphicsContext *ctx)
 {
 	if (ctx->swapchain_require_recreate)
 	{
@@ -925,7 +925,7 @@ static void	render(GraphicsContext *ctx)
 	vkQueuePresentKHR(ctx->queue, &present_info);
 }
 
-void	start_graphics(GraphicsContext *ctx)
+void	startGraphics(GraphicsContext *ctx)
 {
 	const i32	width = 800;
 	const i32	height = 600;
@@ -948,25 +948,10 @@ void	start_graphics(GraphicsContext *ctx)
 	initSdl(ctx);
 	initVulkan(ctx);
 
-	bool	running = true;
-	while (running)
-	{
-		SDL_Event	event = {0};
-		while (SDL_PollEvent(&event))
-		{
-			if (event.type == SDL_EVENT_QUIT) {
-				running = false;
-				break ;
-			}
-			else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
-				ctx->window_width = event.window.data1;
-				ctx->window_height = event.window.data2;
-				break ;
-			}
-		}
-		render(ctx);
-	}
+}
 
+void	endGraphics(GraphicsContext *ctx)
+{
 	destroyVulkan(ctx);
 	SDL_DestroyWindow(ctx->window);
 	SDL_Quit();

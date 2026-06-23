@@ -78,4 +78,6 @@ typedef struct GraphicsContext
 }	GraphicsContext;
 
 
-void	start_graphics(GraphicsContext *ctx);
+void	startGraphics(GraphicsContext *ctx);
+void	endGraphics(GraphicsContext *ctx);
+void	render(GraphicsContext *ctx);
