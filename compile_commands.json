@@ -1,5 +1,21 @@
 [
   {
+    "file": "src/logs.c",
+    "arguments": [
+      "/bin/clang",
+      "-Iinclude",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/logs.c",
+      "-o",
+      "obj/c/logs.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine",
+    "output": "obj/c/logs.o"
+  },
+  {
     "file": "src/main.c",
     "arguments": [
       "/bin/clang",
@@ -46,6 +62,22 @@
     ],
     "directory": "/home/bag/Documents/projects/game_engine",
     "output": "obj/c/base_layer.o"
+  },
+  {
+    "file": "src/variables.c",
+    "arguments": [
+      "/bin/clang",
+      "-Iinclude",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/variables.c",
+      "-o",
+      "obj/c/variables.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine",
+    "output": "obj/c/variables.o"
   },
   {
     "file": "cpp_layer/vma.cpp",

@@ -35,6 +35,8 @@ int	loop()
 
 int	main(void)
 {
+	start_logs();
 	init_vars();
+	print_logs();
 	return (0);
 }

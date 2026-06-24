@@ -65,7 +65,7 @@ Allocator	newArenaAllocator(u64 size, Allocator *parent, u64 alignment);
 typedef struct String
 {
 	u8	*data;
-	u64	size;
+	u64	count;
 }	String;
 
 typedef String StringView;
@@ -77,11 +77,14 @@ String	getNextLine(String str, u64 *offset, Allocator *allocator);
 StringView	getNextLine_noMem(String str, u64 *offset);
 void	printString(const char *fmt, StringView str);
 void	stringViewSkipChar(StringView *s, const char c);
+void	stringViewJumpToChar(StringView *s, const char c);
 char	*cstrdup(const char *str, u64 *size, Allocator *allocator);
 
 
 //  ──────────────────────────────── LOGS ─────────────────────────────
 
+void	start_logs(void);
+void	print_logs(void);
 void	engine_log(const char *file, const char *fmt, ...);
 
 //  ──────────────────────────────── LOGS ─────────────────────────────

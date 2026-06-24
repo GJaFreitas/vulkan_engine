@@ -94,7 +94,7 @@ String	readFile(const char *filename)
 	String	file;
 
 	file.data = mmap(NULL, stats.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-	file.size = stats.st_size;
+	file.count = stats.st_size;
 
 	close(fd);
 
@@ -115,14 +115,14 @@ String	getNextLine(String str, u64 *offset, Allocator *allocator)
 	u8	*start = (u8 *)str.data + (*offset);
 
 	u64	i = 0;
-	for (; line.data[i] != '\n' && i < (*offset) + str.size; i++) { }
+	for (; line.data[i] != '\n' && i < (*offset) + str.count; i++) { }
 
-	line.size = i + 1;
+	line.count = i + 1;
 	line.data = allocator->fp_allocation(allocator, i, 64);
 
-	memcpy(line.data, start, line.size);
+	memcpy(line.data, start, line.count);
 
-	*offset += line.size;
+	*offset += line.count;
 
 	return line;
 }
@@ -132,7 +132,7 @@ void	printString(const char *fmt, StringView str)
 	u32	i = 0;
 	while (fmt[i] != '%') { i++; }
 	write(STDIN_FILENO, fmt, i);
-	write(STDIN_FILENO, str.data, str.size);
+	write(STDIN_FILENO, str.data, str.count);
 
 	// Pass the '%'
 	i++;
@@ -146,20 +146,20 @@ StringView	getNextLine_noMem(String str, u64 *offset)
 {
 	StringView	line;
 
-	if (*offset >= str.size)
+	if (*offset >= str.count)
 		return (StringView){NULL, 0};
 
 	line.data = (u8 *)str.data + (*offset);
 
 	u64	i = *offset;
-	for (; i < str.size && str.data[i] != '\n'; i++) { }
+	for (; i < str.count && str.data[i] != '\n'; i++) { }
 
-	line.size = i - (*offset);
+	line.count = i - (*offset);
 
-	if (i < str.size && str.data[i] == '\n')
-		line.size++;
+	if (i < str.count && str.data[i] == '\n')
+		line.count++;
 
-	*offset = i + (i < str.size);
+	*offset = i + (i < str.count);
 
 	return line;
 }
@@ -169,14 +169,30 @@ void	stringViewSkipChar(StringView *s, const char c)
 	u64	i;
 
 	i = 0;
-	while (i < s->size)
+	while (i < s->count)
 	{
 		if (s->data[i] != c)
 			break ;
 		i++;
 	}
 
-	s->size -= i;
+	s->count -= i;
+	s->data += i;
+}
+
+void	stringViewJumpToChar(StringView *s, const char c)
+{
+	u64	i;
+
+	i = 0;
+	while (i < s->count)
+	{
+		if (s->data[i] == c)
+			break ;
+		i++;
+	}
+
+	s->count -= i;
 	s->data += i;
 }
 
