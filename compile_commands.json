@@ -32,6 +32,22 @@
     "output": "obj/c/vulkan.o"
   },
   {
+    "file": "src/base_layer.c",
+    "arguments": [
+      "/bin/clang",
+      "-Iinclude",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/base_layer.c",
+      "-o",
+      "obj/c/base_layer.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine",
+    "output": "obj/c/base_layer.o"
+  },
+  {
     "file": "cpp_layer/vma.cpp",
     "arguments": [
       "/bin/g++",
