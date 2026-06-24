@@ -51,7 +51,7 @@ static void	modify_field(ConfigField field, String field_value, void *section)
 	}
 }
 
-void	assignField(String settings_type, String field_name, String field_value)
+static bool	assignField(String settings_type, String field_name, String field_value)
 {
 	// The -1 is because the String type doesnt account for the \0 while sizeof() does
 	const String	audio = {(u8 *)"Audio", sizeof("audio") - 1};
@@ -63,21 +63,25 @@ void	assignField(String settings_type, String field_name, String field_value)
 		for (u16 i = 0; i < sizeofarray(audio_fields); i++) {
 			if (stringIsEqual(field_name, audio_fields[i].name)) {
 				modify_field(audio_fields[i], field_value, &g_settings.audio);
+				return true;
 			}
 		}
 	} else if (stringIsEqual(settings_type, dev)) {
 		for (u16 i = 0; i < sizeofarray(dev_fields); i++) {
 			if (stringIsEqual(field_name, dev_fields[i].name)) {
 				modify_field(dev_fields[i], field_value, &g_settings.dev);
+				return true;
 			}
 		}
 	} else if (stringIsEqual(settings_type, display)) {
 		for (u16 i = 0; i < sizeofarray(display_fields); i++) {
 			if (stringIsEqual(field_name, display_fields[i].name)) {
 				modify_field(display_fields[i], field_value, &g_settings.display);
+				return true;
 			}
 		}
 	}
+	return false;
 }
 
 void	init_vars()
@@ -138,7 +142,8 @@ void	init_vars()
 				printString("Name: '%' ", name);
 				printString("Value: '%'\n", rhs);
 
-				assignField(subdir, name, rhs);
+				if (!assignField(subdir, name, rhs))
+				engine_log("variables.c", "Setting name doesnt match any known settings line number: %u\n", line_nr);
 			}
 		}
 
