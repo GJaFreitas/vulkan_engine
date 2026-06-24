@@ -639,7 +639,6 @@ static void	destroySwapchain(GraphicsContext *ctx)
 	}
 	free(ctx->render_complete_sequence_semaphores);
 	free(ctx->swapchain_image_views);
-
 	vkDestroySwapchainKHR(ctx->device, ctx->swapchain, NULL);
 
 	vkDestroyImageView(ctx->device, ctx->swapchain_depth_image_view, NULL);

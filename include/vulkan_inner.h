@@ -1,5 +1,4 @@
 #pragma once
-#include "typedefs.h"
 
 #define VK_NO_PROTOTYPES
 #include <volk.h>

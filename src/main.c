@@ -1,7 +1,11 @@
 #include "graphics_layer.h"
+#include "base_layer.h"
+#include "vars.h"
 
-int	main(void)
+
+int	loop()
 {
+
 	GraphicsContext	ctx = {0};
 
 	startGraphics(&ctx);
@@ -26,5 +30,11 @@ int	main(void)
 	}
 
 	endGraphics(&ctx);
+	return (0);
+}
+
+int	main(void)
+{
+	init_vars();
 	return (0);
 }

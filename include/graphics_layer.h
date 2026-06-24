@@ -5,7 +5,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -19,6 +18,13 @@
 #define MAX_FRAMES_IN_FLIGHT	2
 
 #include "typedefs.h"
+
+typedef struct
+{
+	vec3	pos;
+	vec3	normal;
+	vec2	uv;
+}	Vertex;
 
 typedef struct FrameResources
 {

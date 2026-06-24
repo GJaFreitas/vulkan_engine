@@ -21,26 +21,24 @@ CPPFLAGS := -I$(INC_DIR)
 LDFLAGS :=
 LDLIBS := -lvolk -lvulkan -lSDL3 -lstdc++ -lshaderc_shared
 
-.PHONY: all clean run
-
 all: $(OBJ_DIR) $(TARGET)
 
 $(TARGET): $(OBJS) $(CPP_OBJS)
-	$(CC) $^ -o $@ $(LDFLAGS) $(LDLIBS)
+	@$(CC) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
 $(OBJ_DIR):
-	mkdir -p $(OBJ_DIR)
-	mkdir -p $(OBJ_DIR)/c
-	mkdir -p $(OBJ_DIR)/cpp
+	@mkdir -p $(OBJ_DIR)
+	@mkdir -p $(OBJ_DIR)/c
+	@mkdir -p $(OBJ_DIR)/cpp
 
 $(OBJ_DIR)/c/%.o: $(SRC_DIR)/%.c
-	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+	@$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/cpp/%.o: $(CPP_DIR)/%.cpp
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+	@$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 run: all
-	./$(TARGET)
+	@./$(TARGET)
 
 clean:
 	rm -rf $(OBJ_DIR) $(TARGET)
@@ -48,4 +46,4 @@ clean:
 compdb:
 	bear -- make clean all
 
-.PHONY: compdb
+.PHONY: compdb all clean run

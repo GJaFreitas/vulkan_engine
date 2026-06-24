@@ -1,0 +1,10 @@
+# This is a comment !
+:/audio
+mix_all 1.65
+
+:/dev
+profiling false
+
+                # Also a comment
+:/display
+vsync true
