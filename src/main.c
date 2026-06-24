@@ -37,6 +37,7 @@ int	main(void)
 {
 	start_logs();
 	init_vars();
+	printf("\n\n\n");
 	print_logs();
 	return (0);
 }

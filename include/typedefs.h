@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define sizeofarray(x) (sizeof(x) / sizeof(x[0]))
+
 typedef int8_t		i8;
 typedef int16_t		i16;
 typedef int32_t		i32;
@@ -13,32 +15,38 @@ typedef uint16_t	u16;
 typedef uint32_t	u32;
 typedef uint64_t	u64;
 
+typedef float		float32;
+typedef float		real32;
+
+typedef double		float64;
+typedef double		real64;
+
 typedef struct
 {
-	float	x,y;
+	real32	x,y;
 }	vec2;
 
 typedef struct
 {
-	float	x,y,z;
+	real32	x,y,z;
 }	vec3;
 
 typedef struct
 {
-	float	x,y,z,w;
+	real32	x,y,z,w;
 }	vec4;
 
 typedef struct
 {
-	float	data[4];
+	real32	data[4];
 }	mat2;
 
 typedef struct
 {
-	float	data[9];
+	real32	data[9];
 }	mat3;
 
 typedef struct
 {
-	float	data[16];
+	real32	data[16];
 }	mat4;

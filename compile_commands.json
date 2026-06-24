@@ -2,7 +2,7 @@
   {
     "file": "src/logs.c",
     "arguments": [
-      "/bin/clang",
+      "/bin/gcc",
       "-Iinclude",
       "-Wall",
       "-Wextra",
@@ -18,7 +18,7 @@
   {
     "file": "src/main.c",
     "arguments": [
-      "/bin/clang",
+      "/bin/gcc",
       "-Iinclude",
       "-Wall",
       "-Wextra",
@@ -34,7 +34,7 @@
   {
     "file": "src/vulkan.c",
     "arguments": [
-      "/bin/clang",
+      "/bin/gcc",
       "-Iinclude",
       "-Wall",
       "-Wextra",
@@ -50,7 +50,7 @@
   {
     "file": "src/base_layer.c",
     "arguments": [
-      "/bin/clang",
+      "/bin/gcc",
       "-Iinclude",
       "-Wall",
       "-Wextra",
@@ -66,7 +66,7 @@
   {
     "file": "src/variables.c",
     "arguments": [
-      "/bin/clang",
+      "/bin/gcc",
       "-Iinclude",
       "-Wall",
       "-Wextra",

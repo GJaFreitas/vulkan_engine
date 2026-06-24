@@ -93,7 +93,7 @@ String	readFile(const char *filename)
 
 	String	file;
 
-	file.data = mmap(NULL, stats.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	file.data = mmap(NULL, stats.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
 	file.count = stats.st_size;
 
 	close(fd);
@@ -104,27 +104,6 @@ String	readFile(const char *filename)
 	}
 
 	return file;
-}
-
-
-// Allocates memory
-String	getNextLine(String str, u64 *offset, Allocator *allocator)
-{
-	String	line;
-
-	u8	*start = (u8 *)str.data + (*offset);
-
-	u64	i = 0;
-	for (; line.data[i] != '\n' && i < (*offset) + str.count; i++) { }
-
-	line.count = i + 1;
-	line.data = allocator->fp_allocation(allocator, i, 64);
-
-	memcpy(line.data, start, line.count);
-
-	*offset += line.count;
-
-	return line;
 }
 
 void	printString(const char *fmt, StringView str)
@@ -142,7 +121,7 @@ void	printString(const char *fmt, StringView str)
 }
 
 // No allocations
-StringView	getNextLine_noMem(String str, u64 *offset)
+StringView	getNextLine(String str, u64 *offset)
 {
 	StringView	line;
 
@@ -194,6 +173,18 @@ void	stringViewJumpToChar(StringView *s, const char c)
 
 	s->count -= i;
 	s->data += i;
+}
+
+bool	stringIsEqual(String s1, String s2)
+{
+	if (s1.count != s2.count)
+		return false;
+
+	for (u64 i = 0; i < s1.count; i++) {
+		if (s1.data[i] != s2.data[i])
+			return false;
+	}
+	return true;
 }
 
 char	*cstrdup(const char *str, u64 *size, Allocator *allocator)

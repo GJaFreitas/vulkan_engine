@@ -1,5 +1,6 @@
 #include "typedefs.h"
 
+#include <stddef.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -71,13 +72,12 @@ typedef struct String
 typedef String StringView;
 
 String	readFile(const char *filename);
-// Allocates memory
-String	getNextLine(String str, u64 *offset, Allocator *allocator);
 // No allocations
-StringView	getNextLine_noMem(String str, u64 *offset);
+StringView	getNextLine(String str, u64 *offset);
 void	printString(const char *fmt, StringView str);
 void	stringViewSkipChar(StringView *s, const char c);
 void	stringViewJumpToChar(StringView *s, const char c);
+bool	stringIsEqual(String s1, String s2);
 char	*cstrdup(const char *str, u64 *size, Allocator *allocator);
 
 
