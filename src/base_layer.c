@@ -1,4 +1,6 @@
 #include "base_layer.h"
+#define STB_SPRINTF_IMPLEMENTATION
+#include "stb_sprintf.h"
 
 // TODO: REMOVE THIS
 #include <stdio.h>
@@ -176,4 +178,15 @@ void	stringViewSkipChar(StringView *s, const char c)
 
 	s->size -= i;
 	s->data += i;
+}
+
+char	*cstrdup(const char *str, u64 *size, Allocator *allocator)
+{
+	char	*new_str;
+
+	u64	str_size = strlen(str);
+	new_str = allocator->fp_allocation(allocator, str_size, 8);
+	memcpy(new_str, str, str_size);
+	*size = str_size;
+	return (new_str);
 }

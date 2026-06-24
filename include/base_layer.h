@@ -77,3 +77,11 @@ String	getNextLine(String str, u64 *offset, Allocator *allocator);
 StringView	getNextLine_noMem(String str, u64 *offset);
 void	printString(const char *fmt, StringView str);
 void	stringViewSkipChar(StringView *s, const char c);
+char	*cstrdup(const char *str, u64 *size, Allocator *allocator);
+
+
+//  ──────────────────────────────── LOGS ─────────────────────────────
+
+void	engine_log(const char *file, const char *fmt, ...);
+
+//  ──────────────────────────────── LOGS ─────────────────────────────
