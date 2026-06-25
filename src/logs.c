@@ -3,10 +3,18 @@
 
 // None of this is async, be careful later
 
+enum LogLevel
+{
+	LOG_LOG,
+	LOG_WARN,
+	LOG_ERROR
+};
+
 typedef struct LogEntry
 {
-	String	file_name;
-	String	log;
+	enum LogLevel	level;
+	String		file_name;
+	String		log;
 	struct LogEntry	*next;
 }	LogEntry;
 
@@ -26,14 +34,26 @@ void	print_logs(void)
 	LogEntry	*cur;
 
 	const char	msg[] = "At file: ";
-	const char	msg2[] = "[LOG] ";
+	const char	log_log[] = "[LOG] ";
+	const char	log_warn[] = "[WARN] ";
+	const char	log_error[] = "[ERROR] ";
 	cur = &logs;
 	while (cur)
 	{
 		write(STDOUT_FILENO, msg, sizeof(msg));
 		write(STDOUT_FILENO, cur->file_name.data, cur->file_name.count);
 		write(STDOUT_FILENO, "; ", 2);
-		write(STDOUT_FILENO, msg2, sizeof(msg2));
+		switch (cur->level) {
+			case LOG_LOG:
+				write(STDOUT_FILENO, log_log, sizeof(log_log));
+			break;
+			case LOG_WARN:
+				write(STDOUT_FILENO, log_warn, sizeof(log_warn));
+			break;
+			case LOG_ERROR:
+				write(STDOUT_FILENO, log_error, sizeof(log_error));
+			break;
+		}
 		write(STDOUT_FILENO, cur->log.data, cur->log.count);
 		write(STDOUT_FILENO, "\n", 1);
 		cur = cur->next;
@@ -48,7 +68,7 @@ static void	_add_log(LogEntry entry)
 	current_entry->next = NULL;
 }
 
-void	engine_log(const char *file, const char *fmt, ...)
+static void	create_log_entry(enum LogLevel level, const char *file, const char *fmt, va_list ap)
 {
 	LogEntry	log_entry;
 
@@ -58,10 +78,7 @@ void	engine_log(const char *file, const char *fmt, ...)
 	log_entry.file_name.data = (u8 *)cstrdup(file, &log_entry.file_name.count, &log_allocator);
 	buffer = log_allocator.fp_allocation(&log_allocator, buffer_size, 8);
 
-	va_list	ap;
-	va_start(ap, fmt);
 	vsnprintf(buffer, buffer_size, fmt, ap);
-	va_end(ap);
 
 	const u64	actual_size = strlen(buffer);
 	const u64	size_dif = buffer_size - actual_size;
@@ -73,4 +90,28 @@ void	engine_log(const char *file, const char *fmt, ...)
 	log_entry.log.count = actual_size;
 
 	_add_log(log_entry);
+}
+
+void	engine_warn(const char *file, const char *fmt, ...)
+{
+	va_list	ap;
+	va_start(ap, fmt);
+	create_log_entry(LOG_WARN, file, fmt, ap);
+	va_end(ap);
+}
+
+void	engine_error(const char *file, const char *fmt, ...)
+{
+	va_list	ap;
+	va_start(ap, fmt);
+	create_log_entry(LOG_ERROR, file, fmt, ap);
+	va_end(ap);
+}
+
+void	engine_log(const char *file, const char *fmt, ...)
+{
+	va_list	ap;
+	va_start(ap, fmt);
+	create_log_entry(LOG_LOG, file, fmt, ap);
+	va_end(ap);
 }

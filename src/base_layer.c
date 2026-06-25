@@ -5,9 +5,6 @@
 // TODO: REMOVE THIS
 #include <stdio.h>
 
-// TODO: Allocators and file reading functions
-// TODO: Allocators and string manipulation functions
-
 // TODO: This is wrong of course
 void	*standard_alloc(u64 size)
 {
@@ -31,8 +28,7 @@ void	*arenaAllocationFunction(Allocator *allocator, u64 size, u64 alignment)
 	const u64	new_offset = aligned_offset + size;
 
 	if (new_offset >= a_size) {
-		// TODO: Create some actual logging
-		fprintf(stderr, "[ERROR] Arena size too small for allocation, size: %ld alignment: %ld arena size: %ld\n", size, alignment, a_size);
+		engine_error("base_layer.c", "Arena size too small for allocation, size: %ld alignment: %ld arena size: %ld\n", size, alignment, a_size);
 		return NULL;
 	}
 

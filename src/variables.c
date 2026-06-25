@@ -1,5 +1,7 @@
 #include "vars.h"
 
+// TODO: Make this hotload
+
 Settings	g_settings;
 
 ConfigField	audio_fields[] = {
@@ -51,37 +53,49 @@ static void	modify_field(ConfigField field, String field_value, void *section)
 	}
 }
 
-static bool	assignField(String settings_type, String field_name, String field_value)
+enum assignFielddError {
+	SUCCESS,
+	NO_FIELD_NAME,
+	NO_SUBDIR,
+};
+
+static enum assignFielddError	assignField(String subdir, String field_name, String field_value)
 {
 	// The -1 is because the String type doesnt account for the \0 while sizeof() does
 	const String	audio = {(u8 *)"Audio", sizeof("audio") - 1};
 	const String	dev = {(u8 *)"Dev", sizeof("dev") - 1};
 	const String	display = {(u8 *)"Display", sizeof("display") - 1};
 
+	bool subdir_exists = false;
 
-	if (stringIsEqual(settings_type, audio)) {
+	if (stringIsEqual(subdir, audio)) {
+		subdir_exists = true;
 		for (u16 i = 0; i < sizeofarray(audio_fields); i++) {
 			if (stringIsEqual(field_name, audio_fields[i].name)) {
 				modify_field(audio_fields[i], field_value, &g_settings.audio);
-				return true;
+				return SUCCESS;
 			}
 		}
-	} else if (stringIsEqual(settings_type, dev)) {
+	} else if (stringIsEqual(subdir, dev)) {
+		subdir_exists = true;
 		for (u16 i = 0; i < sizeofarray(dev_fields); i++) {
 			if (stringIsEqual(field_name, dev_fields[i].name)) {
 				modify_field(dev_fields[i], field_value, &g_settings.dev);
-				return true;
+				return SUCCESS;
 			}
 		}
-	} else if (stringIsEqual(settings_type, display)) {
+	} else if (stringIsEqual(subdir, display)) {
+		subdir_exists = true;
 		for (u16 i = 0; i < sizeofarray(display_fields); i++) {
 			if (stringIsEqual(field_name, display_fields[i].name)) {
 				modify_field(display_fields[i], field_value, &g_settings.display);
-				return true;
+				return SUCCESS;
 			}
 		}
 	}
-	return false;
+	if (!subdir_exists)
+		return NO_SUBDIR;
+	return NO_FIELD_NAME;
 }
 
 void	init_vars()
@@ -109,11 +123,10 @@ void	init_vars()
 				if (line.data[1] != '/') {
 					engine_log(__FILE_NAME__, "variables file parsing error at line %u! Expected a '/' after ':'.\n", line_nr);
 				} else {
-					StringView folder_name = line;
-					folder_name.data += 2;
-					folder_name.count -= 2;
-					printString("Folder name '%'\n", folder_name);
-					subdir = folder_name;
+					subdir = line;
+					subdir.data += 2;
+					subdir.count -= 2;
+					printString("Folder name '%'\n", subdir);
 				}
 			}
 
@@ -142,8 +155,11 @@ void	init_vars()
 				printString("Name: '%' ", name);
 				printString("Value: '%'\n", rhs);
 
-				if (!assignField(subdir, name, rhs))
-				engine_log("variables.c", "Setting name doesnt match any known settings line number: %u\n", line_nr);
+				enum assignFielddError error = assignField(subdir, name, rhs);
+				if (error == NO_FIELD_NAME)
+					engine_log("variables.c", "Setting name doesnt match any known settings! line number: %u\n", line_nr);
+				else if (error == NO_SUBDIR)
+					engine_log("variables.c", "Subdir name doesnt match any known subdirs! line number: %u\n", line_nr);
 			}
 		}
 
