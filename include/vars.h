@@ -1,12 +1,14 @@
 #pragma once
 
 #include "base_layer.h"
+#include <sys/stat.h>
 
 // The -1 is because the String type doesnt account for the \0 while sizeof() does
 #define RegisterField(var_name, var_type, settings_type) \
 	{(String){(u8 *)(#var_name), sizeof(#var_name) - 1}, var_type, offsetof(settings_type, var_name)}
 
 void	init_vars();
+void	check_var_modify();
 
 enum ConfigType
 {
@@ -32,9 +34,6 @@ typedef struct Audio
 typedef struct Dev
 {
 	bool	profiling;
-	char	testing[32];
-	char	testing_again[32];
-	char	testing_once_again[32];
 }	Dev;
 
 typedef struct Display

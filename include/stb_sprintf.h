@@ -216,6 +216,7 @@ STBSP__PUBLICDEC void STB_SPRINTF_DECORATE(set_separators)(char comma, char peri
 #endif // STB_SPRINTF_H_INCLUDE
 
 #ifdef STB_SPRINTF_IMPLEMENTATION
+#include "base_layer.h"
 
 #define stbsp__uint32 unsigned int
 #define stbsp__int32 signed int
@@ -575,6 +576,7 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
          char lead[8];
          char tail[8];
          char *s;
+         String S = {0, 0};
          char const *h;
          stbsp__uint32 l, n, cs;
          stbsp__uint64 n64;
@@ -592,6 +594,21 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
          // get the length, limited to desired precision
          // always limit to ~0u chars since our counts are 32b
          l = stbsp__strlen_limited(s, (pr >= 0) ? pr : ~0u);
+         lead[0] = 0;
+         tail[0] = 0;
+         pr = 0;
+         dp = 0;
+         cs = 0;
+         // copy the string in
+         goto scopy;
+
+      case 'S':
+         S = va_arg(va, String);
+         if (S.data == 0)
+            S.data = (u8 *)"null";
+
+	 l = S.count;
+	 s = S.data;
          lead[0] = 0;
          tail[0] = 0;
          pr = 0;

@@ -207,3 +207,16 @@ char	*cstrdup(const char *str, u64 *size, Allocator *allocator)
 	*size = str_size;
 	return (new_str);
 }
+
+String	stringDup(StringView str, Allocator *allocator)
+{
+	String	new_str;
+
+	new_str.count = str.count;
+	if (allocator)
+		new_str.data = allocator->fp_allocation(allocator, new_str.count, 8);
+	else
+		new_str.data = standard_alloc(new_str.count);
+	memcpy(new_str.data, str.data, str.count);
+	return (new_str);
+}

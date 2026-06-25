@@ -29,33 +29,39 @@ void	start_logs(void)
 	logs.log.data = (u8 *)cstrdup("Engine started", &logs.log.count, &log_allocator);
 }
 
-void	print_logs(void)
+void	print_single_log(LogEntry entry)
 {
-	LogEntry	*cur;
-
 	const char	msg[] = "At file: ";
 	const char	log_log[] = "[LOG] ";
 	const char	log_warn[] = "[WARN] ";
 	const char	log_error[] = "[ERROR] ";
+
+	write(STDOUT_FILENO, msg, sizeof(msg));
+	write(STDOUT_FILENO, entry.file_name.data, entry.file_name.count);
+	write(STDOUT_FILENO, "; ", 2);
+	switch (entry.level) {
+		case LOG_LOG:
+			write(STDOUT_FILENO, log_log, sizeof(log_log));
+			break;
+		case LOG_WARN:
+			write(STDOUT_FILENO, log_warn, sizeof(log_warn));
+			break;
+		case LOG_ERROR:
+			write(STDOUT_FILENO, log_error, sizeof(log_error));
+			break;
+	}
+	write(STDOUT_FILENO, entry.log.data, entry.log.count);
+	write(STDOUT_FILENO, "\n", 1);
+}
+
+void	print_logs(void)
+{
+	LogEntry	*cur;
+
 	cur = &logs;
 	while (cur)
 	{
-		write(STDOUT_FILENO, msg, sizeof(msg));
-		write(STDOUT_FILENO, cur->file_name.data, cur->file_name.count);
-		write(STDOUT_FILENO, "; ", 2);
-		switch (cur->level) {
-			case LOG_LOG:
-				write(STDOUT_FILENO, log_log, sizeof(log_log));
-			break;
-			case LOG_WARN:
-				write(STDOUT_FILENO, log_warn, sizeof(log_warn));
-			break;
-			case LOG_ERROR:
-				write(STDOUT_FILENO, log_error, sizeof(log_error));
-			break;
-		}
-		write(STDOUT_FILENO, cur->log.data, cur->log.count);
-		write(STDOUT_FILENO, "\n", 1);
+		print_single_log(*cur);
 		cur = cur->next;
 	}
 }
@@ -66,6 +72,7 @@ static void	_add_log(LogEntry entry)
 	current_entry = current_entry->next;
 	*current_entry = entry;
 	current_entry->next = NULL;
+	print_single_log(entry);
 }
 
 static void	create_log_entry(enum LogLevel level, const char *file, const char *fmt, va_list ap)
