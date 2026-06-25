@@ -1,4 +1,5 @@
 #include "vars.h"
+#include <errno.h>
 
 // TODO: Make this hotload
 
@@ -170,6 +171,7 @@ void	check_var_modify()
 
 	if (last_mod != stats.st_mtim.tv_sec) {
 		last_mod = stats.st_mtim.tv_sec;
+		usleep(1000);
 		engine_log("variables", "Variables changed, hotloading");
 		print_variables();
 		init_vars();
@@ -180,7 +182,8 @@ void	init_vars()
 {
 	String	file_data = readFile("data/All.variables");
 	if (file_data.data == NULL) {
-		engine_error("variables", "Failed to read file data/All.variables: %s\n");
+		fprintf(stderr, "mmap error: %s\n", strerror(errno));
+		engine_error("variables", "Failed to read file data/All.variables\n");
 		return ;
 	}
 
