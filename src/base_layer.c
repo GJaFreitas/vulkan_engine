@@ -1,9 +1,36 @@
 #include "base_layer.h"
 #define STB_SPRINTF_IMPLEMENTATION
 #include "stb_sprintf.h"
-
-// TODO: REMOVE THIS
 #include <stdio.h>
+
+u64	queryTimer(void)
+{
+	struct timespec	t;
+
+	clock_gettime(CLOCK_MONOTONIC_RAW, &t);
+	return (t.tv_nsec);
+}
+
+u64	getFrameDeltaNano(void)
+{
+	static u64	prev_time = 0;
+	
+	if (prev_time == 0) {
+		prev_time = queryTimer();
+		return 0;
+	}
+	u64	new_time = queryTimer();
+	u64	time_elapsed = new_time - prev_time;
+	prev_time = new_time;
+	return (time_elapsed);
+}
+
+double	getFrameDelta(void)
+{
+	const u64	nano_delta = getFrameDeltaNano();
+	const double	ms_delta = (double)nano_delta / 1000;
+	return (ms_delta);
+}
 
 // TODO: This is wrong of course
 void	*standard_alloc(u64 size)

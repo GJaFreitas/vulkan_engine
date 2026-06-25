@@ -366,6 +366,7 @@ typedef struct
 	u64 size;
 }	ShaderCode;
 
+// TODO: Change this function to the new readFile()
 static ShaderCode read_shader_file(const char *filename)
 {
 	ShaderCode code;

@@ -19,6 +19,9 @@ int	loop()
 			if (event.type == SDL_EVENT_QUIT) {
 				running = false;
 				break ;
+			} else if (event.key.key == SDLK_ESCAPE) {
+				running = false;
+				break ;
 			}
 			else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
 				ctx.window_width = event.window.data1;
@@ -27,6 +30,7 @@ int	loop()
 			}
 		}
 		render(&ctx);
+		check_var_modify();
 	}
 
 	endGraphics(&ctx);
@@ -37,9 +41,7 @@ int	main(void)
 {
 	start_logs();
 	init_vars();
-	while (true) {
-		check_var_modify();
-	}
+	loop();
 	printf("\n\n\n");
 	return (0);
 }

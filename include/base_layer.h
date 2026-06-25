@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <time.h>
 
 /* ---------------------- ALLOCATORS ---------------------- */ 
 /* -------------------------------------------------------- */ 
@@ -100,4 +101,9 @@ void	engine_error(const char *file, const char *fmt, ...);
 void	engine_log(const char *file, const char *fmt, ...);
 
 //  ──────────────────────────────── LOGS ─────────────────────────────
+
+u64	getFrameDeltaNano(void);
+double	getFrameDelta(void);
+
+
 #include "stb_sprintf.h"
