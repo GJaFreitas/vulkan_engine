@@ -1,3 +1,4 @@
+#pragma once
 #include "typedefs.h"
 
 #include <stddef.h>
@@ -77,6 +78,7 @@ StringView	getNextLine(String str, u64 *offset);
 void	printString(const char *fmt, StringView str);
 void	stringViewSkipChar(StringView *s, const char c);
 void	stringViewJumpToChar(StringView *s, const char c);
+u8	*stringViewPtrToChar(StringView s, const char c);
 bool	stringIsEqual(String s1, String s2);
 char	*cstrdup(const char *str, u64 *size, Allocator *allocator);
 

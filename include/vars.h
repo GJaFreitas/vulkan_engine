@@ -32,6 +32,9 @@ typedef struct Audio
 typedef struct Dev
 {
 	bool	profiling;
+	char	testing[32];
+	char	testing_again[32];
+	char	testing_once_again[32];
 }	Dev;
 
 typedef struct Display

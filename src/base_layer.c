@@ -155,6 +155,20 @@ void	stringViewSkipChar(StringView *s, const char c)
 	s->data += i;
 }
 
+u8	*stringViewPtrToChar(StringView s, const char c)
+{
+	u64	i;
+
+	i = 0;
+	while (i < s.count)
+	{
+		if (s.data[i] == c)
+			return &s.data[i];
+		i++;
+	}
+	return NULL;
+}
+
 void	stringViewJumpToChar(StringView *s, const char c)
 {
 	u64	i;

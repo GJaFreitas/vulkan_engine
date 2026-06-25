@@ -4,6 +4,9 @@ mix_all 1.65
 
 :/Dev
 profiling false
+testing "true string"
+testing_again fake start string"
+testing_once_again "fake end string
 
                 # Also a comment
 :/Display

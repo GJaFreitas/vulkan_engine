@@ -36,6 +36,7 @@ int	loop()
 int	main(void)
 {
 	start_logs();
+	memcpy(g_settings.dev.testing, "Trollol", 8);
 	init_vars();
 	printf("\n\n\n");
 	print_logs();

@@ -13,8 +13,6 @@
 
 #include <shaderc/shaderc.h>
 
-#define sizeofarray(x) (sizeof(x) / sizeof(*x))
-
 #define MAX_FRAMES_IN_FLIGHT	2
 
 #include "typedefs.h"

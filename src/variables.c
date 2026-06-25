@@ -11,13 +11,24 @@ ConfigField	audio_fields[] = {
 
 ConfigField	dev_fields[] = {
 	RegisterField(profiling, CONFIG_BOOL, Dev),
+	RegisterField(testing, CONFIG_STR, Dev),
+	RegisterField(testing_again, CONFIG_STR, Dev),
+	RegisterField(testing_once_again, CONFIG_STR, Dev),
 };
 
 ConfigField	display_fields[] = {
 	RegisterField(vsync, CONFIG_BOOL, Display),
 };
 
-static void	modify_field(ConfigField field, String field_value, void *section)
+enum assignFielddError {
+	SUCCESS,
+	NO_FIELD_NAME,
+	NO_SUBDIR,
+	STRING_QUOTE_START,
+	STRING_QUOTE_END,
+};
+
+static enum assignFielddError 	modify_field(ConfigField field, String field_value, void *section)
 {
 	char	c;
 	char	*ptr;
@@ -46,18 +57,24 @@ static void	modify_field(ConfigField field, String field_value, void *section)
 			*(float *)((u8 *)section + field.offset) = val;
 		break ;
 		case CONFIG_STR:
-			ptr = *(char **)((u8 *)section + field.offset);
+			if (field_value.data[0] != '\"') {
+				return STRING_QUOTE_START;
+			}
+			if (!stringViewPtrToChar(field_value, '\"')) {
+				return STRING_QUOTE_END;
+			}
+			// Skip the quote
+			field_value.data += 1;
+			// Dont count the ending quote
+			field_value.count -= 2;
+			ptr = (char *)((u8 *)section + field.offset);
+			printf("dereference ptr: %s\n", ptr);
 			memcpy(ptr, field_value.data, field_value.count);
 		break ;
-		default: engine_log("variables.c", "How did we get here?\n");
+		default: engine_log("variables", "How did we get here?\n");
 	}
+	return (SUCCESS);
 }
-
-enum assignFielddError {
-	SUCCESS,
-	NO_FIELD_NAME,
-	NO_SUBDIR,
-};
 
 static enum assignFielddError	assignField(String subdir, String field_name, String field_value)
 {
@@ -72,24 +89,21 @@ static enum assignFielddError	assignField(String subdir, String field_name, Stri
 		subdir_exists = true;
 		for (u16 i = 0; i < sizeofarray(audio_fields); i++) {
 			if (stringIsEqual(field_name, audio_fields[i].name)) {
-				modify_field(audio_fields[i], field_value, &g_settings.audio);
-				return SUCCESS;
+				return modify_field(audio_fields[i], field_value, &g_settings.audio);
 			}
 		}
 	} else if (stringIsEqual(subdir, dev)) {
 		subdir_exists = true;
 		for (u16 i = 0; i < sizeofarray(dev_fields); i++) {
 			if (stringIsEqual(field_name, dev_fields[i].name)) {
-				modify_field(dev_fields[i], field_value, &g_settings.dev);
-				return SUCCESS;
+				return modify_field(dev_fields[i], field_value, &g_settings.dev);
 			}
 		}
 	} else if (stringIsEqual(subdir, display)) {
 		subdir_exists = true;
 		for (u16 i = 0; i < sizeofarray(display_fields); i++) {
 			if (stringIsEqual(field_name, display_fields[i].name)) {
-				modify_field(display_fields[i], field_value, &g_settings.display);
-				return SUCCESS;
+				return modify_field(display_fields[i], field_value, &g_settings.display);
 			}
 		}
 	}
@@ -118,10 +132,10 @@ void	init_vars()
 		if (line.data[0] == ':') {
 
 			if (line.count < 2) {
-				engine_log(__FILE_NAME__, "variables file parsing error at line %u! Lines starting with ':' must have a '/' and a name afterwards.\n", line_nr);
+				engine_log("variables", "variables file parsing error at line %u! Lines starting with ':' must have a '/' and a name afterwards.\n", line_nr);
 			} else {
 				if (line.data[1] != '/') {
-					engine_log(__FILE_NAME__, "variables file parsing error at line %u! Expected a '/' after ':'.\n", line_nr);
+					engine_log("variables", "variables file parsing error at line %u! Expected a '/' after ':'.\n", line_nr);
 				} else {
 					subdir = line;
 					subdir.data += 2;
@@ -152,14 +166,24 @@ void	init_vars()
 				// +1 for the space
 				name.count -= rhs.count + 1;
 
-				printString("Name: '%' ", name);
-				printString("Value: '%'\n", rhs);
-
 				enum assignFielddError error = assignField(subdir, name, rhs);
-				if (error == NO_FIELD_NAME)
-					engine_log("variables.c", "Setting name doesnt match any known settings! line number: %u\n", line_nr);
-				else if (error == NO_SUBDIR)
-					engine_log("variables.c", "Subdir name doesnt match any known subdirs! line number: %u\n", line_nr);
+				switch (error) {
+					case NO_FIELD_NAME:
+						engine_log("variables", "Setting name doesnt match any known settings! line number: %u\n", line_nr);
+					break;
+					case NO_SUBDIR:
+						engine_log("variables", "Subdir name doesnt match any known subdirs! line number: %u\n", line_nr);
+					break;
+					case STRING_QUOTE_END:
+						engine_log("variables", "String must end with quote! line number: %u\n", line_nr);
+					break;
+					case STRING_QUOTE_START:
+						engine_log("variables", "String must start with quote! line number: %u\n", line_nr);
+					break;
+					default:
+					break;
+
+				}
 			}
 		}
 

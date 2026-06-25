@@ -18,9 +18,9 @@ typedef struct LogEntry
 	struct LogEntry	*next;
 }	LogEntry;
 
-LogEntry	logs;
-LogEntry	*current_entry = &logs;
-Allocator	log_allocator;
+static LogEntry	logs;
+static LogEntry	*current_entry = &logs;
+static Allocator	log_allocator;
 
 void	start_logs(void)
 {
