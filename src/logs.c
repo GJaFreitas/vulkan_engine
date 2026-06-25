@@ -88,6 +88,7 @@ static void	create_log_entry(enum LogLevel level, const char *file, const char *
 	log_allocator.arena.offset -= size_dif;
 	log_entry.log.data = (u8 *)buffer;
 	log_entry.log.count = actual_size;
+	log_entry.level = level;
 
 	_add_log(log_entry);
 }
