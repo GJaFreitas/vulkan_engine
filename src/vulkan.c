@@ -437,10 +437,18 @@ static void	createShaders(GraphicsContext *ctx)
 
 static void	createGraphicsPipeline(GraphicsContext *ctx)
 {
+	// Model view projection matrix
+	VkPushConstantRange	push_constant = {
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+		.offset = 0,
+		.size = sizeof(mat4),
+	};
+
 	VkPipelineLayoutCreateInfo	layout_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = 0,
-		.pushConstantRangeCount = 0
+		.pushConstantRangeCount = 1,
+		.pPushConstantRanges = &push_constant,
 	};
 
 	VkPipelineLayout	layout;
@@ -468,7 +476,7 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 
 	VkVertexInputBindingDescription	vertex_binding_info = {
 		.binding = 0,
-		.stride = sizeof(tg3_model),
+		.stride = sizeof(Vertex),
 		.inputRate = VK_VERTEX_INPUT_RATE_VERTEX
 	};
 	VkVertexInputAttributeDescription attrs[] = {
@@ -910,6 +918,23 @@ void	render(GraphicsContext *ctx)
 		VkDeviceSize	offset = 0;
 		vkCmdBindVertexBuffers(resource.command_buffer, 0, 1, &ctx->model.vertex_buffer, &offset);
 		vkCmdBindIndexBuffer(resource.command_buffer, ctx->model.index_buffer, 0, VK_INDEX_TYPE_UINT32);
+
+
+		mat4 model, view, proj, mvp;
+		glm_mat4_identity(model);
+
+		vec3 up     = {0.0f, 1.0f, 0.0f};
+		vec3 eye    = {0.0f, 0.2f, 0.3f};
+		vec3 center = {0.0f, 0.1f, 0.0f};
+		glm_lookat(eye, center, up, view);
+
+		glm_perspective(glm_rad(60.0f), (float)ctx->swapchain_width / ctx->swapchain_height, 0.1f, 100.0f, proj);
+		proj[1][1] *= -1; // Vulkan Y flip
+
+		glm_mat4_mul(proj, view, mvp);
+		glm_mat4_mul(mvp, model, mvp);
+
+		vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mat4), mvp);
 		vkCmdDrawIndexed(resource.command_buffer, ctx->model.index_count, 1, 0, 0, 0);
 	}
 	vkCmdEndRendering(resource.command_buffer);

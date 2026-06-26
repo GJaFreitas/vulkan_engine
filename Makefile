@@ -19,7 +19,7 @@ CFLAGS := -Wall -Wextra -g
 CPPFLAGS := -I$(INC_DIR)
 
 LDFLAGS :=
-LDLIBS := -lvolk -lvulkan -lSDL3 -lstdc++ -lshaderc_shared
+LDLIBS := -lvolk -lvulkan -lSDL3 -lstdc++ -lshaderc_shared -lm
 
 all: $(OBJ_DIR) $(TARGET)
 

@@ -99,6 +99,7 @@ void	gltf_load(String filename, GLTFModel *model, GraphicsContext *ctx)
 	   model->errors.entries[i].message ? model->errors.entries[i].message : "(null)");
 		}
 	}
+
 	gltf_upload(ctx, model);
 }
 
@@ -155,9 +156,14 @@ void gltf_upload(GraphicsContext *ctx, GLTFModel *gltf)
 	VkDeviceSize vertex_size = sizeof(Vertex) * vertex_count;
 	Vertex *vertices = malloc(vertex_size);
 	for (uint32_t i = 0; i < vertex_count; i++) {
-		vertices[i].pos    = (vec3){ positions[i*3], positions[i*3+1], positions[i*3+2] };
-		vertices[i].normal = (vec3){ normals[i*3],   normals[i*3+1],   normals[i*3+2]   };
-		vertices[i].uv     = (vec2){ uvs[i*2],       uvs[i*2+1]                         };
+		vertices[i].pos[0] = positions[i*3];
+		vertices[i].pos[1] = positions[i*3+1];
+		vertices[i].pos[2] = positions[i*3+2];
+		vertices[i].normal[0] = normals[i*3];
+		vertices[i].normal[1] = normals[i*3+1];
+		vertices[i].normal[2] = normals[i*3+2];
+		vertices[i].uv[0] = uvs[i*2];
+		vertices[i].uv[1] = uvs[i*2+1];
 	}
 
 	// Index data
@@ -222,6 +228,7 @@ void gltf_upload(GraphicsContext *ctx, GLTFModel *gltf)
 	UploadCopyData icopy = { staging_ibuf, gltf->index_buffer, index_size };
 	immediate_submit(ctx, copy_buffer_cmd, &icopy);
 	wrapperVMAdestroyBuffer(ctx->vma_allocator, staging_ibuf, staging_ialloc);
+
 
 	free(vertices);
 	free(indices);
