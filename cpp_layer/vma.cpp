@@ -15,7 +15,6 @@ extern "C" void	*initializeVMA(VkPhysicalDevice physical_device, VkDevice device
 	vma_func_info.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
 
 	VmaAllocatorCreateInfo vma_alloc_info {
-			.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
 			.physicalDevice = physical_device,
 			.device = device,
 			.pVulkanFunctions = &vma_func_info,
@@ -56,4 +55,29 @@ extern "C" VkResult	wrapperVMAcreateImage(void *_allocator, VkImageCreateInfo *i
 extern "C" void		wrapperVMAdestroyImage(void *_allocator, VkImage img, void *allocation)
 {
 	vmaDestroyImage((VmaAllocator)_allocator, img, (VmaAllocation)allocation);
+}
+
+extern "C" VkResult wrapperVMAcreateBuffer(void *_allocator, VkBufferCreateInfo *buf_info, VkBuffer *buffer, void *allocation, bool cpu_accessible)
+{
+	VmaAllocator allocator = (VmaAllocator)_allocator;
+	VmaAllocationCreateInfo alloc_info = {
+		.flags = cpu_accessible ? VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT : VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+		.usage = VMA_MEMORY_USAGE_AUTO
+	};
+	return vmaCreateBuffer(allocator, buf_info, &alloc_info, buffer, (VmaAllocation *)allocation, NULL);
+}
+
+extern "C" VkResult wrapperVMAmapMemory(void *_allocator, void *allocation, void **data)
+{
+	return vmaMapMemory((VmaAllocator)_allocator, (VmaAllocation)allocation, data);
+}
+
+extern "C" void wrapperVMAunmapMemory(void *_allocator, void *allocation)
+{
+	vmaUnmapMemory((VmaAllocator)_allocator, (VmaAllocation)allocation);
+}
+
+extern "C" void wrapperVMAdestroyBuffer(void *_allocator, VkBuffer buffer, void *allocation)
+{
+	vmaDestroyBuffer((VmaAllocator)_allocator, buffer, (VmaAllocation)allocation);
 }

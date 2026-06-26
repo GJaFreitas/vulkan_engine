@@ -252,7 +252,8 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 		exit(1);
 	}
 
-	u32	requested_img_count = 2;
+	u32	requested_img_count = surface_capabilities.maxImageCount + 1;
+	// Setting up triple buffering
 	if (surface_capabilities.minImageCount > 2)
 		requested_img_count = surface_capabilities.minImageCount;
 	if (surface_capabilities.maxImageCount > 0 && requested_img_count > surface_capabilities.maxImageCount)
@@ -263,10 +264,13 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 		.surface = ctx->surface,
 		.minImageCount = requested_img_count,
 		.imageFormat = ctx->swapchain_format.format,
-		.imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
+		.imageColorSpace = ctx->swapchain_format.colorSpace,
 		.imageExtent = surface_capabilities.currentExtent,
 		.imageArrayLayers = 1,
-		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.queueFamilyIndexCount = 1,
+		.pQueueFamilyIndices = &ctx->queue_family_index,
 		.preTransform = surface_capabilities.currentTransform,
 		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
 		.presentMode = ctx->swapchain_present_mode
@@ -462,8 +466,23 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 		}
 	};
 
+	VkVertexInputBindingDescription	vertex_binding_info = {
+		.binding = 0,
+		.stride = sizeof(tg3_model),
+		.inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+	};
+	VkVertexInputAttributeDescription attrs[] = {
+		{ .location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, pos) },
+		{ .location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal) },
+		{ .location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT,    .offset = offsetof(Vertex, uv) },
+	};
+
 	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		.vertexAttributeDescriptionCount = sizeofarray(attrs),
+		.pVertexAttributeDescriptions = attrs,
+		.vertexBindingDescriptionCount = 1,
+		.pVertexBindingDescriptions = &vertex_binding_info
 	};
 
 	VkPipelineInputAssemblyStateCreateInfo	imput_assembly_info = {
@@ -702,6 +721,44 @@ static void	initSdl(GraphicsContext *ctx)
 	}
 }
 
+// One time submission for creating buffers
+void immediate_submit(GraphicsContext *ctx, void (*fn)(VkCommandBuffer cmd, void *data), void *data)
+{
+	VkCommandPoolCreateInfo pool_info = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+		.queueFamilyIndex = ctx->queue_family_index
+	};
+	VkCommandPool pool;
+	vkCreateCommandPool(ctx->device, &pool_info, NULL, &pool);
+
+	VkCommandBufferAllocateInfo alloc_info = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.commandPool = pool,
+		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		.commandBufferCount = 1
+	};
+	VkCommandBuffer cmd;
+	vkAllocateCommandBuffers(ctx->device, &alloc_info, &cmd);
+
+	VkCommandBufferBeginInfo begin_info = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+	};
+	vkBeginCommandBuffer(cmd, &begin_info);
+	fn(cmd, data);
+	vkEndCommandBuffer(cmd);
+
+	VkSubmitInfo submit_info = {
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		.commandBufferCount = 1,
+		.pCommandBuffers = &cmd
+	};
+	vkQueueSubmit(ctx->queue, 1, &submit_info, VK_NULL_HANDLE);
+	vkQueueWaitIdle(ctx->queue);
+	vkDestroyCommandPool(ctx->device, pool, NULL);
+}
+
 void	render(GraphicsContext *ctx)
 {
 	if (ctx->swapchain_require_recreate)
@@ -739,13 +796,10 @@ void	render(GraphicsContext *ctx)
 						 VK_NULL_HANDLE,
 						 &img_idx);
 
-	if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR)
-	{
+	if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
 		ctx->swapchain_require_recreate = true;
 		return ;
-	}
-	else if (acquire_result == VK_SUBOPTIMAL_KHR)
-	{
+	} else if (acquire_result == VK_SUBOPTIMAL_KHR) {
 		ctx->swapchain_require_recreate = true;
 	}
 
@@ -846,7 +900,17 @@ void	render(GraphicsContext *ctx)
 		vkCmdSetScissor(resource.command_buffer, 0, 1, &scissor);
 
 		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline);
-		vkCmdDraw(resource.command_buffer, 3, 1, 0, 0);
+		// void vkCmdDraw(
+		//   VkCommandBuffer                             commandBuffer,
+		//   uint32_t                                    vertexCount,
+		//   uint32_t                                    instanceCount,
+		//   uint32_t                                    firstVertex,
+		//   uint32_t                                    firstInstance);
+		// vkCmdDraw(resource.command_buffer, 3, 1, 0, 0);
+		VkDeviceSize	offset = 0;
+		vkCmdBindVertexBuffers(resource.command_buffer, 0, 1, &ctx->model.vertex_buffer, &offset);
+		vkCmdBindIndexBuffer(resource.command_buffer, ctx->model.index_buffer, 0, VK_INDEX_TYPE_UINT32);
+		vkCmdDrawIndexed(resource.command_buffer, ctx->model.index_count, 1, 0, 0, 0);
 	}
 	vkCmdEndRendering(resource.command_buffer);
 

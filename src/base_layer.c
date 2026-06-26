@@ -102,29 +102,37 @@ Allocator	newArenaAllocator(u64 size, Allocator *parent, u64 alignment)
 	return allocator;
 }
 
-String	readFile(const char *filename)
+u8	*readFileData(const char *filename, u64 *file_size)
 {
+	u8	*data;
 	int	fd = open(filename, O_RDONLY);
 
 	if (fd == -1) {
 		fprintf(stderr, "Failed to open file: %s\n", filename);
-		return (String){NULL, 0};
+		return NULL;
 	}
 
 	struct stat	stats;
 	fstat(fd, &stats);
 
-	String	file;
-
-	file.data = mmap(NULL, stats.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-	file.count = stats.st_size;
+	data = mmap(NULL, stats.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+	if (file_size)
+		*file_size = stats.st_size;
 
 	close(fd);
 
-	if (file.data == MAP_FAILED) {
+	if (data == MAP_FAILED) {
 		fprintf(stderr, "Failed to map file: %s\n", filename);
-		return (String){NULL, 0};
+		return NULL;
 	}
+	return (data);
+}
+
+String	readFile(const char *filename)
+{
+	String	file;
+
+	file.data = readFileData(filename, &file.count);
 
 	return file;
 }

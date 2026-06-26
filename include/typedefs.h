@@ -21,32 +21,20 @@ typedef float		real32;
 typedef double		float64;
 typedef double		real64;
 
-typedef struct
+// This can represent binary data or typical string
+// This structure OWNS memory. If it is deleted data must
+// be freed.
+typedef struct String
 {
-	real32	x,y;
-}	vec2;
+	u8	*data;
+	u64	count;
+}	String;
 
-typedef struct
-{
-	real32	x,y,z;
-}	vec3;
 
-typedef struct
-{
-	real32	x,y,z,w;
-}	vec4;
+// The -1 is because the String type doesnt account for the \0 while sizeof() does
+#define sizeofString(x) (sizeof(x) - 1)
+#define STRING_LIT(x) ((String){(u8 *)(x), sizeofString(x)})
 
-typedef struct
-{
-	real32	data[4];
-}	mat2;
-
-typedef struct
-{
-	real32	data[9];
-}	mat3;
-
-typedef struct
-{
-	real32	data[16];
-}	mat4;
+// This structure does not OWN memory, it points to another string
+// to view that memory
+typedef String StringView;

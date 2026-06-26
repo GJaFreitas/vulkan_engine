@@ -8,7 +8,10 @@ int	loop()
 
 	GraphicsContext	ctx = {0};
 
+
 	startGraphics(&ctx);
+	// TODO: Create destruction function
+	gltf_load(STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"), &ctx.model, &ctx);
 
 	bool	running = true;
 	while (running)
@@ -39,9 +42,11 @@ int	loop()
 
 int	main(void)
 {
+	GLTFModel	model;
 	start_logs();
 	init_vars();
 	loop();
+	// gltf_load(STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"), &model);
 	printf("\n\n\n");
 	return (0);
 }

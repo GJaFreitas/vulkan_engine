@@ -11,6 +11,9 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <cglm/cglm.h>
+
+#include "logs.h"
 
 /* ---------------------- ALLOCATORS ---------------------- */ 
 /* -------------------------------------------------------- */ 
@@ -64,23 +67,8 @@ Allocator	newArenaAllocator(u64 size, Allocator *parent, u64 alignment);
 /* -------------------------------------------------------- */ 
 /* ---------------------- ALLOCATORS ---------------------- */ 
 
-// The -1 is because the String type doesnt account for the \0 while sizeof() does
-#define sizeofString(x) (sizeof(x) - 1)
-
-// This can represent binary data or typical string
-// This structure OWNS memory. If it is deleted data must
-// be freed.
-typedef struct String
-{
-	u8	*data;
-	u64	count;
-}	String;
-
-// This structure does not OWN memory, it points to another string
-// to view that memory
-typedef String StringView;
-
 String	readFile(const char *filename);
+u8	*readFileData(const char *filename, u64 *file_size);
 // No allocations
 StringView	getNextLine(String str, u64 *offset);
 void	printString(const char *fmt, StringView str);
@@ -91,16 +79,6 @@ bool	stringIsEqual(String s1, String s2);
 char	*cstrdup(const char *str, u64 *size, Allocator *allocator);
 String	stringDup(StringView str, Allocator *allocator);
 
-
-//  ──────────────────────────────── LOGS ─────────────────────────────
-
-void	start_logs(void);
-void	print_logs(void);
-void	engine_warn(const char *file, const char *fmt, ...);
-void	engine_error(const char *file, const char *fmt, ...);
-void	engine_log(const char *file, const char *fmt, ...);
-
-//  ──────────────────────────────── LOGS ─────────────────────────────
 
 u64	getFrameDeltaNano(void);
 double	getFrameDelta(void);

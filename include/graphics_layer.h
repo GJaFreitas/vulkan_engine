@@ -7,6 +7,9 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <cglm/cglm.h>
 
 #include "vulkan_inner.h"
 #include <volk.h>
@@ -16,6 +19,21 @@
 #define MAX_FRAMES_IN_FLIGHT	2
 
 #include "typedefs.h"
+#include "logs.h"
+
+#define TINYGLTF3_ENABLE_FS
+#include "tiny_gltf_v3.h"
+
+typedef struct GLTFModel
+{
+	tg3_error_stack errors;
+	tg3_model model;
+	VkBuffer vertex_buffer;
+	VkBuffer index_buffer;
+	void *vertex_allocation;
+	void *index_allocation;
+	uint32_t index_count;
+}	GLTFModel;
 
 typedef struct
 {
@@ -79,9 +97,16 @@ typedef struct GraphicsContext
 
 	u32			frame_index;
 	u64			next_signal_value;
+
+	GLTFModel		model;
 }	GraphicsContext;
 
 
+void immediate_submit(GraphicsContext *ctx, void (*fn)(VkCommandBuffer cmd, void *data), void *data);
 void	startGraphics(GraphicsContext *ctx);
 void	endGraphics(GraphicsContext *ctx);
 void	render(GraphicsContext *ctx);
+
+
+void	gltf_load(String filename, GLTFModel *model, GraphicsContext *ctx);
+void	gltf_destroy(GLTFModel model);
