@@ -464,7 +464,6 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 
 	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-
 	};
 
 	VkPipelineInputAssemblyStateCreateInfo	imput_assembly_info = {
