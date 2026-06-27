@@ -24,12 +24,6 @@
 #define TINYGLTF3_ENABLE_FS
 #include "tiny_gltf_v3.h"
 
-typedef struct PushConstants
-{
-    mat4 mvp;
-    vec4 base_color_factor;
-}	PushConstants;
-
 typedef struct GLTFModel
 {
 	tg3_error_stack errors;

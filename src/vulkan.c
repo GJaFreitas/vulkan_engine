@@ -252,8 +252,7 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 		exit(1);
 	}
 
-	u32	requested_img_count = surface_capabilities.maxImageCount + 1;
-	// Setting up triple buffering
+	u32	requested_img_count = 2;
 	if (surface_capabilities.minImageCount > 2)
 		requested_img_count = surface_capabilities.minImageCount;
 	if (surface_capabilities.maxImageCount > 0 && requested_img_count > surface_capabilities.maxImageCount)
@@ -264,13 +263,10 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 		.surface = ctx->surface,
 		.minImageCount = requested_img_count,
 		.imageFormat = ctx->swapchain_format.format,
-		.imageColorSpace = ctx->swapchain_format.colorSpace,
+		.imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
 		.imageExtent = surface_capabilities.currentExtent,
 		.imageArrayLayers = 1,
-		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		.queueFamilyIndexCount = 1,
-		.pQueueFamilyIndices = &ctx->queue_family_index,
+		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 		.preTransform = surface_capabilities.currentTransform,
 		.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
 		.presentMode = ctx->swapchain_present_mode
@@ -437,19 +433,10 @@ static void	createShaders(GraphicsContext *ctx)
 
 static void	createGraphicsPipeline(GraphicsContext *ctx)
 {
-	// Model view projection matrix
-	VkPushConstantRange	push_constant = {
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-		.offset = 0,
-		.size = sizeof(PushConstants),
-	};
-
 	VkPipelineLayoutCreateInfo	layout_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = 1,
-		.pSetLayouts = &descriptor_set_info,
-		.pushConstantRangeCount = 1,
-		.pPushConstantRanges = &push_constant,
+		.setLayoutCount = 0,
+		.pushConstantRangeCount = 0
 	};
 
 	VkPipelineLayout	layout;
@@ -475,23 +462,8 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 		}
 	};
 
-	VkVertexInputBindingDescription	vertex_binding_info = {
-		.binding = 0,
-		.stride = sizeof(Vertex),
-		.inputRate = VK_VERTEX_INPUT_RATE_VERTEX
-	};
-	VkVertexInputAttributeDescription attrs[] = {
-		{ .location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, pos) },
-		{ .location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal) },
-		{ .location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT,    .offset = offsetof(Vertex, uv) },
-	};
-
 	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		.vertexAttributeDescriptionCount = sizeofarray(attrs),
-		.pVertexAttributeDescriptions = attrs,
-		.vertexBindingDescriptionCount = 1,
-		.pVertexBindingDescriptions = &vertex_binding_info
 	};
 
 	VkPipelineInputAssemblyStateCreateInfo	imput_assembly_info = {
@@ -529,21 +501,12 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 	};
 
 	VkPipelineColorBlendAttachmentState	attach_state = {
-		.blendEnable = VK_TRUE,
-
-		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-		.colorBlendOp = VK_BLEND_OP_ADD,
-
-		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-		.alphaBlendOp = VK_BLEND_OP_ADD,
-
-		.colorWriteMask =
-		VK_COLOR_COMPONENT_R_BIT |
-		VK_COLOR_COMPONENT_G_BIT |
-		VK_COLOR_COMPONENT_B_BIT |
-		VK_COLOR_COMPONENT_A_BIT,
+		.blendEnable = VK_FALSE,
+		.colorWriteMask =\
+		VK_COLOR_COMPONENT_R_BIT
+		| VK_COLOR_COMPONENT_G_BIT
+		| VK_COLOR_COMPONENT_B_BIT
+		| VK_COLOR_COMPONENT_A_BIT,
 	};
 
 	VkPipelineColorBlendStateCreateInfo	blend_info = {
@@ -635,7 +598,7 @@ static void	createCommandBuffers(GraphicsContext *ctx)
 {
 	for(u32 i = 0; i < ctx->frames_in_flight_count; i++) {
 		FrameResources	*resource = &ctx->frame_resources[i];
-
+		
 		VkCommandPoolCreateInfo pool_info = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.queueFamilyIndex = ctx->queue_family_index
@@ -692,24 +655,6 @@ static void	destroySyncResources(GraphicsContext *ctx)
 	vkDestroySemaphore(ctx->device, ctx->timeline_semaphore, NULL);
 }
 
-static void	createDescriptorPool(GraphicsContext *ctx)
-{
-	VkDescriptorPoolSize sizes[] = {
-		{
-			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = ctx->frames_in_flight_count
-		},
-	};
-
-	VkDescriptorPoolCreateInfo create_info = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.pPoolSizes = sizes,
-		.flags = 
-	};
-
-	vkCreateDescriptorPool(ctx->device, create_info, )
-}
-
 static void	initVulkan(GraphicsContext *ctx)
 {
 	createInstance(ctx);
@@ -724,7 +669,6 @@ static void	initVulkan(GraphicsContext *ctx)
 	}
 	createSwapchain(ctx, ctx->window_width, ctx->window_height);
 	createShaders(ctx);
-	createDescriptorPool(ctx);
 	createGraphicsPipeline(ctx);
 	createSyncResources(ctx);
 	createCommandBuffers(ctx);
@@ -756,44 +700,6 @@ static void	initSdl(GraphicsContext *ctx)
 	} else {
 		printf("SDL window created\n");
 	}
-}
-
-// One time submission for creating buffers
-void immediate_submit(GraphicsContext *ctx, void (*fn)(VkCommandBuffer cmd, void *data), void *data)
-{
-	VkCommandPoolCreateInfo pool_info = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-		.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-		.queueFamilyIndex = ctx->queue_family_index
-	};
-	VkCommandPool pool;
-	vkCreateCommandPool(ctx->device, &pool_info, NULL, &pool);
-
-	VkCommandBufferAllocateInfo alloc_info = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-		.commandPool = pool,
-		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-		.commandBufferCount = 1
-	};
-	VkCommandBuffer cmd;
-	vkAllocateCommandBuffers(ctx->device, &alloc_info, &cmd);
-
-	VkCommandBufferBeginInfo begin_info = {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-	};
-	vkBeginCommandBuffer(cmd, &begin_info);
-	fn(cmd, data);
-	vkEndCommandBuffer(cmd);
-
-	VkSubmitInfo submit_info = {
-		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		.commandBufferCount = 1,
-		.pCommandBuffers = &cmd
-	};
-	vkQueueSubmit(ctx->queue, 1, &submit_info, VK_NULL_HANDLE);
-	vkQueueWaitIdle(ctx->queue);
-	vkDestroyCommandPool(ctx->device, pool, NULL);
 }
 
 void	render(GraphicsContext *ctx)
@@ -833,10 +739,13 @@ void	render(GraphicsContext *ctx)
 						 VK_NULL_HANDLE,
 						 &img_idx);
 
-	if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR) {
+	if (acquire_result == VK_ERROR_OUT_OF_DATE_KHR)
+	{
 		ctx->swapchain_require_recreate = true;
 		return ;
-	} else if (acquire_result == VK_SUBOPTIMAL_KHR) {
+	}
+	else if (acquire_result == VK_SUBOPTIMAL_KHR)
+	{
 		ctx->swapchain_require_recreate = true;
 	}
 
@@ -869,7 +778,7 @@ void	render(GraphicsContext *ctx)
 		.srcStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
 		.srcAccessMask = 0,
 		.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
-		VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT ,
+				VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT ,
 		.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 		.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
@@ -897,7 +806,7 @@ void	render(GraphicsContext *ctx)
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 		.clearValue = {
-			.color = {{0.0f, 0.0f, 0.0f, 1}},
+			.color = {{0.01f, 0.01f, 0.01f, 1}},
 		}
 	};
 	VkRenderingAttachmentInfo	depth_attach_info = {
@@ -936,44 +845,8 @@ void	render(GraphicsContext *ctx)
 		};
 		vkCmdSetScissor(resource.command_buffer, 0, 1, &scissor);
 
-
 		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline);
-		// void vkCmdDraw(
-		//   VkCommandBuffer                             commandBuffer,
-		//   uint32_t                                    vertexCount,
-		//   uint32_t                                    instanceCount,
-		//   uint32_t                                    firstVertex,
-		//   uint32_t                                    firstInstance);
-		// vkCmdDraw(resource.command_buffer, 3, 1, 0, 0);
-		VkDeviceSize	offset = 0;
-		vkCmdBindVertexBuffers(resource.command_buffer, 0, 1, &ctx->model.vertex_buffer, &offset);
-		vkCmdBindIndexBuffer(resource.command_buffer, ctx->model.index_buffer, 0, VK_INDEX_TYPE_UINT32);
-
-
-		mat4 model, view, proj, mvp;
-		glm_mat4_identity(model);
-
-		vec3 up     = {0.0f, 1.0f, 0.0f};
-		vec3 eye    = {0.0f, 0.2f, 0.3f};
-		vec3 center = {0.0f, 0.1f, 0.0f};
-		glm_lookat(eye, center, up, view);
-
-		glm_perspective(glm_rad(60.0f), (float)ctx->swapchain_width / ctx->swapchain_height, 0.1f, 100.0f, proj);
-		proj[1][1] *= -1; // Vulkan Y flip
-
-		glm_mat4_mul(proj, view, mvp);
-		glm_mat4_mul(mvp, model, mvp);
-
-		const tg3_material	mat = ctx->model.model.materials[0];
-		PushConstants	push_constant = { };
-		push_constant.base_color_factor[0] = 0.87f;
-		push_constant.base_color_factor[1] = 1.0f;
-		push_constant.base_color_factor[2] = 0.376f;
-		push_constant.base_color_factor[3] = 0.25f;
-		glm_mat4_copy(mvp, push_constant.mvp);
-
-		vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &push_constant);
-		vkCmdDrawIndexed(resource.command_buffer, ctx->model.index_count, 1, 0, 0, 0);
+		vkCmdDraw(resource.command_buffer, 3, 1, 0, 0);
 	}
 	vkCmdEndRendering(resource.command_buffer);
 
