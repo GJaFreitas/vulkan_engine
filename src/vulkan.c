@@ -439,14 +439,15 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 {
 	// Model view projection matrix
 	VkPushConstantRange	push_constant = {
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 		.offset = 0,
-		.size = sizeof(mat4),
+		.size = sizeof(PushConstants),
 	};
 
 	VkPipelineLayoutCreateInfo	layout_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = 0,
+		.setLayoutCount = 1,
+		.pSetLayouts = &descriptor_set_info,
 		.pushConstantRangeCount = 1,
 		.pPushConstantRanges = &push_constant,
 	};
@@ -528,12 +529,21 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 	};
 
 	VkPipelineColorBlendAttachmentState	attach_state = {
-		.blendEnable = VK_FALSE,
-		.colorWriteMask =\
-		VK_COLOR_COMPONENT_R_BIT
-		| VK_COLOR_COMPONENT_G_BIT
-		| VK_COLOR_COMPONENT_B_BIT
-		| VK_COLOR_COMPONENT_A_BIT,
+		.blendEnable = VK_TRUE,
+
+		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+		.colorBlendOp = VK_BLEND_OP_ADD,
+
+		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+		.alphaBlendOp = VK_BLEND_OP_ADD,
+
+		.colorWriteMask =
+		VK_COLOR_COMPONENT_R_BIT |
+		VK_COLOR_COMPONENT_G_BIT |
+		VK_COLOR_COMPONENT_B_BIT |
+		VK_COLOR_COMPONENT_A_BIT,
 	};
 
 	VkPipelineColorBlendStateCreateInfo	blend_info = {
@@ -625,7 +635,7 @@ static void	createCommandBuffers(GraphicsContext *ctx)
 {
 	for(u32 i = 0; i < ctx->frames_in_flight_count; i++) {
 		FrameResources	*resource = &ctx->frame_resources[i];
-		
+
 		VkCommandPoolCreateInfo pool_info = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.queueFamilyIndex = ctx->queue_family_index
@@ -682,6 +692,24 @@ static void	destroySyncResources(GraphicsContext *ctx)
 	vkDestroySemaphore(ctx->device, ctx->timeline_semaphore, NULL);
 }
 
+static void	createDescriptorPool(GraphicsContext *ctx)
+{
+	VkDescriptorPoolSize sizes[] = {
+		{
+			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.descriptorCount = ctx->frames_in_flight_count
+		},
+	};
+
+	VkDescriptorPoolCreateInfo create_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.pPoolSizes = sizes,
+		.flags = 
+	};
+
+	vkCreateDescriptorPool(ctx->device, create_info, )
+}
+
 static void	initVulkan(GraphicsContext *ctx)
 {
 	createInstance(ctx);
@@ -696,6 +724,7 @@ static void	initVulkan(GraphicsContext *ctx)
 	}
 	createSwapchain(ctx, ctx->window_width, ctx->window_height);
 	createShaders(ctx);
+	createDescriptorPool(ctx);
 	createGraphicsPipeline(ctx);
 	createSyncResources(ctx);
 	createCommandBuffers(ctx);
@@ -840,7 +869,7 @@ void	render(GraphicsContext *ctx)
 		.srcStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
 		.srcAccessMask = 0,
 		.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
-				VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT ,
+		VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT ,
 		.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 		.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
@@ -868,7 +897,7 @@ void	render(GraphicsContext *ctx)
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 		.clearValue = {
-			.color = {{0.01f, 0.01f, 0.01f, 1}},
+			.color = {{0.0f, 0.0f, 0.0f, 1}},
 		}
 	};
 	VkRenderingAttachmentInfo	depth_attach_info = {
@@ -907,6 +936,7 @@ void	render(GraphicsContext *ctx)
 		};
 		vkCmdSetScissor(resource.command_buffer, 0, 1, &scissor);
 
+
 		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline);
 		// void vkCmdDraw(
 		//   VkCommandBuffer                             commandBuffer,
@@ -934,7 +964,15 @@ void	render(GraphicsContext *ctx)
 		glm_mat4_mul(proj, view, mvp);
 		glm_mat4_mul(mvp, model, mvp);
 
-		vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mat4), mvp);
+		const tg3_material	mat = ctx->model.model.materials[0];
+		PushConstants	push_constant = { };
+		push_constant.base_color_factor[0] = 0.87f;
+		push_constant.base_color_factor[1] = 1.0f;
+		push_constant.base_color_factor[2] = 0.376f;
+		push_constant.base_color_factor[3] = 0.25f;
+		glm_mat4_copy(mvp, push_constant.mvp);
+
+		vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &push_constant);
 		vkCmdDrawIndexed(resource.command_buffer, ctx->model.index_count, 1, 0, 0, 0);
 	}
 	vkCmdEndRendering(resource.command_buffer);
