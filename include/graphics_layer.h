@@ -46,14 +46,8 @@ typedef struct Material
 	double		base_color_factor[4];
 	double		roughness_factor;
 	double		metallic_factor;
+	VkDescriptorSet	descriptor_set;
 }	Material;
-
-typedef struct GLTFModel
-{
-	tg3_error_stack	errors;
-	Texture		*textures;
-	Material	*materials;
-}	GLTFModel;
 
 typedef struct
 {
@@ -61,6 +55,98 @@ typedef struct
 	vec3	normal;
 	vec2	uv;
 }	Vertex;
+
+typedef struct Mesh
+{
+	// -1 if absent
+	i32		material_index;
+	Vertex		*vertices;
+	u32		vertex_count;
+	void		*indices;
+	u32		index_count;
+	VkIndexType	index_type;
+}	Mesh;
+
+typedef struct Node
+{
+	// TODO: I dont know if this should stay
+	String	name;
+
+	Mesh	mesh;
+	u32	index;
+
+	double	rotation[4];     /* Default: {0,0,0,1} */
+	double	scale[3];        /* Default: {1,1,1} */
+	double	translation[3];  /* Default: {0,0,0} */
+
+	i32	*children;
+	u32	children_count;
+
+	i32	parent;
+
+}	Node;
+
+enum	AnimationChannelTargetPath
+{
+	TRANSLATION,
+	ROTATION,
+	SCALE,
+	WEIGHTS
+};
+
+typedef struct AnimationChannelTarget
+{
+	i32				node;    /* -1 if absent */
+	enum AnimationChannelTargetPath	path;
+}	AnimationChannelTarget;
+
+typedef struct AnimationChannel
+{
+	i32			sampler; /* Required */
+	AnimationChannelTarget	target;
+}	AnimationChannel;
+
+enum	SamplerInterpolationType
+{
+	LINEAR,
+	STEP,
+	CUBICSPLINE
+};
+
+typedef struct AnimationSampler
+{
+	i32				input;
+	i32				output;
+	enum SamplerInterpolationType	interpolation;
+}	AnimationSampler;
+
+
+typedef struct Animation
+{
+	String			name;
+
+	AnimationChannel	*channels;
+	u32			channels_count;
+	AnimationSampler	*samplers;
+	u32			samplers_count;
+}	Animation;
+
+typedef struct GLTFModel
+{
+	tg3_error_stack	errors;
+	Texture		*textures;	u32	texture_count;
+	Material	*materials;	u32	material_count;
+	Node		*linear_nodes;	u32	node_count;
+	Mesh		*meshes;	u32	mesh_count;
+	Animation	*animations;	u32	animation_count;
+}	GLTFModel;
+
+typedef struct UniformBufferObject
+{
+	mat4	model;
+	mat4	view;
+	mat4	proj;
+}	UniformBufferObject;
 
 typedef struct FrameResources
 {
@@ -117,9 +203,6 @@ typedef struct GraphicsContext
 
 	u32			frame_index;
 	u64			next_signal_value;
-
-	VkDescriptorPool	descriptor_pool;
-	GLTFModel		model;
 }	GraphicsContext;
 
 
