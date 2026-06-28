@@ -31,14 +31,10 @@ void	start_logs(void)
 
 void	print_single_log(LogEntry entry)
 {
-	const char	msg[] = "At file: ";
 	const char	log_log[] = "[LOG] ";
 	const char	log_warn[] = "[WARN] ";
 	const char	log_error[] = "[ERROR] ";
 
-	write(STDOUT_FILENO, msg, sizeof(msg));
-	write(STDOUT_FILENO, entry.file_name.data, entry.file_name.count);
-	write(STDOUT_FILENO, "; ", 2);
 	switch (entry.level) {
 		case LOG_LOG:
 			write(STDOUT_FILENO, log_log, sizeof(log_log));
@@ -50,6 +46,8 @@ void	print_single_log(LogEntry entry)
 			write(STDOUT_FILENO, log_error, sizeof(log_error));
 			break;
 	}
+	write(STDOUT_FILENO, entry.file_name.data, entry.file_name.count);
+	write(STDOUT_FILENO, ": ", 2);
 	write(STDOUT_FILENO, entry.log.data, entry.log.count);
 	write(STDOUT_FILENO, "\n", 1);
 }
@@ -85,7 +83,7 @@ static void	create_log_entry(enum LogLevel level, const char *file, const char *
 	log_entry.file_name.data = (u8 *)cstrdup(file, &log_entry.file_name.count, &log_allocator);
 	buffer = log_allocator.fp_allocation(&log_allocator, buffer_size, 8);
 
-	vsnprintf(buffer, buffer_size, fmt, ap);
+	stbsp_vsnprintf(buffer, buffer_size, fmt, ap);
 
 	const u64	actual_size = strlen(buffer);
 	const u64	size_dif = buffer_size - actual_size;

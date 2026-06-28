@@ -78,6 +78,9 @@ u8	*stringViewPtrToChar(StringView s, const char c);
 bool	stringIsEqual(String s1, String s2);
 char	*cstrdup(const char *str, u64 *size, Allocator *allocator);
 String	stringDup(StringView str, Allocator *allocator);
+String	createString(const char *cstr);
+String	stringCopy(const String str);
+void	stringViewAdvance(StringView *s, u64 count);
 
 
 u64	getFrameDeltaNano(void);

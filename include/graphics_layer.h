@@ -20,19 +20,39 @@
 
 #include "typedefs.h"
 #include "logs.h"
+#include "base_layer.h"
 
 #define TINYGLTF3_ENABLE_FS
 #include "tiny_gltf_v3.h"
 
+typedef struct Texture
+{
+	// TODO: Not a good identifier outside of debug, find another way
+	String	name;
+
+	VkImageView	image_view;
+	VkSampler	sampler;
+
+	VkImage		gpu_image;
+	void		*gpu_image_alloc;
+}	Texture;
+
+typedef struct Material
+{
+	Texture		base_color_texture;
+	Texture		normal_texture;
+	Texture		occlusion_texture;
+	Texture		emissive_texture;
+	double		base_color_factor[4];
+	double		roughness_factor;
+	double		metallic_factor;
+}	Material;
+
 typedef struct GLTFModel
 {
-	tg3_error_stack errors;
-	tg3_model model;
-	VkBuffer vertex_buffer;
-	VkBuffer index_buffer;
-	void *vertex_allocation;
-	void *index_allocation;
-	uint32_t index_count;
+	tg3_error_stack	errors;
+	Texture		*textures;
+	Material	*materials;
 }	GLTFModel;
 
 typedef struct

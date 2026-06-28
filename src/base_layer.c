@@ -220,6 +220,12 @@ void	stringViewJumpToChar(StringView *s, const char c)
 	s->data += i;
 }
 
+void	stringViewAdvance(StringView *s, u64 count)
+{
+	s->data += count;
+	s->count -= count;
+}
+
 bool	stringIsEqual(String s1, String s2)
 {
 	if (s1.count != s2.count)
@@ -254,4 +260,27 @@ String	stringDup(StringView str, Allocator *allocator)
 		new_str.data = standard_alloc(new_str.count);
 	memcpy(new_str.data, str.data, str.count);
 	return (new_str);
+}
+
+String	createString(const char *cstr)
+{
+	String	s;
+
+	u64	len = strlen(cstr);
+	s.count = len;
+	// TODO: Change allocators
+	s.data = malloc(len);
+	memcpy(s.data, cstr, len);
+	return s;
+}
+
+String	stringCopy(const String str)
+{
+	String	s;
+
+	s.count = str.count;
+	// TODO: Change allocators
+	s.data = malloc(s.count);
+	memcpy(s.data, str.data, s.count);
+	return s;
 }
