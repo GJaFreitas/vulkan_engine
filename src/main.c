@@ -6,11 +6,12 @@ int	loop()
 {
 
 	GraphicsContext	ctx = {0};
+	GLTFModel	model;
 
 
 	startGraphics(&ctx);
 	// TODO: Create destruction function
-	gltf_load(STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"), &ctx.model, &ctx);
+	gltf_load(STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"), &model, &ctx);
 
 
 	bool	running = true;

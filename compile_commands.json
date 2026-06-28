@@ -4,6 +4,7 @@
     "arguments": [
       "/bin/gcc",
       "-Iinclude",
+      "-Ideps",
       "-Wall",
       "-Wextra",
       "-g",
@@ -20,6 +21,7 @@
     "arguments": [
       "/bin/gcc",
       "-Iinclude",
+      "-Ideps",
       "-Wall",
       "-Wextra",
       "-g",
@@ -36,6 +38,7 @@
     "arguments": [
       "/bin/gcc",
       "-Iinclude",
+      "-Ideps",
       "-Wall",
       "-Wextra",
       "-g",
@@ -52,6 +55,7 @@
     "arguments": [
       "/bin/gcc",
       "-Iinclude",
+      "-Ideps",
       "-Wall",
       "-Wextra",
       "-g",
@@ -68,6 +72,7 @@
     "arguments": [
       "/bin/gcc",
       "-Iinclude",
+      "-Ideps",
       "-Wall",
       "-Wextra",
       "-g",
@@ -80,10 +85,28 @@
     "output": "obj/c/variables.o"
   },
   {
+    "file": "src/gltf_loading.c",
+    "arguments": [
+      "/bin/gcc",
+      "-Iinclude",
+      "-Ideps",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/gltf_loading.c",
+      "-o",
+      "obj/c/gltf_loading.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine",
+    "output": "obj/c/gltf_loading.o"
+  },
+  {
     "file": "cpp_layer/vma.cpp",
     "arguments": [
       "/bin/g++",
       "-Iinclude",
+      "-Ideps",
       "-g",
       "-c",
       "cpp_layer/vma.cpp",
@@ -92,5 +115,16 @@
     ],
     "directory": "/home/bag/Documents/projects/game_engine",
     "output": "obj/cpp/vma.o"
+  },
+  {
+    "file": "deps/tiny_gltf_v3.c",
+    "arguments": [
+      "/bin/gcc",
+      "deps/tiny_gltf_v3.c",
+      "-o",
+      "engine"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine",
+    "output": "engine"
   }
 ]
