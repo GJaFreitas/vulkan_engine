@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define internal	static
+
 #define sizeofarray(x) (sizeof(x) / sizeof(x[0]))
 
 typedef int8_t		i8;

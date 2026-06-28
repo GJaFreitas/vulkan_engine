@@ -83,6 +83,7 @@ String	stringCopy(const String str);
 void	stringViewAdvance(StringView *s, u64 count);
 
 
+u64	queryTimer(void);
 u64	getFrameDeltaNano(void);
 double	getFrameDelta(void);
 
