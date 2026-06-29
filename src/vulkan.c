@@ -9,7 +9,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
 {
 	if (message_severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
 	{
-		fprintf(stderr, "%i - %s: %s\n", callback_data->messageIdNumber, callback_data->pMessageIdName, callback_data->pMessage);
+		engine_error("vulkan", "%i - %s: %s\n", callback_data->messageIdNumber, callback_data->pMessageIdName, callback_data->pMessage);
 	}
 	return VK_FALSE;
 }
@@ -17,7 +17,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
 static void	createInstance(GraphicsContext *ctx)
 {
 	if (volkInitialize() != VK_SUCCESS) {
-		fprintf(stderr, "Failed to initialized volk\n");
+		engine_error("vulkan", "Failed to initialized volk\n");
 		exit(1);
 	}
 
@@ -65,7 +65,7 @@ static void	createInstance(GraphicsContext *ctx)
 	};
 
 	if (vkCreateInstance(&instanceInfo, NULL, &ctx->vk_instance) != VK_SUCCESS) {
-		fprintf(stderr, "Failed to create vulkan instance\n");
+		engine_error("vulkan", "Failed to create vulkan instance\n");
 		exit(1);
 	}
 
@@ -77,7 +77,7 @@ static void	createSurface(GraphicsContext *ctx)
 {
 	printf("SDL video driver: %s\n", SDL_GetCurrentVideoDriver());
 	if (!SDL_Vulkan_CreateSurface(ctx->window, ctx->vk_instance, NULL, &ctx->surface)) {
-		fprintf(stderr, "Failed to create surface, error: %s\n", SDL_GetError());
+		engine_error("vulkan", "Failed to create surface, error: %s\n", SDL_GetError());
 		exit(1);
 	}
 	printf("Successfully created surface\n");
@@ -177,15 +177,15 @@ static void	createDevice(GraphicsContext *ctx)
 	vkGetPhysicalDeviceFeatures2(chosen_phys_device, &supported_features);
 
 	if (!supported_features13.dynamicRendering) {
-		fprintf(stderr, "Card doesnt support dynamic rendering\n");
+		engine_error("vulkan", "Card doesnt support dynamic rendering\n");
 		exit(1);
 	}
 	if (!supported_features13.synchronization2) {
-		fprintf(stderr, "Card doesnt support sync2\n");
+		engine_error("vulkan", "Card doesnt support sync2\n");
 		exit(1);
 	}
 	if (!supported_features12.timelineSemaphore) {
-		fprintf(stderr, "Card doesnt support timeline semaphore\n");
+		engine_error("vulkan", "Card doesnt support timeline semaphore\n");
 		exit(1);
 	}
 
@@ -232,7 +232,7 @@ static void	createDevice(GraphicsContext *ctx)
 	};
 
 	if (vkCreateDevice(chosen_phys_device, &device_create_info, NULL, &ctx->device) != VK_SUCCESS) {
-		fprintf(stderr, "Failed to create logical device\n");
+		engine_error("vulkan", "Failed to create logical device\n");
 		exit(1);
 	}
 
@@ -248,7 +248,7 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 
 	VkSurfaceCapabilitiesKHR	surface_capabilities = {0};
 	if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(ctx->phys_device, ctx->surface, &surface_capabilities) != VK_SUCCESS) {
-		fprintf(stderr, "Failed to get surface capabilities\n");
+		engine_error("vulkan", "Failed to get surface capabilities\n");
 		exit(1);
 	}
 
@@ -273,7 +273,7 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 	};
 
 	if (vkCreateSwapchainKHR(ctx->device, &swapchain_info, NULL, &ctx->swapchain) != VK_SUCCESS) {
-		fprintf(stderr, "Failed to create swapchain\n");
+		engine_error("vulkan", "Failed to create swapchain\n");
 	}
 	printf("Successfully created swapchain\n");
 
@@ -298,7 +298,7 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 		};
 
 		if (vkCreateImageView(ctx->device, &img_info, NULL, &image_views[i]) != VK_SUCCESS) {
-			fprintf(stderr, "Failed to create image view nr: %u\n", i);
+			engine_error("vulkan", "Failed to create image view nr: %u\n", i);
 			exit(1);
 		}
 	}
@@ -310,7 +310,7 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 		};
 
 		if (vkCreateSemaphore(ctx->device, &semaphore_info, NULL, &semaphores[i]) != VK_SUCCESS) {
-			fprintf(stderr, "Failed to create semaphore nr: %u\n", i);
+			engine_error("vulkan", "Failed to create semaphore nr: %u\n", i);
 			exit(1);
 		}
 	}
@@ -331,7 +331,7 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 	};
 
 	if (wrapperVMAcreateImage(ctx->vma_allocator, &depth_info, &ctx->swapchain_depth_image, &ctx->swapchain_depth_image_allocation) != VK_SUCCESS) {
-		fprintf(stderr, "Failed to allocate depth buffer\n");
+		engine_error("vulkan", "Failed to allocate depth buffer\n");
 		exit(1);
 	}
 
@@ -348,7 +348,7 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 	};
 
 	if (vkCreateImageView(ctx->device, &depth_view_info, NULL, &ctx->swapchain_depth_image_view) != VK_SUCCESS) {
-		fprintf(stderr, "Failed to create depth image view\n");
+		engine_error("vulkan", "Failed to create depth image view\n");
 		exit(1);
 	}
 
@@ -366,60 +366,53 @@ typedef struct
 	u64 size;
 }	ShaderCode;
 
-// TODO: Change this function to the new readFile()
-static ShaderCode read_shader_file(const char *filename)
+static VkShaderModule	createShaderModule(String filename, shaderc_shader_kind kind, GraphicsContext *ctx)
 {
-	ShaderCode code;
-	char	buffer[4096];
-	u8 *data = malloc(0);
-	int fd = open(filename, O_RDONLY);
-	if (fd == -1) {
-		fprintf(stderr, "Error opening file: %s\n", filename);
-		exit(1);
+
+	StringView	extension = filename;
+
+	// extension is at '.'
+	stringViewJumpToChar(&extension, '.');
+	// extension after '.'
+	stringViewAdvance(&extension, 1);
+
+	String shader_code = readFile(filename);
+	engine_log("vulkan", "Compiling shader: %S", filename);
+
+	u64	shader_size;
+	u32	*shader_data;
+
+	// Shader is already compiled
+	if (stringIsEqual(extension, STRING_LIT("spv"))) {
+		shader_data = (u32 *)shader_code.data;
+		shader_size = shader_code.count;
+	} else {
+		char	*filename_cstring = stringToCstr(filename, NULL);
+
+		shaderc_compiler_t		compiler = shaderc_compiler_initialize();
+		shaderc_compile_options_t	opts = shaderc_compile_options_initialize();
+		shaderc_compile_options_set_target_env(opts, shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_4);
+		shaderc_compile_options_set_target_spirv(opts, shaderc_spirv_version_1_6);
+		shaderc_compile_options_set_optimization_level(opts, shaderc_optimization_level_performance);
+		shaderc_compilation_result_t result = shaderc_compile_into_spv(compiler, (char *)shader_code.data, shader_code.count, kind, filename_cstring, "main", opts);
+		if (shaderc_result_get_compilation_status(result) != shaderc_compilation_status_success) {
+			engine_error("vulkan", "Shader compilation error: %s\n", shaderc_result_get_error_message(result));
+			exit(1);
+		}
+		free(filename_cstring);
+
+		shader_size = shaderc_result_get_length(result);
+		shader_data = (u32 *)shaderc_result_get_bytes(result);
 	}
-
-	u64 bytes, size = 0;
-	while ((bytes = read(fd, buffer, 4096)) >= 4096) {
-		data = realloc(data, size + bytes);
-		mempcpy(data + size, buffer, bytes);
-		size += bytes;
-	}
-	data = realloc(data, size + bytes);
-	mempcpy(data + size, buffer, bytes);
-	size += bytes;
-	close(fd);
-	code.code = (u32 *)data;
-	code.size = size;
-	return code;
-}
-
-static VkShaderModule	createShaderModule(const char *filename, shaderc_shader_kind kind, GraphicsContext *ctx)
-{
-	ShaderCode shader_code = read_shader_file(filename);
-
-	printf("Compiling shader: %s\n", filename);
-
-	shaderc_compiler_t		compiler = shaderc_compiler_initialize();
-	shaderc_compile_options_t	opts = shaderc_compile_options_initialize();
-	shaderc_compile_options_set_target_env(opts, shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_4);
-	shaderc_compile_options_set_target_spirv(opts, shaderc_spirv_version_1_6);
-	shaderc_compile_options_set_optimization_level(opts, shaderc_optimization_level_performance);
-	shaderc_compilation_result_t result = shaderc_compile_into_spv(compiler, (char *)shader_code.code, shader_code.size, kind, filename, "main", opts);
-	if (shaderc_result_get_compilation_status(result) != shaderc_compilation_status_success) {
-		fprintf(stderr, "Shader compilation error: %s\n", shaderc_result_get_error_message(result));
-		exit(1);
-	}
-
-	const u64	shader_size = shaderc_result_get_length(result);
 
 	VkShaderModuleCreateInfo	shader_info = {
 		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
 		.codeSize = shader_size,
-		.pCode = (u32 *)shaderc_result_get_bytes(result),
+		.pCode = shader_data,
 	};
 	VkShaderModule	module;
 	if (vkCreateShaderModule(ctx->device, &shader_info, NULL, &module) != VK_SUCCESS) {
-		fprintf(stderr, "Failed to create shader module: %s\n", filename);
+		engine_error("vulkan", "Failed to create shader module: %S\n", filename);
 		exit(1);
 	}
 	return module;
@@ -427,38 +420,38 @@ static VkShaderModule	createShaderModule(const char *filename, shaderc_shader_ki
 
 static void	createShaders(GraphicsContext *ctx)
 {
-	ctx->vertex_shader = createShaderModule("shaders/shader.vert", shaderc_vertex_shader, ctx);
-	ctx->frag_shader = createShaderModule("shaders/shader.frag", shaderc_fragment_shader, ctx);
+	ctx->vertex_shader = createShaderModule(STRING_LIT("shaders/compiled/slang.spv"), shaderc_vertex_shader, ctx);
+	ctx->frag_shader = ctx->vertex_shader;
 }
 
 static void	createGraphicsPipeline(GraphicsContext *ctx)
 {
 	VkPipelineLayoutCreateInfo	layout_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = 0,
+		.setLayoutCount = 1,
+		.pSetLayouts = &ctx->descriptor_layout,
 		.pushConstantRangeCount = 0
 	};
 
 	VkPipelineLayout	layout;
 	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &layout) != VK_SUCCESS) {
-		fprintf(stderr, "Failed to create pipeline layout\n");
+		engine_error("vulkan", "Failed to create pipeline layout\n");
 		exit(1);
 	}
 	ctx->pipeline_layout = layout;
 
-	const char	*entry_point = "main";
 	VkPipelineShaderStageCreateInfo	shader_stages[] = {
 		{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = VK_SHADER_STAGE_VERTEX_BIT,
 			.module = ctx->vertex_shader,
-			.pName = entry_point
+			.pName = "vertMain"
 		},
 		{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
 			.module = ctx->frag_shader,
-			.pName = entry_point
+			.pName = "fragMain"
 		}
 	};
 
@@ -572,7 +565,7 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 	};
 
 	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline) != VK_SUCCESS) {
-		fprintf(stderr, "Failed to create graphics pipeline\n");
+		engine_error("vulkan", "Failed to create graphics pipeline\n");
 		exit(1);
 	}
 
@@ -596,7 +589,7 @@ static void	createSyncResources(GraphicsContext *ctx)
 	};
 
 	if (vkCreateSemaphore(ctx->device, &timeline_semaphore_info, NULL, &ctx->timeline_semaphore) != VK_SUCCESS) {
-		fprintf(stderr, "Failed to create timeline semaphore\n");
+		engine_error("vulkan", "Failed to create timeline semaphore\n");
 		exit(1);
 	}
 
@@ -607,7 +600,7 @@ static void	createSyncResources(GraphicsContext *ctx)
 
 		if (vkCreateSemaphore(ctx->device, &semaphore_info, NULL,
 			&ctx->frame_resources[i].image_acquired_semaphore) != VK_SUCCESS) {
-			fprintf(stderr, "Failed to create semaphore for frame resources nr: %u\n", i);
+			engine_error("vulkan", "Failed to create semaphore for frame resources nr: %u\n", i);
 			exit(1);
 		}
 	}
@@ -626,7 +619,7 @@ static void	createCommandBuffers(GraphicsContext *ctx)
 		};
 
 		if (vkCreateCommandPool(ctx->device, &pool_info, NULL, &resource->command_pool) != VK_SUCCESS) {
-			fprintf(stderr, "Failed to create command pool nr: %u\n", i);
+			engine_error("vulkan", "Failed to create command pool nr: %u\n", i);
 			exit(1);
 		}
 
@@ -638,7 +631,7 @@ static void	createCommandBuffers(GraphicsContext *ctx)
 		};
 
 		if (vkAllocateCommandBuffers(ctx->device, &buffer_alloc_info, &resource->command_buffer) != VK_SUCCESS) {
-			fprintf(stderr, "Failed to create command buffer nr: %u\n", i);
+			engine_error("vulkan", "Failed to create command buffer nr: %u\n", i);
 			exit(1);
 		}
 	}
@@ -676,7 +669,7 @@ static void	destroySyncResources(GraphicsContext *ctx)
 	vkDestroySemaphore(ctx->device, ctx->timeline_semaphore, NULL);
 }
 
-internal void	createVertexBuf(GraphicsContext *ctx)
+internal void	createVertIdxBuf(GraphicsContext *ctx)
 {
 	ToyVertex	vertices[] = {
 		{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
@@ -718,9 +711,106 @@ internal void	createVertexBuf(GraphicsContext *ctx)
 	memcpy(data, indices, idx_buf_info.size);
 	wrapperVMAunmapMemory(ctx->vma_allocator, ctx->index_buffer_allocation);
 //
-// 	fprintf(stderr, "created vertex_buffer handle: %p\n", (void*)ctx->vertex_buffer);
-// fprintf(stderr, "offsetof vertex_buffer: %zu\n", offsetof(GraphicsContext, vertex_buffer));
-// fprintf(stderr, "offsetof vertex_buffer_allocation: %zu\n", offsetof(GraphicsContext, vertex_buffer_allocation));
+// 	engine_error("vulkan", "created vertex_buffer handle: %p\n", (void*)ctx->vertex_buffer);
+// engine_error("vulkan", "offsetof vertex_buffer: %zu\n", offsetof(GraphicsContext, vertex_buffer));
+// engine_error("vulkan", "offsetof vertex_buffer_allocation: %zu\n", offsetof(GraphicsContext, vertex_buffer_allocation));
+}
+
+internal void	createDescriptorSetLayout(GraphicsContext *ctx)
+{
+	VkDescriptorSetLayoutBinding	layout_bindings[] = {
+		// UBO binding
+		{
+			.binding = 0,
+			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			.descriptorCount = 1,
+			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+		}
+	};
+
+	VkDescriptorSetLayoutCreateInfo	create_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.bindingCount = sizeofarray(layout_bindings),
+		.pBindings = layout_bindings,
+	};
+
+	vkCreateDescriptorSetLayout(ctx->device, &create_info, NULL, &ctx->descriptor_layout);
+}
+
+internal void	createUniformBuffers(GraphicsContext *ctx)
+{
+	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		VkBufferCreateInfo	buf_info = {
+			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+			.size = sizeof(UniformBufferObject)
+		};
+
+		wrapperVMAcreateBuffer(ctx->vma_allocator, &buf_info, &ctx->uniform_buffers[i], &ctx->uniform_buffer_allocations[i], 1);
+		wrapperVMAmapMemory(ctx->vma_allocator, ctx->uniform_buffer_allocations[i], &ctx->uniform_buffers_mapped[i]);
+	}
+}
+
+internal void	createDescriptorPoolSets(GraphicsContext *ctx)
+{
+	VkDescriptorPoolSize	pool_size = {
+		.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		.descriptorCount = MAX_FRAMES_IN_FLIGHT,
+	};
+
+	VkDescriptorPoolCreateInfo	create_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
+		.maxSets = MAX_FRAMES_IN_FLIGHT,
+		.poolSizeCount = 1,
+		.pPoolSizes = &pool_size,
+	};
+
+	if (vkCreateDescriptorPool(ctx->device, &create_info, NULL, &ctx->descriptor_pool) != VK_SUCCESS) {
+		engine_error("vulkan", "Failed to create descriptor pool");
+	}
+
+	VkDescriptorSetLayout layouts[MAX_FRAMES_IN_FLIGHT];
+	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		layouts[i] = ctx->descriptor_layout;
+
+	VkDescriptorSetAllocateInfo	alloc_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = ctx->descriptor_pool,
+		.descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
+		.pSetLayouts = layouts,
+	};
+
+	if (vkAllocateDescriptorSets(ctx->device, &alloc_info, ctx->descriptor_sets) != VK_SUCCESS) {
+		engine_error("vulkan", "Failed to allocate descriptor sets");
+		exit(1);
+	}
+
+	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+		engine_error("vulkan", "allocated descriptor_set[%u]: %p\n", i, (void*)ctx->descriptor_sets[i]);
+
+	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		VkDescriptorBufferInfo	buf_info = {
+			.buffer = ctx->uniform_buffers[i],
+			.offset = 0,
+			.range = sizeof(UniformBufferObject),
+		};
+
+		VkWriteDescriptorSet	descriptor_write = {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = ctx->descriptor_sets[i],
+			.dstBinding = 0,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			.pBufferInfo = &buf_info,
+		};
+
+		vkUpdateDescriptorSets(ctx->device, 1, &descriptor_write, 0, NULL);
+	}
+
+	engine_log("vulkan", "Successfully created descriptor pools and sets");
 }
 
 static void	initVulkan(GraphicsContext *ctx)
@@ -732,14 +822,17 @@ static void	initVulkan(GraphicsContext *ctx)
 	volkLoadDevice(ctx->device);
 	ctx->vma_allocator = initializeVMA(ctx->phys_device, ctx->device, ctx->vk_instance);
 	if (ctx->vma_allocator == NULL) {
-		fprintf(stderr, "Failed to create vma allocator\n");
+		engine_error("vulkan", "Failed to create vma allocator\n");
 		exit(1);
 	}
 	createSwapchain(ctx, ctx->window_width, ctx->window_height);
 	createShaders(ctx);
+	createDescriptorSetLayout(ctx);
 	createGraphicsPipeline(ctx);
 	createSyncResources(ctx);
-	createVertexBuf(ctx);
+	createVertIdxBuf(ctx);
+	createUniformBuffers(ctx);
+	createDescriptorPoolSets(ctx);
 	createCommandBuffers(ctx);
 	ctx->frame_index = 0;
 	ctx->next_signal_value = ctx->frames_in_flight_count + 1;
@@ -764,11 +857,38 @@ static void	initSdl(GraphicsContext *ctx)
 	SDL_InitSubSystem(SDL_INIT_VIDEO);
 
 	if ((ctx->window = SDL_CreateWindow("Hello world", ctx->window_width, ctx->window_height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE)) == NULL) {
-		fprintf(stderr, "Couldnt create window\n");
+		engine_error("vulkan", "Couldnt create window\n");
 		exit(1);
 	} else {
 		printf("SDL window created\n");
 	}
+}
+
+internal void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx)
+{
+	static u64	last_time = UINT64_MAX;
+
+	if (last_time == UINT64_MAX) {
+		last_time = queryTimer();
+		return ;
+	}
+
+	u64	cur = queryTimer();
+	float	time = (float)(cur - last_time) / 10000000;
+	engine_debug("vulkan", "time: %.2f", time);
+	last_time = cur;
+
+	UniformBufferObject ubo = {};
+	glm_mat4_identity(ubo.model);
+
+	glm_rotate(ubo.model, glm_rad(90) * time, (vec3){0, 0, 1.0f});
+	glm_lookat((vec3){2.0f, 2.0f, 2.0f}, (vec3){0, 0, 0}, (vec3){0, 0, 1.0f}, ubo.view);
+	glm_perspective(glm_rad(45.0f), (float)ctx->swapchain_width / (float)ctx->swapchain_height, 0.1f, 10.0f, ubo.proj);
+
+	// Vulkan y shift
+	ubo.proj[1][1] *= -1;
+
+	memcpy(ctx->uniform_buffers_mapped[frame_idx], &ubo, sizeof(UniformBufferObject));
 }
 
 void	render(GraphicsContext *ctx)
@@ -786,6 +906,9 @@ void	render(GraphicsContext *ctx)
 	const u64	signal_value = ctx->next_signal_value++;
 	const u64	wait_value = signal_value - ctx->frames_in_flight_count;
 	// printf("res_index: %u, signal_value: %lu, wait_value: %lu\n", frame_res_index, signal_value, wait_value);
+
+	updateUniformBuffer(ctx, frame_res_index);
+
 	VkSemaphoreWaitInfo	wait_info = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
 		.semaphoreCount = 1,
@@ -914,11 +1037,12 @@ void	render(GraphicsContext *ctx)
 		};
 		vkCmdSetScissor(resource.command_buffer, 0, 1, &scissor);
 
-		// fprintf(stderr, "vertex_buffer handle: %p\n", (void*)ctx->vertex_buffer);
+		// engine_error("vulkan", "vertex_buffer handle: %p\n", (void*)ctx->vertex_buffer);
 		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline);
 		VkDeviceSize	offset = 0;
 		vkCmdBindVertexBuffers(resource.command_buffer, 0, 1, &ctx->vertex_buffer, &offset);
 		vkCmdBindIndexBuffer(resource.command_buffer, ctx->index_buffer, 0, VK_INDEX_TYPE_UINT16);
+		vkCmdBindDescriptorSets(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_layout, 0, 1, &ctx->descriptor_sets[frame_res_index], 0, NULL);
 		vkCmdDrawIndexed(resource.command_buffer, ctx->index_count, 1, 0, 0, 0);
 	}
 	vkCmdEndRendering(resource.command_buffer);

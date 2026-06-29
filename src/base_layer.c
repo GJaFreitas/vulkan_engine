@@ -33,8 +33,9 @@ double	getFrameDelta(void)
 }
 
 // TODO: This is wrong of course
-void	*standard_alloc(u64 size)
+void	*standard_alloc(u64 size, u64 alignment)
 {
+	(void)alignment;
 	return (malloc(size));
 }
 
@@ -91,7 +92,7 @@ Allocator	newArenaAllocator(u64 size, Allocator *parent, u64 alignment)
 	if (parent)
 		a.mem = parent->fp_allocation(parent, size, alignment);
 	else
-		a.mem = standard_alloc(size);
+		a.mem = standard_alloc(size, DEFAULT_ALIGN);
 
 	allocator.parent = parent;
 	allocator.arena = a;
@@ -102,33 +103,42 @@ Allocator	newArenaAllocator(u64 size, Allocator *parent, u64 alignment)
 	return allocator;
 }
 
-u8	*readFileData(const char *filename, u64 *file_size)
+u8	*readFileData(String filename, u64 *file_size)
 {
-	u8	*data;
-	int	fd = open(filename, O_RDONLY);
+	char	filename_cstring[128];
+	memcpy(filename_cstring, filename.data, filename.count);
+	filename_cstring[filename.count] = 0;
+	int	fd = open(filename_cstring, O_RDONLY);
 
 	if (fd == -1) {
-		fprintf(stderr, "Failed to open file: %s\n", filename);
+		fprintf(stderr, "Failed to open file: %S\n", filename);
 		return NULL;
 	}
+
+	u8	*data;
 
 	struct stat	stats;
 	fstat(fd, &stats);
 
 	data = mmap(NULL, stats.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-	if (file_size)
-		*file_size = stats.st_size;
 
 	close(fd);
 
 	if (data == MAP_FAILED) {
-		fprintf(stderr, "Failed to map file: %s\n", filename);
+		fprintf(stderr, "Failed to map file: %S\n", filename);
+		return NULL;
+	}
+	if (file_size) {
+		*file_size = stats.st_size;
+	} else {
+		fprintf(stderr, "Failed to get file size: %S\n", filename);
+		munmap(data, stats.st_size);
 		return NULL;
 	}
 	return (data);
 }
 
-String	readFile(const char *filename)
+String	readFile(String filename)
 {
 	String	file;
 
@@ -257,7 +267,7 @@ String	stringDup(StringView str, Allocator *allocator)
 	if (allocator)
 		new_str.data = allocator->fp_allocation(allocator, new_str.count, 8);
 	else
-		new_str.data = standard_alloc(new_str.count);
+		new_str.data = standard_alloc(new_str.count, DEFAULT_ALIGN);
 	memcpy(new_str.data, str.data, str.count);
 	return (new_str);
 }
@@ -283,4 +293,17 @@ String	stringCopy(const String str)
 	s.data = malloc(s.count);
 	memcpy(s.data, str.data, s.count);
 	return s;
+}
+
+char	*stringToCstr(String s, Allocator *allocator)
+{
+	char	*cstring;
+
+	if (allocator)
+		cstring = allocator->fp_allocation(allocator, s.count + 1, 16);
+	else
+		cstring = standard_alloc(s.count + 1, DEFAULT_ALIGN);
+	memcpy(cstring, s.data, s.count);
+	cstring[s.count] = 0;
+	return cstring;
 }

@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #include <cglm/cglm.h>
 
 #include "vulkan_inner.h"
@@ -217,6 +218,14 @@ typedef struct GraphicsContext
 	VkBuffer		index_buffer;
 	void			*vertex_buffer_allocation;
 	void			*index_buffer_allocation;
+
+	VkDescriptorSetLayout	descriptor_layout;
+	VkBuffer		uniform_buffers[MAX_FRAMES_IN_FLIGHT];
+	void			*uniform_buffers_mapped[MAX_FRAMES_IN_FLIGHT];
+	void			*uniform_buffer_allocations[MAX_FRAMES_IN_FLIGHT];
+
+	VkDescriptorPool	descriptor_pool;
+	VkDescriptorSet		descriptor_sets[MAX_FRAMES_IN_FLIGHT];
 
 }	GraphicsContext;
 

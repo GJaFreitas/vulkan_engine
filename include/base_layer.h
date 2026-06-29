@@ -11,12 +11,15 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <time.h>
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #include <cglm/cglm.h>
 
 #include "logs.h"
 
 /* ---------------------- ALLOCATORS ---------------------- */ 
 /* -------------------------------------------------------- */ 
+
+#define DEFAULT_ALIGN	16
 
 typedef struct Allocator Allocator;
 
@@ -67,8 +70,8 @@ Allocator	newArenaAllocator(u64 size, Allocator *parent, u64 alignment);
 /* -------------------------------------------------------- */ 
 /* ---------------------- ALLOCATORS ---------------------- */ 
 
-String	readFile(const char *filename);
-u8	*readFileData(const char *filename, u64 *file_size);
+String	readFile(String filename);
+u8	*readFileData(String filename, u64 *file_size);
 // No allocations
 StringView	getNextLine(String str, u64 *offset);
 void	printString(const char *fmt, StringView str);
@@ -81,6 +84,7 @@ String	stringDup(StringView str, Allocator *allocator);
 String	createString(const char *cstr);
 String	stringCopy(const String str);
 void	stringViewAdvance(StringView *s, u64 count);
+char	*stringToCstr(String s, Allocator *allocator);
 
 
 u64	queryTimer(void);

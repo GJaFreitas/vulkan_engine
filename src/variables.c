@@ -180,7 +180,7 @@ void	check_var_modify()
 
 void	init_vars()
 {
-	String	file_data = readFile("data/All.variables");
+	String	file_data = readFile(STRING_LIT("data/All.variables"));
 	if (file_data.data == NULL) {
 		fprintf(stderr, "mmap error: %s\n", strerror(errno));
 		engine_error("variables", "Failed to read file data/All.variables\n");

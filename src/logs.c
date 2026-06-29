@@ -3,13 +3,6 @@
 
 // None of this is async, be careful later
 
-enum LogLevel
-{
-	LOG_LOG,
-	LOG_WARN,
-	LOG_ERROR
-};
-
 typedef struct LogEntry
 {
 	enum LogLevel	level;
@@ -18,9 +11,11 @@ typedef struct LogEntry
 	struct LogEntry	*next;
 }	LogEntry;
 
-static LogEntry	logs;
-static LogEntry	*current_entry = &logs;
-static Allocator	log_allocator;
+internal LogEntry	logs;
+internal LogEntry	*current_entry = &logs;
+internal Allocator	log_allocator;
+internal enum LogLevel	print_severity = LOG_LOG;
+
 
 void	start_logs(void)
 {
@@ -29,8 +24,16 @@ void	start_logs(void)
 	logs.log.data = (u8 *)cstrdup("Engine started", &logs.log.count, &log_allocator);
 }
 
+void	set_log_severity(enum LogLevel level)
+{
+	print_severity = level;
+}
+
 void	print_single_log(LogEntry entry)
 {
+	if (entry.level < print_severity)
+		return ;
+
 	const char	log_log[] = "[LOG] ";
 	const char	log_warn[] = "[WARN] ";
 	const char	log_error[] = "[ERROR] ";
@@ -111,6 +114,14 @@ void	engine_error(const char *file, const char *fmt, ...)
 	va_list	ap;
 	va_start(ap, fmt);
 	create_log_entry(LOG_ERROR, file, fmt, ap);
+	va_end(ap);
+}
+
+void	engine_debug(const char *file, const char *fmt, ...)
+{
+	va_list	ap;
+	va_start(ap, fmt);
+	create_log_entry(LOG_DEBUG, file, fmt, ap);
 	va_end(ap);
 }
 

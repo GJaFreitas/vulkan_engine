@@ -45,6 +45,7 @@ int	loop()
 
 int	main(void)
 {
+	set_log_severity(LOG_DEBUG);
 	start_logs();
 	init_vars();
 	loop();
