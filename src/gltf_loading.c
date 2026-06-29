@@ -183,6 +183,7 @@ static void	loadFromPNG(GraphicsContext *ctx, tg3_model model, tg3_image image, 
 	// Submit the image to the GPU
 	// Creating the command buffer
 	// TODO: This part can be optimized A LOT
+	// »speed
 	VkCommandBuffer	cmd;
 	VkCommandPool	cmd_pool;
 

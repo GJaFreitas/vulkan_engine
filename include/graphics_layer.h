@@ -25,6 +25,12 @@
 #define TINYGLTF3_ENABLE_FS
 #include "tiny_gltf_v3.h"
 
+typedef struct ToyVertex
+{
+	vec2	pos;
+	vec3	color;
+}	ToyVertex;
+
 typedef struct Texture
 {
 	// TODO: Not a good identifier outside of debug, find another way
@@ -203,6 +209,15 @@ typedef struct GraphicsContext
 
 	u32			frame_index;
 	u64			next_signal_value;
+
+
+	u32			vertex_count;
+	VkBuffer		vertex_buffer;
+	u32			index_count;
+	VkBuffer		index_buffer;
+	void			*vertex_buffer_allocation;
+	void			*index_buffer_allocation;
+
 }	GraphicsContext;
 
 

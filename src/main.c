@@ -33,7 +33,9 @@ int	loop()
 				break ;
 			}
 		}
+		// fprintf(stderr, "vertex_buffer handle before render: %p\n", (void*)ctx.vertex_buffer);
 		render(&ctx);
+		
 		check_var_modify();
 	}
 

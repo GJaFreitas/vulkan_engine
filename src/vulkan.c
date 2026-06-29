@@ -462,8 +462,28 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 		}
 	};
 
+
+	/* TOY CODE --------------------------- */
+
+	VkVertexInputBindingDescription	bind_desc = {
+		.binding = 0,
+		.stride = sizeof(ToyVertex),
+		.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+	};
+
+	VkVertexInputAttributeDescription	attribute_desc[] = {
+		{.location = 0, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(ToyVertex, pos)},
+		{.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(ToyVertex, color)},
+	};
+
+	/* TOY CODE --------------------------- */
+
 	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		.pVertexBindingDescriptions = &bind_desc,
+		.vertexBindingDescriptionCount = 1,
+		.pVertexAttributeDescriptions = attribute_desc,
+		.vertexAttributeDescriptionCount = sizeofarray(attribute_desc),
 	};
 
 	VkPipelineInputAssemblyStateCreateInfo	imput_assembly_info = {
@@ -490,7 +510,8 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 	VkPipelineRasterizationStateCreateInfo	rasterization_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
 		.polygonMode = VK_POLYGON_MODE_FILL,
-		.cullMode = VK_CULL_MODE_BACK_BIT,
+		// TODO: Change the cull mode to back bit again
+		.cullMode = VK_CULL_MODE_NONE,
 		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
 		.lineWidth = 1.0f
 	};
@@ -655,6 +676,53 @@ static void	destroySyncResources(GraphicsContext *ctx)
 	vkDestroySemaphore(ctx->device, ctx->timeline_semaphore, NULL);
 }
 
+internal void	createVertexBuf(GraphicsContext *ctx)
+{
+	ToyVertex	vertices[] = {
+		{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+		{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+		{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+		{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+	};
+
+	u16	indices[] = {
+	    0, 1, 2, 2, 3, 0
+	};
+
+	ctx->index_count = sizeofarray(indices);
+	ctx->vertex_count = sizeofarray(vertices);
+	VkBufferCreateInfo	vert_buf_info = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.size = sizeof(ToyVertex) * ctx->vertex_count,
+	};
+	VkBufferCreateInfo	idx_buf_info = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.size = sizeof(u16) * ctx->index_count,
+	};
+
+	wrapperVMAcreateBuffer(ctx->vma_allocator, &vert_buf_info, &ctx->vertex_buffer, &ctx->vertex_buffer_allocation, 1);
+	wrapperVMAcreateBuffer(ctx->vma_allocator, &idx_buf_info, &ctx->index_buffer, &ctx->index_buffer_allocation, 1);
+
+	void *data;
+	// Map vertex
+	wrapperVMAmapMemory(ctx->vma_allocator, ctx->vertex_buffer_allocation, &data);
+	memcpy(data, vertices, vert_buf_info.size);
+	wrapperVMAunmapMemory(ctx->vma_allocator, ctx->vertex_buffer_allocation);
+
+	// Map index
+	wrapperVMAmapMemory(ctx->vma_allocator, ctx->index_buffer_allocation, &data);
+	memcpy(data, indices, idx_buf_info.size);
+	wrapperVMAunmapMemory(ctx->vma_allocator, ctx->index_buffer_allocation);
+//
+// 	fprintf(stderr, "created vertex_buffer handle: %p\n", (void*)ctx->vertex_buffer);
+// fprintf(stderr, "offsetof vertex_buffer: %zu\n", offsetof(GraphicsContext, vertex_buffer));
+// fprintf(stderr, "offsetof vertex_buffer_allocation: %zu\n", offsetof(GraphicsContext, vertex_buffer_allocation));
+}
+
 static void	initVulkan(GraphicsContext *ctx)
 {
 	createInstance(ctx);
@@ -671,6 +739,7 @@ static void	initVulkan(GraphicsContext *ctx)
 	createShaders(ctx);
 	createGraphicsPipeline(ctx);
 	createSyncResources(ctx);
+	createVertexBuf(ctx);
 	createCommandBuffers(ctx);
 	ctx->frame_index = 0;
 	ctx->next_signal_value = ctx->frames_in_flight_count + 1;
@@ -717,7 +786,6 @@ void	render(GraphicsContext *ctx)
 	const u64	signal_value = ctx->next_signal_value++;
 	const u64	wait_value = signal_value - ctx->frames_in_flight_count;
 	// printf("res_index: %u, signal_value: %lu, wait_value: %lu\n", frame_res_index, signal_value, wait_value);
-
 	VkSemaphoreWaitInfo	wait_info = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
 		.semaphoreCount = 1,
@@ -830,6 +898,7 @@ void	render(GraphicsContext *ctx)
 		.pDepthAttachment = &depth_attach_info
 	};
 
+
 	vkCmdBeginRendering(resource.command_buffer, &render_info);
 	{
 		VkViewport	viewport = {
@@ -845,8 +914,12 @@ void	render(GraphicsContext *ctx)
 		};
 		vkCmdSetScissor(resource.command_buffer, 0, 1, &scissor);
 
+		// fprintf(stderr, "vertex_buffer handle: %p\n", (void*)ctx->vertex_buffer);
 		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline);
-		vkCmdDraw(resource.command_buffer, 3, 1, 0, 0);
+		VkDeviceSize	offset = 0;
+		vkCmdBindVertexBuffers(resource.command_buffer, 0, 1, &ctx->vertex_buffer, &offset);
+		vkCmdBindIndexBuffer(resource.command_buffer, ctx->index_buffer, 0, VK_INDEX_TYPE_UINT16);
+		vkCmdDrawIndexed(resource.command_buffer, ctx->index_count, 1, 0, 0, 0);
 	}
 	vkCmdEndRendering(resource.command_buffer);
 
