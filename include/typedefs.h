@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 
-#define internal	static
-
 #define sizeofarray(x) (sizeof(x) / sizeof(x[0]))
 
 typedef int8_t		i8;
@@ -40,3 +38,5 @@ typedef struct String
 // This structure does not OWN memory, it points to another string
 // to view that memory
 typedef String StringView;
+
+

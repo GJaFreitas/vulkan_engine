@@ -11,10 +11,10 @@ typedef struct LogEntry
 	struct LogEntry	*next;
 }	LogEntry;
 
-internal LogEntry	logs;
-internal LogEntry	*current_entry = &logs;
-internal Allocator	log_allocator;
-internal enum LogLevel	print_severity = LOG_LOG;
+static LogEntry	logs;
+static LogEntry	*current_entry = &logs;
+static Allocator	log_allocator;
+static enum LogLevel	print_severity = LOG_LOG;
 
 
 void	start_logs(void)

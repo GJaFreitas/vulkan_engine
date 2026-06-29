@@ -351,7 +351,7 @@ static void	loadFromPNG(GraphicsContext *ctx, tg3_model model, tg3_image image, 
 	vkCreateSampler(ctx->device, &sampler_info, NULL, &tex->sampler);
 }
 
-internal void	gltfLoadTextures(GraphicsContext *ctx, GLTFModel *model, tg3_model gltf_model)
+static void	gltfLoadTextures(GraphicsContext *ctx, GLTFModel *model, tg3_model gltf_model)
 {
 
 	// TODO: This is bad memory allocation
@@ -394,7 +394,7 @@ internal void	gltfLoadTextures(GraphicsContext *ctx, GLTFModel *model, tg3_model
 
 }
 
-internal void	gltfLoadMaterials(GLTFModel *model, tg3_model gltf_model)
+static void	gltfLoadMaterials(GLTFModel *model, tg3_model gltf_model)
 {
 	model->materials = malloc(gltf_model.materials_count * sizeof(Material));
 	model->material_count = gltf_model.materials_count;
@@ -443,7 +443,7 @@ internal void	gltfLoadMaterials(GLTFModel *model, tg3_model gltf_model)
 	}
 }
 
-internal void	gltfBuildSceneGraph(GLTFModel *model, tg3_model gltf_model)
+static void	gltfBuildSceneGraph(GLTFModel *model, tg3_model gltf_model)
 {
 	// TODO: Bad allocation
 	model->linear_nodes = malloc(sizeof(Node) * gltf_model.nodes_count);
@@ -489,7 +489,7 @@ internal void	gltfBuildSceneGraph(GLTFModel *model, tg3_model gltf_model)
 }
 
 
-internal void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
+static void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
 {
 	for (u32 n = 0; n < gltf_model.nodes_count; n++) {
 		const tg3_node	gltf_node = gltf_model.nodes[n];
@@ -570,7 +570,7 @@ internal void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
 	}
 }
 
-internal void	gltfLoadAnimations(GLTFModel *model, tg3_model gltf_model)
+static void	gltfLoadAnimations(GLTFModel *model, tg3_model gltf_model)
 {
 	// TODO: Bad allocation
 	model->animation_count = gltf_model.animations_count;

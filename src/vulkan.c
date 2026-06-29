@@ -669,7 +669,7 @@ static void	destroySyncResources(GraphicsContext *ctx)
 	vkDestroySemaphore(ctx->device, ctx->timeline_semaphore, NULL);
 }
 
-internal void	createVertIdxBuf(GraphicsContext *ctx)
+static void	createVertIdxBuf(GraphicsContext *ctx)
 {
 	ToyVertex	vertices[] = {
 		{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
@@ -716,7 +716,7 @@ internal void	createVertIdxBuf(GraphicsContext *ctx)
 // engine_error("vulkan", "offsetof vertex_buffer_allocation: %zu\n", offsetof(GraphicsContext, vertex_buffer_allocation));
 }
 
-internal void	createDescriptorSetLayout(GraphicsContext *ctx)
+static void	createDescriptorSetLayout(GraphicsContext *ctx)
 {
 	VkDescriptorSetLayoutBinding	layout_bindings[] = {
 		// UBO binding
@@ -737,7 +737,7 @@ internal void	createDescriptorSetLayout(GraphicsContext *ctx)
 	vkCreateDescriptorSetLayout(ctx->device, &create_info, NULL, &ctx->descriptor_layout);
 }
 
-internal void	createUniformBuffers(GraphicsContext *ctx)
+static void	createUniformBuffers(GraphicsContext *ctx)
 {
 	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		VkBufferCreateInfo	buf_info = {
@@ -752,7 +752,7 @@ internal void	createUniformBuffers(GraphicsContext *ctx)
 	}
 }
 
-internal void	createDescriptorPoolSets(GraphicsContext *ctx)
+static void	createDescriptorPoolSets(GraphicsContext *ctx)
 {
 	VkDescriptorPoolSize	pool_size = {
 		.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -864,7 +864,20 @@ static void	initSdl(GraphicsContext *ctx)
 	}
 }
 
-internal void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx)
+static inline void	getProjectionMatrix(mat4 dst, Camera *c, float aspect_ratio)
+{
+	glm_perspective(glm_rad(c->zoom), aspect_ratio, 0.1f, 10.0f, dst);
+}
+
+static inline void	getViewMatrix(mat4 dst, Camera *c)
+{
+	vec3	center;
+	glm_vec3_add(c->position, c->front, center);
+	glm_lookat(c->position, center, c->up, dst);
+}
+
+
+static void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx)
 {
 	static u64	last_time = UINT64_MAX;
 
@@ -875,13 +888,11 @@ internal void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx)
 
 	u64	cur = queryTimer();
 	float	time = (float)(cur - last_time) / 10000000;
-	engine_debug("vulkan", "time: %.2f", time);
 	last_time = cur;
 
 	UniformBufferObject ubo = {};
 	glm_mat4_identity(ubo.model);
 
-	glm_rotate(ubo.model, glm_rad(90) * time, (vec3){0, 0, 1.0f});
 	glm_lookat((vec3){2.0f, 2.0f, 2.0f}, (vec3){0, 0, 0}, (vec3){0, 0, 1.0f}, ubo.view);
 	glm_perspective(glm_rad(45.0f), (float)ctx->swapchain_width / (float)ctx->swapchain_height, 0.1f, 10.0f, ubo.proj);
 
@@ -891,7 +902,7 @@ internal void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx)
 	memcpy(ctx->uniform_buffers_mapped[frame_idx], &ubo, sizeof(UniformBufferObject));
 }
 
-void	render(GraphicsContext *ctx)
+void	render(GraphicsContext *ctx, Camera *camera)
 {
 	if (ctx->swapchain_require_recreate)
 	{

@@ -9,8 +9,6 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-#include <cglm/cglm.h>
 
 #include "vulkan_inner.h"
 #include <volk.h>
@@ -230,10 +228,42 @@ typedef struct GraphicsContext
 }	GraphicsContext;
 
 
+enum CameraMovement {
+	FORWARD,
+	BACKWARD,
+	LEFT,
+	RIGHT,
+	UP,
+	DOWN
+};
+
+typedef struct Camera
+{
+	// Spatial positioning and orientation vectors
+	// These form the camera's local coordinate system in world space
+	vec3 position;     // Camera's location in world coordinates
+	vec3 front;        // Forward direction (where camera is looking)
+	vec3 up;           // Camera's local up direction (for roll control)
+	vec3 right;        // Camera's local right direction (perpendicular to front and up)
+	vec3 worldUp;      // Global up vector reference (typically Y-axis)
+
+	// Rotation representation using Euler angles
+	// Provides intuitive control while managing gimbal lock and other rotation complexities
+	float yaw;              // Horizontal rotation around the world up-axis (left-right looking)
+	float pitch;            // Vertical rotation around the camera's right axis (up-down looking)
+
+	// User interaction and behavior parameters
+	// These control how the camera responds to input and environmental factors
+	float movementSpeed;    // Units per second for translation movement
+	float mouseSensitivity; // Multiplier for mouse input to rotation angle conversion
+	float zoom;             // Field of view control for perspective projection
+
+}	Camera;
+
 void immediate_submit(GraphicsContext *ctx, void (*fn)(VkCommandBuffer cmd, void *data), void *data);
 void	startGraphics(GraphicsContext *ctx);
 void	endGraphics(GraphicsContext *ctx);
-void	render(GraphicsContext *ctx);
+void	render(GraphicsContext *ctx, Camera *world);
 
 
 void	gltf_load(String filename, GLTFModel *model, GraphicsContext *ctx);
