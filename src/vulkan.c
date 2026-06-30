@@ -7,6 +7,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
     const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
     void *user_data)
 {
+	(void)user_data;
+	(void)message_type;
 	if (message_severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
 	{
 		engine_error("vulkan", "%i - %s: %s\n", callback_data->messageIdNumber, callback_data->pMessageIdName, callback_data->pMessage);
@@ -31,16 +33,16 @@ static void	createInstance(GraphicsContext *ctx)
 	const char *const *sdl_extensions = SDL_Vulkan_GetInstanceExtensions(&extensionCount);
 
 	const char **extensions = malloc(sizeof(char *) * (extensionCount + ctx->required_extension_count));
-	printf("Extensions ---------------\n");
+	engine_log("vulkan", "Extensions ---------------");
 	for (u32 i = 0; i < extensionCount + ctx->required_extension_count; i++) {
 		if (i < extensionCount) {
 			extensions[i] = strdup(sdl_extensions[i]);
 		} else {
 			extensions[i] = strdup(ctx->required_extensions[i - extensionCount]);
 		}
-		printf("%s\n", extensions[i]);
+		engine_log("vulkan", "%s", extensions[i]);
 	}
-	printf("Extensions ---------------\n");
+	engine_log("vulkan", "Extensions ---------------");
 
 	VkDebugUtilsMessengerCreateInfoEXT debugInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
@@ -70,17 +72,17 @@ static void	createInstance(GraphicsContext *ctx)
 	}
 
 
-	printf("Successfully created vulkan instance\n");
+	engine_log("vulkan", "Successfully created vulkan instance");
 }
 
 static void	createSurface(GraphicsContext *ctx)
 {
-	printf("SDL video driver: %s\n", SDL_GetCurrentVideoDriver());
+	engine_log("vulkan", "SDL video driver: %s", SDL_GetCurrentVideoDriver());
 	if (!SDL_Vulkan_CreateSurface(ctx->window, ctx->vk_instance, NULL, &ctx->surface)) {
 		engine_error("vulkan", "Failed to create surface, error: %s\n", SDL_GetError());
 		exit(1);
 	}
-	printf("Successfully created surface\n");
+	engine_log("vulkan", "Successfully created surface");
 }
 
 static VkPresentModeKHR chooseSwapPresentMode(VkPresentModeKHR *presentModes, u32 presentModesCount)
@@ -232,11 +234,11 @@ static void	createDevice(GraphicsContext *ctx)
 	};
 
 	if (vkCreateDevice(chosen_phys_device, &device_create_info, NULL, &ctx->device) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to create logical device\n");
+		engine_error("vulkan", "Failed to create logical device");
 		exit(1);
 	}
 
-	printf("Successfully created logical device\n");
+	engine_log("vulkan", "Successfully created logical device");
 
 	vkGetDeviceQueue(ctx->device, queue_family_index, 0, &ctx->queue);
 }
@@ -275,7 +277,7 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 	if (vkCreateSwapchainKHR(ctx->device, &swapchain_info, NULL, &ctx->swapchain) != VK_SUCCESS) {
 		engine_error("vulkan", "Failed to create swapchain\n");
 	}
-	printf("Successfully created swapchain\n");
+	engine_log("vulkan", "Successfully created swapchain");
 
 	u32	image_count = 0;
 	vkGetSwapchainImagesKHR(ctx->device, ctx->swapchain, &image_count, NULL);
@@ -352,7 +354,7 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 		exit(1);
 	}
 
-	printf("Successfully created depth buffer\n");
+	engine_log("vulkan", "Successfully created depth buffer");
 
 	ctx->image_count = image_count;
 	ctx->swapchain_images = images;
@@ -426,12 +428,27 @@ static void	createShaders(GraphicsContext *ctx)
 
 static void	createGraphicsPipeline(GraphicsContext *ctx)
 {
+	VkPushConstantRange	push_constant_range = {
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		.offset = 0,
+		.size = sizeof(PushConstantBlock),
+	};
+	(void)push_constant_range;
+
+	VkDescriptorSetLayout	layouts[] = {
+		ctx->ubo_descriptor_layout,
+		ctx->material_descriptor_layout
+	};
+
 	VkPipelineLayoutCreateInfo	layout_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = 1,
-		.pSetLayouts = &ctx->descriptor_layout,
-		.pushConstantRangeCount = 0
+		.setLayoutCount = sizeofarray(layouts),
+		.pSetLayouts = layouts,
+		// TODO: Add push constants back
+		.pushConstantRangeCount = 0,
+		.pPushConstantRanges = NULL,
 	};
+
 
 	VkPipelineLayout	layout;
 	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &layout) != VK_SUCCESS) {
@@ -460,13 +477,15 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 
 	VkVertexInputBindingDescription	bind_desc = {
 		.binding = 0,
-		.stride = sizeof(ToyVertex),
+		.stride = sizeof(Vertex),
 		.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
 	};
 
 	VkVertexInputAttributeDescription	attribute_desc[] = {
-		{.location = 0, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(ToyVertex, pos)},
-		{.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(ToyVertex, color)},
+		{.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, pos)},
+		{.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)},
+		{.location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, uv)},
+		{.location = 3, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, tex_coord)},
 	};
 
 	/* TOY CODE --------------------------- */
@@ -515,7 +534,12 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 	};
 
 	VkPipelineColorBlendAttachmentState	attach_state = {
-		.blendEnable = VK_FALSE,
+		.blendEnable = VK_TRUE,
+		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+		.colorBlendOp = VK_BLEND_OP_ADD,
+		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
 		.colorWriteMask =\
 		VK_COLOR_COMPONENT_R_BIT
 		| VK_COLOR_COMPONENT_G_BIT
@@ -569,7 +593,7 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 		exit(1);
 	}
 
-	printf("Successfully created graphics pipeline\n");
+	engine_log("vulkan", "Successfully created graphics pipeline");
 }
 
 static void	createSyncResources(GraphicsContext *ctx)
@@ -589,7 +613,7 @@ static void	createSyncResources(GraphicsContext *ctx)
 	};
 
 	if (vkCreateSemaphore(ctx->device, &timeline_semaphore_info, NULL, &ctx->timeline_semaphore) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to create timeline semaphore\n");
+		engine_error("vulkan", "Failed to create timeline semaphore");
 		exit(1);
 	}
 
@@ -605,7 +629,7 @@ static void	createSyncResources(GraphicsContext *ctx)
 		}
 	}
 
-	printf("Successfully created sync resources\n");
+	engine_log("vulkan", "Successfully created sync resources");
 }
 
 static void	createCommandBuffers(GraphicsContext *ctx)
@@ -619,7 +643,7 @@ static void	createCommandBuffers(GraphicsContext *ctx)
 		};
 
 		if (vkCreateCommandPool(ctx->device, &pool_info, NULL, &resource->command_pool) != VK_SUCCESS) {
-			engine_error("vulkan", "Failed to create command pool nr: %u\n", i);
+			engine_error("vulkan", "Failed to create command pool nr: %u", i);
 			exit(1);
 		}
 
@@ -631,12 +655,12 @@ static void	createCommandBuffers(GraphicsContext *ctx)
 		};
 
 		if (vkAllocateCommandBuffers(ctx->device, &buffer_alloc_info, &resource->command_buffer) != VK_SUCCESS) {
-			engine_error("vulkan", "Failed to create command buffer nr: %u\n", i);
+			engine_error("vulkan", "Failed to create command buffer nr: %u", i);
 			exit(1);
 		}
 	}
 
-	printf("Successfully created command buffers\n");
+	engine_log("vulkan", "Successfully created command buffers");
 }
 
 static void	destroyShaders(GraphicsContext *ctx)
@@ -669,53 +693,6 @@ static void	destroySyncResources(GraphicsContext *ctx)
 	vkDestroySemaphore(ctx->device, ctx->timeline_semaphore, NULL);
 }
 
-static void	createVertIdxBuf(GraphicsContext *ctx)
-{
-	ToyVertex	vertices[] = {
-		{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-		{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-		{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-		{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
-	};
-
-	u16	indices[] = {
-	    0, 1, 2, 2, 3, 0
-	};
-
-	ctx->index_count = sizeofarray(indices);
-	ctx->vertex_count = sizeofarray(vertices);
-	VkBufferCreateInfo	vert_buf_info = {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		.size = sizeof(ToyVertex) * ctx->vertex_count,
-	};
-	VkBufferCreateInfo	idx_buf_info = {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		.size = sizeof(u16) * ctx->index_count,
-	};
-
-	wrapperVMAcreateBuffer(ctx->vma_allocator, &vert_buf_info, &ctx->vertex_buffer, &ctx->vertex_buffer_allocation, 1);
-	wrapperVMAcreateBuffer(ctx->vma_allocator, &idx_buf_info, &ctx->index_buffer, &ctx->index_buffer_allocation, 1);
-
-	void *data;
-	// Map vertex
-	wrapperVMAmapMemory(ctx->vma_allocator, ctx->vertex_buffer_allocation, &data);
-	memcpy(data, vertices, vert_buf_info.size);
-	wrapperVMAunmapMemory(ctx->vma_allocator, ctx->vertex_buffer_allocation);
-
-	// Map index
-	wrapperVMAmapMemory(ctx->vma_allocator, ctx->index_buffer_allocation, &data);
-	memcpy(data, indices, idx_buf_info.size);
-	wrapperVMAunmapMemory(ctx->vma_allocator, ctx->index_buffer_allocation);
-//
-// 	engine_error("vulkan", "created vertex_buffer handle: %p\n", (void*)ctx->vertex_buffer);
-// engine_error("vulkan", "offsetof vertex_buffer: %zu\n", offsetof(GraphicsContext, vertex_buffer));
-// engine_error("vulkan", "offsetof vertex_buffer_allocation: %zu\n", offsetof(GraphicsContext, vertex_buffer_allocation));
-}
-
 static void	createDescriptorSetLayout(GraphicsContext *ctx)
 {
 	VkDescriptorSetLayoutBinding	layout_bindings[] = {
@@ -724,7 +701,7 @@ static void	createDescriptorSetLayout(GraphicsContext *ctx)
 			.binding = 0,
 			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 		}
 	};
 
@@ -734,7 +711,9 @@ static void	createDescriptorSetLayout(GraphicsContext *ctx)
 		.pBindings = layout_bindings,
 	};
 
-	vkCreateDescriptorSetLayout(ctx->device, &create_info, NULL, &ctx->descriptor_layout);
+	if (vkCreateDescriptorSetLayout(ctx->device, &create_info, NULL, &ctx->ubo_descriptor_layout) != VK_SUCCESS) {
+		engine_error("vulkan", "Failed to create ubo layout");
+	}
 }
 
 static void	createUniformBuffers(GraphicsContext *ctx)
@@ -754,17 +733,23 @@ static void	createUniformBuffers(GraphicsContext *ctx)
 
 static void	createDescriptorPoolSets(GraphicsContext *ctx)
 {
-	VkDescriptorPoolSize	pool_size = {
-		.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		.descriptorCount = MAX_FRAMES_IN_FLIGHT,
+	VkDescriptorPoolSize	pool_sizes[] = {
+		{
+			.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			.descriptorCount = MAX_FRAMES_IN_FLIGHT,
+		},
+		{
+			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.descriptorCount = 20,
+		}
 	};
 
 	VkDescriptorPoolCreateInfo	create_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-		.maxSets = MAX_FRAMES_IN_FLIGHT,
-		.poolSizeCount = 1,
-		.pPoolSizes = &pool_size,
+		.maxSets = MAX_FRAMES_IN_FLIGHT + 20,
+		.poolSizeCount = sizeofarray(pool_sizes),
+		.pPoolSizes = pool_sizes,
 	};
 
 	if (vkCreateDescriptorPool(ctx->device, &create_info, NULL, &ctx->descriptor_pool) != VK_SUCCESS) {
@@ -772,8 +757,9 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 	}
 
 	VkDescriptorSetLayout layouts[MAX_FRAMES_IN_FLIGHT];
-	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-		layouts[i] = ctx->descriptor_layout;
+	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		layouts[i] = ctx->ubo_descriptor_layout;
+	}
 
 	VkDescriptorSetAllocateInfo	alloc_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -786,9 +772,6 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 		engine_error("vulkan", "Failed to allocate descriptor sets");
 		exit(1);
 	}
-
-	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-		engine_error("vulkan", "allocated descriptor_set[%u]: %p\n", i, (void*)ctx->descriptor_sets[i]);
 
 	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		VkDescriptorBufferInfo	buf_info = {
@@ -828,12 +811,12 @@ static void	initVulkan(GraphicsContext *ctx)
 	createSwapchain(ctx, ctx->window_width, ctx->window_height);
 	createShaders(ctx);
 	createDescriptorSetLayout(ctx);
-	createGraphicsPipeline(ctx);
 	createSyncResources(ctx);
-	createVertIdxBuf(ctx);
 	createUniformBuffers(ctx);
 	createDescriptorPoolSets(ctx);
 	createCommandBuffers(ctx);
+	gltf_load(STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"), &ctx->model, ctx);
+	createGraphicsPipeline(ctx);
 	ctx->frame_index = 0;
 	ctx->next_signal_value = ctx->frames_in_flight_count + 1;
 }
@@ -857,10 +840,10 @@ static void	initSdl(GraphicsContext *ctx)
 	SDL_InitSubSystem(SDL_INIT_VIDEO);
 
 	if ((ctx->window = SDL_CreateWindow("Hello world", ctx->window_width, ctx->window_height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE)) == NULL) {
-		engine_error("vulkan", "Couldnt create window\n");
+		engine_error("vulkan", "Couldnt create window");
 		exit(1);
 	} else {
-		printf("SDL window created\n");
+		engine_log("vulkan", "SDL window created");
 	}
 }
 
@@ -879,16 +862,6 @@ static inline void	getViewMatrix(mat4 dst, Camera *c)
 
 static void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx)
 {
-	static u64	last_time = UINT64_MAX;
-
-	if (last_time == UINT64_MAX) {
-		last_time = queryTimer();
-		return ;
-	}
-
-	u64	cur = queryTimer();
-	float	time = (float)(cur - last_time) / 10000000;
-	last_time = cur;
 
 	UniformBufferObject ubo = {};
 	glm_mat4_identity(ubo.model);
@@ -899,11 +872,25 @@ static void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx)
 	// Vulkan y shift
 	ubo.proj[1][1] *= -1;
 
+	glm_vec4_copy((vec4){-10.0f,  10.0f, 10.0f, 1.0f}, ubo.light_positions[0]);
+	glm_vec4_copy((vec4){ 10.0f,  10.0f, 10.0f, 1.0f}, ubo.light_positions[1]);
+	glm_vec4_copy((vec4){-10.0f, -10.0f, 10.0f, 1.0f}, ubo.light_positions[2]);
+	glm_vec4_copy((vec4){ 10.0f, -10.0f, 10.0f, 1.0f}, ubo.light_positions[3]);
+
+	glm_vec4_copy((vec4){300.0f, 300.0f, 300.0f, 1.0f}, ubo.light_colors[0]);
+	glm_vec4_copy((vec4){300.0f, 300.0f,   0.0f, 1.0f}, ubo.light_colors[1]);
+	glm_vec4_copy((vec4){  0.0f,   0.0f, 300.0f, 1.0f}, ubo.light_colors[2]);
+	glm_vec4_copy((vec4){300.0f,   0.0f,   0.0f, 1.0f}, ubo.light_colors[3]);
+
+	ubo.exposure = 4.5f;
+	ubo.gamma = 2.2f;
+
 	memcpy(ctx->uniform_buffers_mapped[frame_idx], &ubo, sizeof(UniformBufferObject));
 }
 
 void	render(GraphicsContext *ctx, Camera *camera)
 {
+	(void)camera;
 	if (ctx->swapchain_require_recreate)
 	{
 		vkDeviceWaitIdle(ctx->device);
@@ -912,11 +899,11 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		ctx->swapchain_require_recreate = false;
 	}
 
-	// printf("frame index: %u, next_signal_value: %lu, frames_in_flight_count: %u\n", ctx->frame_index, ctx->next_signal_value, ctx->frames_in_flight_count);
+	// engine_log("vulkan", "frame index: %u, next_signal_value: %lu, frames_in_flight_count: %u\n", ctx->frame_index, ctx->next_signal_value, ctx->frames_in_flight_count);
 	const u32	frame_res_index = ctx->frame_index++ % ctx->frames_in_flight_count;
 	const u64	signal_value = ctx->next_signal_value++;
 	const u64	wait_value = signal_value - ctx->frames_in_flight_count;
-	// printf("res_index: %u, signal_value: %lu, wait_value: %lu\n", frame_res_index, signal_value, wait_value);
+	// engine_log("vulkan", "res_index: %u, signal_value: %lu, wait_value: %lu\n", frame_res_index, signal_value, wait_value);
 
 	updateUniformBuffer(ctx, frame_res_index);
 
@@ -1051,10 +1038,35 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		// engine_error("vulkan", "vertex_buffer handle: %p\n", (void*)ctx->vertex_buffer);
 		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline);
 		VkDeviceSize	offset = 0;
-		vkCmdBindVertexBuffers(resource.command_buffer, 0, 1, &ctx->vertex_buffer, &offset);
-		vkCmdBindIndexBuffer(resource.command_buffer, ctx->index_buffer, 0, VK_INDEX_TYPE_UINT16);
-		vkCmdBindDescriptorSets(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_layout, 0, 1, &ctx->descriptor_sets[frame_res_index], 0, NULL);
-		vkCmdDrawIndexed(resource.command_buffer, ctx->index_count, 1, 0, 0, 0);
+
+		for (u32 i = 0; i < ctx->model.node_count; i++) {
+			const Mesh	*mesh = &ctx->model.linear_nodes[i].mesh;
+
+			if (mesh->vertex_count == 0)
+				continue ;
+
+			// TODO: Again this could be a big buffer and the binding done with offsets
+			// »speed
+			vkCmdBindVertexBuffers(resource.command_buffer, 0, 1, &mesh->gpu_vertex_data, &offset);
+			vkCmdBindIndexBuffer(resource.command_buffer, mesh->gpu_index_data, 0, mesh->index_type);
+
+			Material	*mat;
+			if (mesh->material_index >= 0)
+				mat = &ctx->model.materials[mesh->material_index];
+			else
+				mat = NULL;
+
+			VkDescriptorSet	descriptor_sets[2] = { ctx->descriptor_sets[frame_res_index], VK_NULL_HANDLE };
+			u32		descriptor_set_count = 1;
+			if (mat) {
+				descriptor_set_count += 1;
+				descriptor_sets[1] = mat->descriptor_set;
+			}
+
+			vkCmdBindDescriptorSets(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_layout, 0, descriptor_set_count, descriptor_sets, 0, NULL);
+
+			vkCmdDrawIndexed(resource.command_buffer, mesh->index_count, 1, 0, 0, 0);
+		}
 	}
 	vkCmdEndRendering(resource.command_buffer);
 

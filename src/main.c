@@ -11,7 +11,6 @@ int	loop(World world)
 
 	startGraphics(world.graphics_ctx);
 	// TODO: Create destruction function
-	gltf_load(STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"), &model, world.graphics_ctx);
 
 
 	bool	running = true;
@@ -60,7 +59,7 @@ int	main(void)
 
 
 
-	set_log_severity(LOG_DEBUG);
+	set_log_severity(LOG_ERROR);
 	start_logs();
 	init_vars();
 	loop(world);

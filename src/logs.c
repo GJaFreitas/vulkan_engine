@@ -37,6 +37,7 @@ void	print_single_log(LogEntry entry)
 	const char	log_log[] = "[LOG] ";
 	const char	log_warn[] = "[WARN] ";
 	const char	log_error[] = "[ERROR] ";
+	const char	log_debug[] = "[DEBUG] ";
 
 	switch (entry.level) {
 		case LOG_LOG:
@@ -47,6 +48,9 @@ void	print_single_log(LogEntry entry)
 			break;
 		case LOG_ERROR:
 			write(STDOUT_FILENO, log_error, sizeof(log_error));
+			break;
+		case LOG_DEBUG:
+			write(STDOUT_FILENO, log_debug, sizeof(log_debug));
 			break;
 	}
 	write(STDOUT_FILENO, entry.file_name.data, entry.file_name.count);

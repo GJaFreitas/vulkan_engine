@@ -24,12 +24,6 @@
 #define TINYGLTF3_ENABLE_FS
 #include "tiny_gltf_v3.h"
 
-typedef struct ToyVertex
-{
-	vec2	pos;
-	vec3	color;
-}	ToyVertex;
-
 typedef struct Texture
 {
 	// TODO: Not a good identifier outside of debug, find another way
@@ -59,6 +53,7 @@ typedef struct
 	vec3	pos;
 	vec3	normal;
 	vec2	uv;
+	vec2	tex_coord;
 }	Vertex;
 
 typedef struct Mesh
@@ -70,6 +65,11 @@ typedef struct Mesh
 	void		*indices;
 	u32		index_count;
 	VkIndexType	index_type;
+
+	VkBuffer	gpu_vertex_data;
+	void		*gpu_vertex_alloc;
+	VkBuffer	gpu_index_data;
+	void		*gpu_index_alloc;
 }	Mesh;
 
 typedef struct Node
@@ -136,6 +136,7 @@ typedef struct Animation
 	u32			samplers_count;
 }	Animation;
 
+// TODO: See if i can cut down this struct a bit
 typedef struct GLTFModel
 {
 	tg3_error_stack	errors;
@@ -146,11 +147,33 @@ typedef struct GLTFModel
 	Animation	*animations;	u32	animation_count;
 }	GLTFModel;
 
+typedef struct PushConstantBlock
+{
+	vec4	base_color_factor;			// rgb base color and alpha
+	float	metallic_factor;			// how metallic the surface is
+	float	roughness_factor;			// how rough the surface is
+	i32	basecolor_texture_set;			// texture coordinate set for base color
+	i32	physical_descriptor_texture_set;	// texture coordinate set for metallic-roughness
+	i32	normal_texture_set;			// texture coordinate set for normal map
+	i32	occlusion_texture_set;			// texture coordinate set for occlusion
+	i32	emissive_texture_set;			// texture coordinate set for emission
+	float	alpha_mask;				// whether to use alpha masking
+	float	alpha_mask_cut_off;			// alpha threshold for masking
+}	PushConstantBlock;
+
 typedef struct UniformBufferObject
 {
 	mat4	model;
 	mat4	view;
 	mat4	proj;
+
+	vec4	light_positions[4];		// Pos and radius
+	vec4	light_colors[4];		// Color and intensity
+	vec4	cam_pos;			// For view dependent effects
+	float	exposure;			// for HDR rendering
+	float	gamma;				// gamma correction
+	float	prefiltered_cube_miplevels;	// for image based lighting
+	float	scale_ibl_ambient;		// Scale factor for ambient light
 }	UniformBufferObject;
 
 typedef struct FrameResources
@@ -209,21 +232,18 @@ typedef struct GraphicsContext
 	u32			frame_index;
 	u64			next_signal_value;
 
-
-	u32			vertex_count;
-	VkBuffer		vertex_buffer;
-	u32			index_count;
-	VkBuffer		index_buffer;
-	void			*vertex_buffer_allocation;
-	void			*index_buffer_allocation;
-
-	VkDescriptorSetLayout	descriptor_layout;
+	VkDescriptorSetLayout	ubo_descriptor_layout;
 	VkBuffer		uniform_buffers[MAX_FRAMES_IN_FLIGHT];
 	void			*uniform_buffers_mapped[MAX_FRAMES_IN_FLIGHT];
 	void			*uniform_buffer_allocations[MAX_FRAMES_IN_FLIGHT];
 
 	VkDescriptorPool	descriptor_pool;
 	VkDescriptorSet		descriptor_sets[MAX_FRAMES_IN_FLIGHT];
+
+	VkDescriptorSetLayout	material_descriptor_layout;
+	VkDescriptorSet		material_descriptor_sets;
+
+	GLTFModel		model;
 
 }	GraphicsContext;
 

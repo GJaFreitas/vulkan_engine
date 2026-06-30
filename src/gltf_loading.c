@@ -4,6 +4,12 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+/*
+
+	https://docs.vulkan.org/tutorial/latest/Building_a_Simple_Engine/Loading_Models/04_loading_gltf.html
+
+*/
+
 i32	file_exists_fn(const char *path, uint32_t path_len, void *user_data)
 {
 	(void)user_data;
@@ -136,6 +142,8 @@ static void	loadFromPNG(GraphicsContext *ctx, tg3_model model, tg3_image image, 
 	// of the previous one so the total levels is how many times you can halve a texture +1 for the
 	// first full sized map
 	u32	mip_levels = (u32)floor(log2(fmax(width, height))) + 1;
+	// TODO: Implement mip generation
+	mip_levels = 1;
 
 	VkImageCreateInfo	image_info = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -355,7 +363,7 @@ static void	gltfLoadTextures(GraphicsContext *ctx, GLTFModel *model, tg3_model g
 {
 
 	// TODO: This is bad memory allocation
-	model->textures = malloc(gltf_model.textures_count * sizeof(Texture));
+	model->textures = calloc(gltf_model.textures_count, sizeof(Texture));
 	model->texture_count = gltf_model.textures_count;
 	for (u32 i = 0; i < gltf_model.textures_count; i++) {
 		const tg3_texture	gltf_texture = gltf_model.textures[i];
@@ -372,10 +380,6 @@ static void	gltfLoadTextures(GraphicsContext *ctx, GLTFModel *model, tg3_model g
 			stbsp_snprintf(buf, 32, "%S%i", tex_string, i);
 			tex.name = createString(buf);
 		}
-		char	printbuffer[128];
-		stbsp_snprintf(printbuffer, 128, "%S", tex.name);
-		printf("%s\n", printbuffer);
-		memset(printbuffer, 0, 128);
 
 		StringView	mime_type = tg3_to_String(gltf_image.mime_type);
 		// mime_type is at '/'
@@ -386,7 +390,7 @@ static void	gltfLoadTextures(GraphicsContext *ctx, GLTFModel *model, tg3_model g
 		if (stringIsEqual(mime_type, STRING_LIT("png"))) {
 			loadFromPNG(ctx, gltf_model, gltf_image, &tex);
 		} else {
-			engine_error("Gltf loading", "Unrecognized mime type, please come implement it");
+			engine_error("Gltf loading", "Unrecognized mime type, please come implement: %S", mime_type);
 		}
 
 		model->textures[i] = tex;
@@ -635,35 +639,7 @@ static void	gltfLoadAnimations(GLTFModel *model, tg3_model gltf_model)
 	}
 }
 
-
-void	gltf_load(String filename, GLTFModel *model, GraphicsContext *ctx)
-{
-	tg3_parse_options	opts;
-	tg3_model		gltf_model;
-
-	tg3_parse_options_init(&opts);
-	tg3_error_stack_init(&model->errors);
-
-	opts.fs = callbacks;
-
-	tg3_error_code err = tg3_parse_file(&gltf_model, &model->errors, (char *)filename.data, filename.count, &opts);
-	if (err != TG3_OK) {
-		for (uint32_t i = 0; i < model->errors.count; i++) {
-			fprintf(stderr, "[%d] %s\n", (int)model->errors.entries[i].severity,
-	   model->errors.entries[i].message ? model->errors.entries[i].message : "(null)");
-		}
-	}
-
-	gltfLoadTextures(ctx, model, gltf_model);
-	gltfLoadMaterials(model, gltf_model);
-	gltfBuildSceneGraph(model, gltf_model);
-	gltfSetMeshData(model, gltf_model);
-	gltfLoadAnimations(model, gltf_model);
-
-	engine_log("Gltf loading", "Successfully loaded texture %S", filename);
-}
-
-void	createDescriptorSetsForMaterials(Material *materials, u32 material_count)
+void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials, u32 material_count)
 {
 	VkDescriptorSetLayoutBinding	bindings[] = {
 		// Base Color Texture binding
@@ -703,14 +679,194 @@ void	createDescriptorSetsForMaterials(Material *materials, u32 material_count)
 		},
 	};
 
-	VkDescriptorSetLayoutCreateInfo	descriptor_set_info = {
+	VkDescriptorSetLayoutCreateInfo	descriptor_set_layout_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.pNext = NULL,
 		.flags = 0,
 		.bindingCount = sizeofarray(bindings),
 		.pBindings = bindings
 	};
+	vkCreateDescriptorSetLayout(ctx->device, &descriptor_set_layout_info, NULL, &ctx->material_descriptor_layout);
 
+	for (u32 i = 0; i < material_count; i++) {
+		Material	*mat = &materials[i];
+
+		VkDescriptorSetAllocateInfo alloc_info = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			.descriptorPool = ctx->descriptor_pool,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &ctx->material_descriptor_layout
+		};
+
+		VkDescriptorSet	d_set;
+		vkAllocateDescriptorSets(ctx->device, &alloc_info, &d_set);
+
+		VkWriteDescriptorSet	write_set = {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = d_set,
+			// dstBinding is set in each material
+			// .dstBinding = 0,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = NULL	// Set after
+		};
+
+		u32			written = 0;
+		VkWriteDescriptorSet	all_sets[4] = {write_set, write_set, write_set, write_set};
+
+		// »speed
+		// TODO: Investigate possible optimizations here
+		if (mat->base_color_texture.sampler) {
+			VkDescriptorImageInfo	img_info = {
+				.sampler = mat->base_color_texture.sampler,
+				.imageView = mat->base_color_texture.image_view,
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			};
+
+			all_sets[written].pImageInfo = &img_info;
+			all_sets[written].dstBinding = 0;
+			written++;
+		}
+		if (mat->normal_texture.sampler) {
+			VkDescriptorImageInfo	img_info = {
+				.sampler = mat->normal_texture.sampler,
+				.imageView = mat->normal_texture.image_view,
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			};
+
+			all_sets[written].pImageInfo = &img_info;
+			all_sets[written].dstBinding = 1;
+			written++;
+		}
+		if (mat->occlusion_texture.sampler) {
+			VkDescriptorImageInfo	img_info = {
+				.sampler = mat->occlusion_texture.sampler,
+				.imageView = mat->occlusion_texture.image_view,
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			};
+
+			all_sets[written].pImageInfo = &img_info;
+			all_sets[written].dstBinding = 2;
+			written++;
+		}
+		if (mat->emissive_texture.sampler) {
+			VkDescriptorImageInfo	img_info = {
+				.sampler = mat->emissive_texture.sampler,
+				.imageView = mat->emissive_texture.image_view,
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			};
+
+			all_sets[written].pImageInfo = &img_info;
+			all_sets[written].dstBinding = 3;
+			written++;
+		}
+		vkUpdateDescriptorSets(ctx->device, written, all_sets, 0, NULL);
+
+		mat->descriptor_set = d_set;
+	}
+}
+
+static void	gltfCreateMeshBuffers(Mesh *mesh, GraphicsContext *ctx)
+{
+	if (mesh->vertex_count == 0)
+		return ;
+
+	// TODO: This is mappable memory for now but later it should all be staging buffers that get
+	// uploaded to the gpu with the texture data in one call.
+	// »speed
+
+	VkBufferCreateInfo	v_buffer_info = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = (sizeof(Vertex) * mesh->vertex_count),
+		.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+	};
+
+	void		*v_alloc;
+	VkBuffer	v_buf;
+	if (wrapperVMAcreateBuffer(ctx->vma_allocator, &v_buffer_info, &v_buf, &v_alloc, 1) != VK_SUCCESS) {
+		engine_error("Gltf loading", "Failed to allocate mesh buffer");
+	}
+
+	u32	index_size;
+	switch (mesh->index_type) {
+		case VK_INDEX_TYPE_UINT8_EXT:
+			index_size = 1;
+		break;
+		case VK_INDEX_TYPE_UINT16:
+			index_size = 2;
+		break;
+		case VK_INDEX_TYPE_UINT32:
+			index_size = 4;
+		break;
+		default:
+			engine_error("Gltf loading", "Unrecognized index type, please check it out");
+		break;
+	}
+	VkBufferCreateInfo	i_buffer_info = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.size = index_size * mesh->index_count,
+	};
+
+	void		*i_alloc;
+	VkBuffer	i_buf;
+	if (wrapperVMAcreateBuffer(ctx->vma_allocator, &i_buffer_info, &i_buf, &i_alloc, 1) != VK_SUCCESS) {
+		engine_error("Gltf loading", "Failed to allocate mesh buffer");
+	}
+
+	// Copy data to gpu
+	// TODO: See if i can deallocate this data after
+	void	*data;
+	wrapperVMAmapMemory(ctx->vma_allocator, v_alloc, &data);
+	memcpy(data, mesh->vertices, sizeof(Vertex) * mesh->vertex_count);
+	wrapperVMAunmapMemory(ctx->vma_allocator, v_alloc);
+
+	wrapperVMAmapMemory(ctx->vma_allocator, i_alloc, &data);
+	memcpy(data, mesh->vertices, index_size * mesh->index_count);
+	wrapperVMAunmapMemory(ctx->vma_allocator, i_alloc);
+
+	mesh->gpu_vertex_alloc = v_alloc;
+	mesh->gpu_vertex_data = v_buf;
+	mesh->gpu_index_alloc = i_alloc;
+	mesh->gpu_index_data = i_buf;
+}
+
+void	gltf_load(String filename, GLTFModel *model, GraphicsContext *ctx)
+{
+	tg3_parse_options	opts;
+	tg3_model		gltf_model;
+
+	tg3_parse_options_init(&opts);
+	tg3_error_stack_init(&model->errors);
+
+	opts.fs = callbacks;
+
+	tg3_error_code err = tg3_parse_file(&gltf_model, &model->errors, (char *)filename.data, filename.count, &opts);
+	if (err != TG3_OK) {
+		for (uint32_t i = 0; i < model->errors.count; i++) {
+			fprintf(stderr, "[%d] %s\n", (int)model->errors.entries[i].severity,
+	   model->errors.entries[i].message ? model->errors.entries[i].message : "(null)");
+		}
+	}
+
+	gltfLoadTextures(ctx, model, gltf_model);
+	gltfLoadMaterials(model, gltf_model);
+	gltfBuildSceneGraph(model, gltf_model);
+	gltfSetMeshData(model, gltf_model);
+	for (u32 i = 0; i < model->node_count; i++) {
+		Mesh	*mesh = &model->linear_nodes[i].mesh;
+
+		gltfCreateMeshBuffers(mesh, ctx);
+	}
+	gltfLoadAnimations(model, gltf_model);
+	createDescriptorSetsForMaterials(ctx, model->materials, model->material_count);
+	engine_debug("Gltf loading", "We did it, we didnt segfault");
+	
+
+	engine_log("Gltf loading", "Successfully loaded texture %S", filename);
 }
 
 // TODO: This function

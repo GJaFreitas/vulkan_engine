@@ -1,30 +1,72 @@
-struct VSInput {
-    float2 inPosition;
-    float3 inColor;
-};
+// shared structs
 
-struct UniformBuffer {
+struct UniformBufferObject
+{
     float4x4 model;
     float4x4 view;
     float4x4 proj;
+    float4 lightPositions[4];
+    float4 lightColors[4];
+    float4 camPos;
+    float exposure;
+    float gamma;
+    float prefilteredCubeMipLevels;
+    float scaleIBLAmbient;
 };
-ConstantBuffer<UniformBuffer> ubo;
+
+[[vk::binding(0, 0)]]
+ConstantBuffer<UniformBufferObject> ubo;
+
+[[vk::binding(0, 1)]]
+Sampler2D baseColorMap;
+
+// vertex stage
+
+struct VertexInput
+{
+    float3 pos       : POSITION;
+    float3 normal    : NORMAL;
+    float2 uv        : TEXCOORD0;
+    float2 tex_coord : TEXCOORD1;
+};
 
 struct VSOutput
 {
-    float4 pos : SV_Position;
-    float3 color;
+    float4 clipPos  : SV_Position;
+    float3 worldPos : POSITION;
+    float3 normal   : NORMAL;
+    float2 uv       : TEXCOORD0;
 };
 
 [shader("vertex")]
-VSOutput vertMain(VSInput input) {
+VSOutput vertMain(VertexInput input)
+{
     VSOutput output;
-    output.pos = mul(ubo.proj, mul(ubo.view, mul(ubo.model, float4(input.inPosition, 0.0, 1.0))));
-    output.color = input.inColor;
+    float4 worldPos = mul(ubo.model, float4(input.pos, 1.0));
+    output.worldPos = worldPos.xyz;
+    output.clipPos = mul(ubo.proj, mul(ubo.view, worldPos));
+    output.normal = mul((float3x3)ubo.model, input.normal);
+    output.uv = input.uv;
     return output;
 }
 
+// fragment stage
+
 [shader("fragment")]
-float4 fragMain(VSOutput vertIn) : SV_TARGET {
-    return float4(vertIn.color, 1.0);
+float4 fragMain(VSOutput input) : SV_Target
+{
+    float4 baseColor = baseColorMap.Sample(input.uv);
+
+    float3 N = normalize(input.normal);
+    float3 L = normalize(ubo.lightPositions[0].xyz - input.worldPos);
+    float NdotL = max(dot(N, L), 0.0);
+
+    float3 ambient = 0.1 * baseColor.rgb;
+    float3 diffuse = NdotL * baseColor.rgb * ubo.lightColors[0].rgb;
+
+    float3 color = ambient + diffuse;
+    color = color / (color + float3(1.0, 1.0, 1.0)); // simple tonemap
+    color = pow(color, float3(1.0 / ubo.gamma, 1.0 / ubo.gamma, 1.0 / ubo.gamma));
+
+    return float4(color, baseColor.a);
 }
