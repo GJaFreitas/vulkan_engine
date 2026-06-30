@@ -714,50 +714,43 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 
 		u32			written = 0;
 		VkWriteDescriptorSet	all_sets[4] = {write_set, write_set, write_set, write_set};
+		VkDescriptorImageInfo	img_infos[4];
 
 		// »speed
 		// TODO: Investigate possible optimizations here
 		if (mat->base_color_texture.sampler) {
-			VkDescriptorImageInfo	img_info = {
-				.sampler = mat->base_color_texture.sampler,
-				.imageView = mat->base_color_texture.image_view,
-				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			};
+			img_infos[written].sampler = mat->base_color_texture.sampler;
+			img_infos[written].imageView = mat->base_color_texture.image_view;
+			img_infos[written].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-			all_sets[written].pImageInfo = &img_info;
+			all_sets[written].pImageInfo = &img_infos[written];
 			all_sets[written].dstBinding = 0;
 			written++;
 		}
 		if (mat->normal_texture.sampler) {
-			VkDescriptorImageInfo	img_info = {
-				.sampler = mat->normal_texture.sampler,
-				.imageView = mat->normal_texture.image_view,
-				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			};
+			img_infos[written].sampler = mat->normal_texture.sampler;
+			img_infos[written].imageView = mat->normal_texture.image_view;
+			img_infos[written].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-			all_sets[written].pImageInfo = &img_info;
+			all_sets[written].pImageInfo = &img_infos[written];
 			all_sets[written].dstBinding = 1;
 			written++;
 		}
 		if (mat->occlusion_texture.sampler) {
-			VkDescriptorImageInfo	img_info = {
-				.sampler = mat->occlusion_texture.sampler,
-				.imageView = mat->occlusion_texture.image_view,
-				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			};
+			img_infos[written].sampler = mat->occlusion_texture.sampler;
+			img_infos[written].imageView = mat->occlusion_texture.image_view;
+			img_infos[written].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-			all_sets[written].pImageInfo = &img_info;
+			all_sets[written].pImageInfo = &img_infos[written];
 			all_sets[written].dstBinding = 2;
 			written++;
 		}
 		if (mat->emissive_texture.sampler) {
-			VkDescriptorImageInfo	img_info = {
-				.sampler = mat->emissive_texture.sampler,
-				.imageView = mat->emissive_texture.image_view,
-				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			};
+			img_infos[written].sampler = mat->emissive_texture.sampler;
+			img_infos[written].imageView = mat->emissive_texture.image_view;
+			img_infos[written].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-			all_sets[written].pImageInfo = &img_info;
+			all_sets[written].pImageInfo = &img_infos[written];
 			all_sets[written].dstBinding = 3;
 			written++;
 		}
@@ -793,16 +786,16 @@ static void	gltfCreateMeshBuffers(Mesh *mesh, GraphicsContext *ctx)
 	switch (mesh->index_type) {
 		case VK_INDEX_TYPE_UINT8_EXT:
 			index_size = 1;
-		break;
+			break;
 		case VK_INDEX_TYPE_UINT16:
 			index_size = 2;
-		break;
+			break;
 		case VK_INDEX_TYPE_UINT32:
 			index_size = 4;
-		break;
+			break;
 		default:
 			engine_error("Gltf loading", "Unrecognized index type, please check it out");
-		break;
+			break;
 	}
 	VkBufferCreateInfo	i_buffer_info = {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -825,7 +818,7 @@ static void	gltfCreateMeshBuffers(Mesh *mesh, GraphicsContext *ctx)
 	wrapperVMAunmapMemory(ctx->vma_allocator, v_alloc);
 
 	wrapperVMAmapMemory(ctx->vma_allocator, i_alloc, &data);
-	memcpy(data, mesh->vertices, index_size * mesh->index_count);
+	memcpy(data, mesh->indices, index_size * mesh->index_count);
 	wrapperVMAunmapMemory(ctx->vma_allocator, i_alloc);
 
 	mesh->gpu_vertex_alloc = v_alloc;
@@ -864,7 +857,7 @@ void	gltf_load(String filename, GLTFModel *model, GraphicsContext *ctx)
 	gltfLoadAnimations(model, gltf_model);
 	createDescriptorSetsForMaterials(ctx, model->materials, model->material_count);
 	engine_debug("Gltf loading", "We did it, we didnt segfault");
-	
+
 
 	engine_log("Gltf loading", "Successfully loaded texture %S", filename);
 }
