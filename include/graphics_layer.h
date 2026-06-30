@@ -89,6 +89,9 @@ typedef struct Node
 
 	i32	parent;
 
+	mat4	local_transform;
+	mat4	world_transform;
+
 }	Node;
 
 enum	AnimationChannelTargetPath

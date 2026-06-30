@@ -447,6 +447,50 @@ static void	gltfLoadMaterials(GLTFModel *model, tg3_model gltf_model)
 	}
 }
 
+/*	Temp code	*/
+static void compute_node_transform(Node* node) {
+    // Convert double to float if needed
+    vec3 translation = { node->translation[0], node->translation[1], node->translation[2] };
+    vec3 scale = { node->scale[0], node->scale[1], node->scale[2] };
+    vec4 rotation = { node->rotation[0], node->rotation[1], node->rotation[2], node->rotation[3] };
+    
+    // Start with identity
+    glm_mat4_identity(node->local_transform);
+    
+    // Apply translation
+    glm_translate(node->local_transform, translation);
+    
+    // Apply rotation (quaternion to matrix)
+    mat4 rot_mat;
+    glm_quat_mat4(rotation, rot_mat);
+    glm_mul(node->local_transform, rot_mat, node->local_transform);
+    
+    // Apply scale
+    glm_scale(node->local_transform, scale);
+}
+
+static void compute_world_transforms(Node* nodes, u32 node_count) {
+    // First compute all local transforms
+    for (u32 i = 0; i < node_count; i++) {
+        compute_node_transform(&nodes[i]);
+    }
+    
+    // Then compute world transforms for all nodes
+    for (u32 i = 0; i < node_count; i++) {
+        Node* node = &nodes[i];
+        
+        if (node->parent == -1) {
+            // Root node: world = local
+            glm_mat4_copy(node->local_transform, node->world_transform);
+        } else {
+            // Child node: world = parent_world * local
+            Node* parent = &nodes[node->parent];
+            glm_mat4_mul(parent->world_transform, node->local_transform, node->world_transform);
+        }
+    }
+}
+/*	Temp code	*/
+
 static void	gltfBuildSceneGraph(GLTFModel *model, tg3_model gltf_model)
 {
 	// TODO: Bad allocation
@@ -490,6 +534,8 @@ static void	gltfBuildSceneGraph(GLTFModel *model, tg3_model gltf_model)
 		}
 	}
 
+	// TODO: Possible optimization? I mean 4 passes is a lot 01/07/26
+	compute_world_transforms(model->linear_nodes, model->node_count);
 }
 
 
@@ -856,8 +902,6 @@ void	gltf_load(String filename, GLTFModel *model, GraphicsContext *ctx)
 	}
 	gltfLoadAnimations(model, gltf_model);
 	createDescriptorSetsForMaterials(ctx, model->materials, model->material_count);
-	engine_debug("Gltf loading", "We did it, we didnt segfault");
-
 
 	engine_log("Gltf loading", "Successfully loaded texture %S", filename);
 }

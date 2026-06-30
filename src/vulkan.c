@@ -2,10 +2,10 @@
 #include "graphics_layer.h"
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-    VkDebugUtilsMessageTypeFlagsEXT message_type,
-    const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
-    void *user_data)
+	VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+	VkDebugUtilsMessageTypeFlagsEXT message_type,
+	const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
+	void *user_data)
 {
 	(void)user_data;
 	(void)message_type;
@@ -47,12 +47,12 @@ static void	createInstance(GraphicsContext *ctx)
 	VkDebugUtilsMessengerCreateInfoEXT debugInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
 		.messageSeverity = \
-				VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-				VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-				VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
 		.messageType = \
-				VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-				VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+		VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+		VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
 		.pfnUserCallback = debug_utils_messenger_callback
 	};
 
@@ -636,7 +636,7 @@ static void	createCommandBuffers(GraphicsContext *ctx)
 {
 	for(u32 i = 0; i < ctx->frames_in_flight_count; i++) {
 		FrameResources	*resource = &ctx->frame_resources[i];
-		
+
 		VkCommandPoolCreateInfo pool_info = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.queueFamilyIndex = ctx->queue_family_index
@@ -859,18 +859,18 @@ static inline void	getViewMatrix(mat4 dst, Camera *c)
 	glm_lookat(c->position, center, c->up, dst);
 }
 
-
-static void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx)
+static void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx, Camera *cam)
 {
 
 	UniformBufferObject ubo = {};
 	glm_mat4_identity(ubo.model);
-
-	glm_lookat((vec3){2.0f, 2.0f, 2.0f}, (vec3){0, 0, 0}, (vec3){0, 0, 1.0f}, ubo.view);
-	glm_perspective(glm_rad(45.0f), (float)ctx->swapchain_width / (float)ctx->swapchain_height, 0.1f, 10.0f, ubo.proj);
+	getViewMatrix(ubo.view, cam);
+	getProjectionMatrix(ubo.proj, cam, (float)ctx->swapchain_width / (float)ctx->swapchain_height);
 
 	// Vulkan y shift
 	ubo.proj[1][1] *= -1;
+
+	glm_vec4_copy((vec4){cam->position[0], cam->position[1], cam->position[2], 1.0f}, ubo.cam_pos);
 
 	glm_vec4_copy((vec4){-10.0f,  10.0f, 10.0f, 1.0f}, ubo.light_positions[0]);
 	glm_vec4_copy((vec4){ 10.0f,  10.0f, 10.0f, 1.0f}, ubo.light_positions[1]);
@@ -890,7 +890,6 @@ static void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx)
 
 void	render(GraphicsContext *ctx, Camera *camera)
 {
-	(void)camera;
 	if (ctx->swapchain_require_recreate)
 	{
 		vkDeviceWaitIdle(ctx->device);
@@ -905,7 +904,7 @@ void	render(GraphicsContext *ctx, Camera *camera)
 	const u64	wait_value = signal_value - ctx->frames_in_flight_count;
 	// engine_log("vulkan", "res_index: %u, signal_value: %lu, wait_value: %lu\n", frame_res_index, signal_value, wait_value);
 
-	updateUniformBuffer(ctx, frame_res_index);
+	updateUniformBuffer(ctx, frame_res_index, camera);
 
 	VkSemaphoreWaitInfo	wait_info = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
@@ -1035,7 +1034,6 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		};
 		vkCmdSetScissor(resource.command_buffer, 0, 1, &scissor);
 
-		// engine_error("vulkan", "vertex_buffer handle: %p\n", (void*)ctx->vertex_buffer);
 		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline);
 		VkDeviceSize	offset = 0;
 
