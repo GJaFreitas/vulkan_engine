@@ -34,16 +34,12 @@ struct PushConstants {
 
 // Resource bindings - Connect CPU resources to GPU shader registers
 [[vk::binding(0, 0)]] ConstantBuffer<UniformBufferObject> ubo;
-[[vk::binding(0, 1)]] Texture2D baseColorMap;
-[[vk::binding(0, 1)]] SamplerState baseColorSampler;
-[[vk::binding(1, 1)]] Texture2D metallicRoughnessMap;
-[[vk::binding(1, 1)]] SamplerState metallicRoughnessSampler;
-[[vk::binding(2, 1)]] Texture2D normalMap;
-[[vk::binding(2, 1)]] SamplerState normalSampler;
-[[vk::binding(3, 1)]] Texture2D occlusionMap;
-[[vk::binding(3, 1)]] SamplerState occlusionSampler;
-[[vk::binding(4, 1)]] Texture2D emissiveMap;
-[[vk::binding(4, 1)]] SamplerState emissiveSampler;
+
+[[vk::binding(0, 1)]] Sampler2D baseColorMap;
+[[vk::binding(1, 1)]] Sampler2D metallicRoughnessMap;
+[[vk::binding(2, 1)]] Sampler2D normalMap;
+[[vk::binding(3, 1)]] Sampler2D occlusionMap;
+[[vk::binding(4, 1)]] Sampler2D emissiveMap;
 
 [[vk::push_constant]] PushConstants material;
 
@@ -137,19 +133,19 @@ float4 fragMain(VSOutput input) : SV_TARGET
 {
     // === MATERIAL PROPERTY SAMPLING ===
     // Sample base color texture and apply material color factor
-    float4 baseColor = baseColorMap.Sample(baseColorSampler, input.UV) * material.baseColorFactor;
+    float4 baseColor = baseColorMap.Sample(input.UV) * material.baseColorFactor;
 
     // Sample metallic-roughness texture (metallic=B channel, roughness=G channel)
     // glTF standard: metallic stored in blue, roughness in green
-    float2 metallicRoughness = metallicRoughnessMap.Sample(metallicRoughnessSampler, input.UV).bg;
+    float2 metallicRoughness = metallicRoughnessMap.Sample(input.UV).bg;
     float metallic = metallicRoughness.x * material.metallicFactor;
     float roughness = metallicRoughness.y * material.roughnessFactor;
 
     // Sample ambient occlusion (typically stored in red channel)
-    float ao = occlusionMap.Sample(occlusionSampler, input.UV).r;
+    float ao = occlusionMap.Sample(input.UV).r;
 
     // Sample emissive texture for self-illuminating materials
-    float3 emissive = emissiveMap.Sample(emissiveSampler, input.UV).rgb;
+    float3 emissive = emissiveMap.Sample(input.UV).rgb;
 
     // === NORMAL CALCULATION ===
     // Start with interpolated surface normal
@@ -158,7 +154,7 @@ float4 fragMain(VSOutput input) : SV_TARGET
     // Apply normal mapping if texture is available
     if (material.normalTextureSet >= 0) {
         // Sample normal map and convert from [0,1] to [-1,1] range
-        float3 tangentNormal = normalMap.Sample(normalSampler, input.UV).xyz * 2.0 - 1.0;
+        float3 tangentNormal = normalMap.Sample(input.UV).xyz * 2.0 - 1.0;
 
         // Construct tangent-space to world-space transformation matrix (TBN)
         float3 T = normalize(input.Tangent.xyz);              // Tangent

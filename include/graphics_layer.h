@@ -58,7 +58,7 @@ typedef struct
 	vec3	pos;
 	vec3	normal;
 	vec2	uv;
-	vec2	tex_coord;
+	vec4	tangent;
 }	Vertex;
 
 typedef struct Mesh

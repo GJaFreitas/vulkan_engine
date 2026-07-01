@@ -429,12 +429,6 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 			.offset = 0,
 			.size = sizeof(PushConstantBlock),
 		},
-		// Push constant to change model transformation (ubo)
-		{
-			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-			.offset = 0,
-			.size = sizeof(PushConstantBlock),
-		},
 	};
 
 	VkDescriptorSetLayout	layouts[] = {
@@ -482,7 +476,7 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 		{.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, pos)},
 		{.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)},
 		{.location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, uv)},
-		{.location = 3, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, tex_coord)},
+		{.location = 3, .binding = 0, .format = VK_FORMAT_R32G32B32A32_SFLOAT, .offset = offsetof(Vertex, tangent)},
 	};
 
 	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
@@ -854,10 +848,11 @@ static inline void	getViewMatrix(mat4 dst, Camera *c)
 	glm_lookat(c->position, center, c->up, dst);
 }
 
-static UniformBufferObject	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx, Camera *cam)
+static void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx, Camera *cam)
 {
 
 	UniformBufferObject ubo = {};
+	glm_mat4_identity(ubo.model);
 	getViewMatrix(ubo.view, cam);
 	getProjectionMatrix(ubo.proj, cam, (float)ctx->swapchain_width / (float)ctx->swapchain_height);
 
@@ -880,7 +875,6 @@ static UniformBufferObject	updateUniformBuffer(GraphicsContext *ctx, u32 frame_i
 	ubo.gamma = 2.2f;
 
 	memcpy(ctx->uniform_buffers_mapped[frame_idx], &ubo, sizeof(UniformBufferObject));
-	return ubo;
 }
 
 void	render(GraphicsContext *ctx, Camera *camera)
@@ -899,7 +893,7 @@ void	render(GraphicsContext *ctx, Camera *camera)
 	const u64	wait_value = signal_value - ctx->frames_in_flight_count;
 	// engine_log("vulkan", "res_index: %u, signal_value: %lu, wait_value: %lu\n", frame_res_index, signal_value, wait_value);
 
-	UniformBufferObject	ubo = updateUniformBuffer(ctx, frame_res_index, camera);
+	updateUniformBuffer(ctx, frame_res_index, camera);
 
 	VkSemaphoreWaitInfo	wait_info = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
@@ -1034,47 +1028,43 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline);
 		VkDeviceSize	offset = 0;
 
+			// »speed
 		for (u32 i = 0; i < ctx->model.node_count; i++) {
 			const Mesh	*mesh = &ctx->model.linear_nodes[i].mesh;
+			const Node	*node = &ctx->model.linear_nodes[i];
 
 			if (mesh->vertex_count == 0)
 				continue ;
 
-			PushConstantBlock	push_constants_mat = {
-				.roughness_factor = ctx->model.materials[mesh->material_index].roughness_factor,
-				.metallic_factor = ctx->model.materials[mesh->material_index].metallic_factor,
-				.alpha_mask_cut_off = ctx->model.materials[mesh->material_index].alpha_cutoff,
-			};
-			glm_vec4_copy(ctx->model.materials[mesh->material_index].base_color_factor, push_constants_mat.base_color_factor);
-
-			vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout,
-			      VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,	// Shader stage to apply
-			      0,				// Offset
-			      sizeof(PushConstantBlock),	// Sizeof constants
-			      &push_constants_mat			// The constansts themselves
-		      );
-
-			// TODO: Again this could be a big buffer and the binding done with offsets
-			// »speed
-			vkCmdBindVertexBuffers(resource.command_buffer, 0, 1, &mesh->gpu_vertex_data, &offset);
-			vkCmdBindIndexBuffer(resource.command_buffer, mesh->gpu_index_data, 0, mesh->index_type);
-
+			VkDescriptorSet	descriptor_sets[2] = { ctx->ubo_descriptor_sets[frame_res_index], VK_NULL_HANDLE };
+			u32		descriptor_set_count = 1;
 			Material	*mat;
 			if (mesh->material_index >= 0) {
 				mat = &ctx->model.materials[mesh->material_index];
+				descriptor_set_count += 1;
+				descriptor_sets[1] = mat->descriptor_set;
+				PushConstantBlock	push_constants_mat = {
+					.roughness_factor = mat->roughness_factor,
+					.metallic_factor = mat->metallic_factor,
+					.alpha_mask_cut_off = mat->alpha_cutoff,
+					.basecolor_texture_set = 0,
+					.physical_descriptor_texture_set = 1,
+					.normal_texture_set = 2,
+					.occlusion_texture_set = 3,
+					.emissive_texture_set = 4,
+					.alpha_mask = 0.0f,
+				};
+				glm_vec4_copy(mat->base_color_factor, push_constants_mat.base_color_factor);
+
+				vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantBlock), &push_constants_mat);
 			} else {
 				mat = NULL;
 			}
 
-			glm_mat4_copy(ctx->model.linear_nodes[i].world_transform, ubo.model);
-			memcpy(ctx->uniform_buffers_mapped[frame_res_index] + offsetof(UniformBufferObject, model), &ubo.model, sizeof(mat4));
-			VkDescriptorSet	descriptor_sets[2] = { ctx->ubo_descriptor_sets[frame_res_index], VK_NULL_HANDLE };
-			u32		descriptor_set_count = 1;
-		if (mat) {
-				descriptor_set_count += 1;
-				descriptor_sets[1] = mat->descriptor_set;
-			}
+			memcpy(ctx->uniform_buffers_mapped[frame_res_index] + offsetof(UniformBufferObject, model), &node->world_transform, sizeof(mat4));
 
+			vkCmdBindVertexBuffers(resource.command_buffer, 0, 1, &mesh->gpu_vertex_data, &offset);
+			vkCmdBindIndexBuffer(resource.command_buffer, mesh->gpu_index_data, 0, mesh->index_type);
 			vkCmdBindDescriptorSets(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_layout, 0, descriptor_set_count, descriptor_sets, 0, NULL);
 
 			vkCmdDrawIndexed(resource.command_buffer, mesh->index_count, 1, 0, 0, 0);
