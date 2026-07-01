@@ -39,6 +39,7 @@ typedef struct Texture
 typedef struct Material
 {
 	Texture		base_color_texture;
+	Texture		metallic_roughness_texture;
 	Texture		normal_texture;
 	Texture		occlusion_texture;
 	Texture		emissive_texture;
@@ -240,7 +241,7 @@ typedef struct GraphicsContext
 	void			*uniform_buffer_allocations[MAX_FRAMES_IN_FLIGHT];
 
 	VkDescriptorPool	descriptor_pool;
-	VkDescriptorSet		descriptor_sets[MAX_FRAMES_IN_FLIGHT];
+	VkDescriptorSet		ubo_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
 
 	VkDescriptorSetLayout	material_descriptor_layout;
 	VkDescriptorSet		material_descriptor_sets;

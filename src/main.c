@@ -50,9 +50,6 @@ static void updateCamera(Camera *camera, SDL_Window *window, double dt)
 int	loop(World world)
 {
 
-	GLTFModel	model;
-
-
 	startGraphics(world.graphics_ctx);
 	// TODO: Create destruction function
 

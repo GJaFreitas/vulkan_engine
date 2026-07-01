@@ -362,12 +362,6 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 	ctx->render_complete_sequence_semaphores = semaphores;
 }
 
-typedef struct
-{
-	u32* code;
-	u64 size;
-}	ShaderCode;
-
 static VkShaderModule	createShaderModule(String filename, shaderc_shader_kind kind, GraphicsContext *ctx)
 {
 
@@ -435,7 +429,7 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 		// 	.offset = 0,
 		// 	.size = sizeof(PushConstantBlock),
 		// },
-		// Push constant to change model transformation
+		// Push constant to change model transformation (ubo)
 		{
 			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
 			.offset = 0,
@@ -457,12 +451,10 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 	};
 
 
-	VkPipelineLayout	layout;
-	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &layout) != VK_SUCCESS) {
+	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &ctx->pipeline_layout) != VK_SUCCESS) {
 		engine_error("vulkan", "Failed to create pipeline layout\n");
 		exit(1);
 	}
-	ctx->pipeline_layout = layout;
 
 	VkPipelineShaderStageCreateInfo	shader_stages[] = {
 		{
@@ -480,8 +472,6 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 	};
 
 
-	/* TOY CODE --------------------------- */
-
 	VkVertexInputBindingDescription	bind_desc = {
 		.binding = 0,
 		.stride = sizeof(Vertex),
@@ -494,8 +484,6 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 		{.location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, uv)},
 		{.location = 3, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, tex_coord)},
 	};
-
-	/* TOY CODE --------------------------- */
 
 	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -529,8 +517,7 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 	VkPipelineRasterizationStateCreateInfo	rasterization_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
 		.polygonMode = VK_POLYGON_MODE_FILL,
-		// TODO: Change the cull mode to back bit again
-		.cullMode = VK_CULL_MODE_NONE,
+		.cullMode = VK_CULL_MODE_BACK_BIT,
 		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
 		.lineWidth = 1.0f
 	};
@@ -591,7 +578,7 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 		.pDepthStencilState = &depth_stencil_info,
 		.pColorBlendState = &blend_info,
 		.pDynamicState = &dynamic_state_info,
-		.layout = layout,
+		.layout = ctx->pipeline_layout,
 		.renderPass = VK_NULL_HANDLE
 	};
 
@@ -740,6 +727,7 @@ static void	createUniformBuffers(GraphicsContext *ctx)
 
 static void	createDescriptorPoolSets(GraphicsContext *ctx)
 {
+	const	u32	material_descriptor_count = 1000;
 	VkDescriptorPoolSize	pool_sizes[] = {
 		{
 			.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -747,14 +735,14 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 		},
 		{
 			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = 20,
+			.descriptorCount = material_descriptor_count,
 		}
 	};
 
 	VkDescriptorPoolCreateInfo	create_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-		.maxSets = MAX_FRAMES_IN_FLIGHT + 20,
+		.maxSets = MAX_FRAMES_IN_FLIGHT + material_descriptor_count,
 		.poolSizeCount = sizeofarray(pool_sizes),
 		.pPoolSizes = pool_sizes,
 	};
@@ -775,7 +763,7 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 		.pSetLayouts = layouts,
 	};
 
-	if (vkAllocateDescriptorSets(ctx->device, &alloc_info, ctx->descriptor_sets) != VK_SUCCESS) {
+	if (vkAllocateDescriptorSets(ctx->device, &alloc_info, ctx->ubo_descriptor_sets) != VK_SUCCESS) {
 		engine_error("vulkan", "Failed to allocate descriptor sets");
 		exit(1);
 	}
@@ -789,7 +777,7 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 
 		VkWriteDescriptorSet	descriptor_write = {
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = ctx->descriptor_sets[i],
+			.dstSet = ctx->ubo_descriptor_sets[i],
 			.dstBinding = 0,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
@@ -1057,14 +1045,15 @@ void	render(GraphicsContext *ctx, Camera *camera)
 			vkCmdBindIndexBuffer(resource.command_buffer, mesh->gpu_index_data, 0, mesh->index_type);
 
 			Material	*mat;
-			if (mesh->material_index >= 0)
+			if (mesh->material_index >= 0) {
 				mat = &ctx->model.materials[mesh->material_index];
-			else
+			} else {
 				mat = NULL;
+			}
 
-			VkDescriptorSet	descriptor_sets[2] = { ctx->descriptor_sets[frame_res_index], VK_NULL_HANDLE };
+			VkDescriptorSet	descriptor_sets[2] = { ctx->ubo_descriptor_sets[frame_res_index], VK_NULL_HANDLE };
 			u32		descriptor_set_count = 1;
-			if (mat) {
+		if (mat) {
 				descriptor_set_count += 1;
 				descriptor_sets[1] = mat->descriptor_set;
 			}

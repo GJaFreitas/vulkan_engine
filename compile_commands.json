@@ -85,6 +85,23 @@
     "output": "obj/c/variables.o"
   },
   {
+    "file": "src/player.c",
+    "arguments": [
+      "/bin/gcc",
+      "-Iinclude",
+      "-Ideps",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/player.c",
+      "-o",
+      "obj/c/player.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine",
+    "output": "obj/c/player.o"
+  },
+  {
     "file": "src/gltf_loading.c",
     "arguments": [
       "/bin/gcc",

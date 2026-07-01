@@ -387,7 +387,7 @@ static void	gltfLoadTextures(GraphicsContext *ctx, GLTFModel *model, tg3_model g
 		// mime_type is after '/'
 		stringViewAdvance(&mime_type, 1);
 
-		if (stringIsEqual(mime_type, STRING_LIT("png"))) {
+		if (stringIsEqual(mime_type, STRING_LIT("png")) || stringIsEqual(mime_type, STRING_LIT("jpeg"))) {
 			loadFromPNG(ctx, gltf_model, gltf_image, &tex);
 		} else {
 			engine_error("Gltf loading", "Unrecognized mime type, please come implement: %S", mime_type);
@@ -423,6 +423,13 @@ static void	gltfLoadMaterials(GLTFModel *model, tg3_model gltf_model)
 			const tg3_texture	gltf_texture =
 				gltf_model.textures[gltf_material.pbr_metallic_roughness.base_color_texture.index];
 			mat.base_color_texture = model->textures[gltf_texture.source];
+		}
+
+		// » Possible bug here
+		if (gltf_material.pbr_metallic_roughness.metallic_roughness_texture.index >= 0) {
+			const tg3_texture	gltf_texture =
+				gltf_model.textures[gltf_material.pbr_metallic_roughness.metallic_roughness_texture.index];
+			mat.metallic_roughness_texture = model->textures[gltf_texture.source];
 		}
 
 		if (gltf_material.normal_texture.index >= 0) {
@@ -744,12 +751,11 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 			.pSetLayouts = &ctx->material_descriptor_layout
 		};
 
-		VkDescriptorSet	d_set;
-		vkAllocateDescriptorSets(ctx->device, &alloc_info, &d_set);
+		vkAllocateDescriptorSets(ctx->device, &alloc_info, &mat->descriptor_set);
 
 		VkWriteDescriptorSet	write_set = {
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = d_set,
+			.dstSet = mat->descriptor_set,
 			// dstBinding is set in each material
 			// .dstBinding = 0,
 			.dstArrayElement = 0,
@@ -759,8 +765,8 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 		};
 
 		u32			written = 0;
-		VkWriteDescriptorSet	all_sets[4] = {write_set, write_set, write_set, write_set};
-		VkDescriptorImageInfo	img_infos[4];
+		VkWriteDescriptorSet	all_sets[5] = {write_set, write_set, write_set, write_set, write_set};
+		VkDescriptorImageInfo	img_infos[5];
 
 		// »speed
 		// TODO: Investigate possible optimizations here
@@ -773,13 +779,22 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 			all_sets[written].dstBinding = 0;
 			written++;
 		}
+		if (mat->metallic_roughness_texture.sampler) {
+			img_infos[written].sampler = mat->metallic_roughness_texture.sampler;
+			img_infos[written].imageView = mat->metallic_roughness_texture.image_view;
+			img_infos[written].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+			all_sets[written].pImageInfo = &img_infos[written];
+			all_sets[written].dstBinding = 1;
+			written++;
+		}
 		if (mat->normal_texture.sampler) {
 			img_infos[written].sampler = mat->normal_texture.sampler;
 			img_infos[written].imageView = mat->normal_texture.image_view;
 			img_infos[written].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 			all_sets[written].pImageInfo = &img_infos[written];
-			all_sets[written].dstBinding = 1;
+			all_sets[written].dstBinding = 2;
 			written++;
 		}
 		if (mat->occlusion_texture.sampler) {
@@ -788,7 +803,7 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 			img_infos[written].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 			all_sets[written].pImageInfo = &img_infos[written];
-			all_sets[written].dstBinding = 2;
+			all_sets[written].dstBinding = 3;
 			written++;
 		}
 		if (mat->emissive_texture.sampler) {
@@ -797,12 +812,10 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 			img_infos[written].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 			all_sets[written].pImageInfo = &img_infos[written];
-			all_sets[written].dstBinding = 3;
+			all_sets[written].dstBinding = 4;
 			written++;
 		}
 		vkUpdateDescriptorSets(ctx->device, written, all_sets, 0, NULL);
-
-		mat->descriptor_set = d_set;
 	}
 }
 

@@ -25,8 +25,21 @@ ConstantBuffer<PushConstants> pc;
 [[vk::binding(0, 0)]]
 ConstantBuffer<UniformBufferObject> ubo;
 
+// Material bindings
 [[vk::binding(0, 1)]]
 Sampler2D baseColorMap;
+
+[[vk::binding(1, 1)]]
+Sampler2D metalRoughMap;
+
+[[vk::binding(2, 1)]]
+Sampler2D normalMap;
+
+[[vk::binding(3, 1)]]
+Sampler2D occlusionMap;
+
+[[vk::binding(4, 1)]]
+Sampler2D emissiveMap;
 
 // vertex stage
 
@@ -76,5 +89,5 @@ float4 fragMain(VSOutput input) : SV_Target
     color = color / (color + float3(1.0, 1.0, 1.0)); // simple tonemap
     color = pow(color, float3(1.0 / ubo.gamma, 1.0 / ubo.gamma, 1.0 / ubo.gamma));
 
-    return float4(color, baseColor.a);
+    return baseColor;
 }
