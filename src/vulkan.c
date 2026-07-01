@@ -424,16 +424,16 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 {
 	VkPushConstantRange	push_constant_ranges[] = {
 		// Mat push constant
-		// {
-		// 	.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-		// 	.offset = 0,
-		// 	.size = sizeof(PushConstantBlock),
-		// },
+		{
+			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+			.offset = 0,
+			.size = sizeof(PushConstantBlock),
+		},
 		// Push constant to change model transformation (ubo)
 		{
 			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
 			.offset = 0,
-			.size = sizeof(mat4),
+			.size = sizeof(PushConstantBlock),
 		},
 	};
 
@@ -854,7 +854,7 @@ static inline void	getViewMatrix(mat4 dst, Camera *c)
 	glm_lookat(c->position, center, c->up, dst);
 }
 
-static void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx, Camera *cam)
+static UniformBufferObject	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx, Camera *cam)
 {
 
 	UniformBufferObject ubo = {};
@@ -880,6 +880,7 @@ static void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx, Camera *cam
 	ubo.gamma = 2.2f;
 
 	memcpy(ctx->uniform_buffers_mapped[frame_idx], &ubo, sizeof(UniformBufferObject));
+	return ubo;
 }
 
 void	render(GraphicsContext *ctx, Camera *camera)
@@ -898,7 +899,7 @@ void	render(GraphicsContext *ctx, Camera *camera)
 	const u64	wait_value = signal_value - ctx->frames_in_flight_count;
 	// engine_log("vulkan", "res_index: %u, signal_value: %lu, wait_value: %lu\n", frame_res_index, signal_value, wait_value);
 
-	updateUniformBuffer(ctx, frame_res_index, camera);
+	UniformBufferObject	ubo = updateUniformBuffer(ctx, frame_res_index, camera);
 
 	VkSemaphoreWaitInfo	wait_info = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
@@ -1009,7 +1010,7 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		.layerCount = 1,
 		.colorAttachmentCount = 1,
 		.pColorAttachments = &color_attach_info,
-		.pDepthAttachment = &depth_attach_info
+		.pDepthAttachment = &depth_attach_info,
 	};
 
 
@@ -1019,6 +1020,8 @@ void	render(GraphicsContext *ctx, Camera *camera)
 			.x = 0, .y = 0,
 			.width = ctx->swapchain_width,
 			.height = ctx->swapchain_height,
+			.minDepth = 0.0f,
+			.maxDepth = 1.0f,
 		};
 		vkCmdSetViewport(resource.command_buffer, 0, 1, &viewport);
 
@@ -1037,7 +1040,19 @@ void	render(GraphicsContext *ctx, Camera *camera)
 			if (mesh->vertex_count == 0)
 				continue ;
 
-			vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mat4), &ctx->model.linear_nodes[i].world_transform);
+			PushConstantBlock	push_constants_mat = {
+				.roughness_factor = ctx->model.materials[mesh->material_index].roughness_factor,
+				.metallic_factor = ctx->model.materials[mesh->material_index].metallic_factor,
+				.alpha_mask_cut_off = ctx->model.materials[mesh->material_index].alpha_cutoff,
+			};
+			glm_vec4_copy(ctx->model.materials[mesh->material_index].base_color_factor, push_constants_mat.base_color_factor);
+
+			vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout,
+			      VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,	// Shader stage to apply
+			      0,				// Offset
+			      sizeof(PushConstantBlock),	// Sizeof constants
+			      &push_constants_mat			// The constansts themselves
+		      );
 
 			// TODO: Again this could be a big buffer and the binding done with offsets
 			// »speed
@@ -1051,6 +1066,8 @@ void	render(GraphicsContext *ctx, Camera *camera)
 				mat = NULL;
 			}
 
+			glm_mat4_copy(ctx->model.linear_nodes[i].world_transform, ubo.model);
+			memcpy(ctx->uniform_buffers_mapped[frame_res_index] + offsetof(UniformBufferObject, model), &ubo.model, sizeof(mat4));
 			VkDescriptorSet	descriptor_sets[2] = { ctx->ubo_descriptor_sets[frame_res_index], VK_NULL_HANDLE };
 			u32		descriptor_set_count = 1;
 		if (mat) {

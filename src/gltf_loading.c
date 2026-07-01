@@ -407,15 +407,19 @@ static void	gltfLoadMaterials(GLTFModel *model, tg3_model gltf_model)
 
 		Material	mat = {};
 
-		// Base color
 		mat.base_color_factor[0] = gltf_material.pbr_metallic_roughness.base_color_factor[0];
 		mat.base_color_factor[1] = gltf_material.pbr_metallic_roughness.base_color_factor[1];
 		mat.base_color_factor[2] = gltf_material.pbr_metallic_roughness.base_color_factor[2];
 		mat.base_color_factor[3] = gltf_material.pbr_metallic_roughness.base_color_factor[3];
 
-		// Metalic and roughness factors
 		mat.roughness_factor = gltf_material.pbr_metallic_roughness.roughness_factor;
 		mat.metallic_factor = gltf_material.pbr_metallic_roughness.metallic_factor;
+
+		mat.emissive_factor[0] = gltf_material.emissive_factor[0];
+		mat.emissive_factor[1] = gltf_material.emissive_factor[1];
+		mat.emissive_factor[2] = gltf_material.emissive_factor[2];
+
+		mat.alpha_cutoff = gltf_material.alpha_cutoff;
 
 		// Associate textures with the material
 
@@ -425,7 +429,6 @@ static void	gltfLoadMaterials(GLTFModel *model, tg3_model gltf_model)
 			mat.base_color_texture = model->textures[gltf_texture.source];
 		}
 
-		// » Possible bug here
 		if (gltf_material.pbr_metallic_roughness.metallic_roughness_texture.index >= 0) {
 			const tg3_texture	gltf_texture =
 				gltf_model.textures[gltf_material.pbr_metallic_roughness.metallic_roughness_texture.index];
@@ -456,46 +459,46 @@ static void	gltfLoadMaterials(GLTFModel *model, tg3_model gltf_model)
 
 /*	Temp code	*/
 static void compute_node_transform(Node* node) {
-    // Convert double to float if needed
-    vec3 translation = { node->translation[0], node->translation[1], node->translation[2] };
-    vec3 scale = { node->scale[0], node->scale[1], node->scale[2] };
-    vec4 rotation = { node->rotation[0], node->rotation[1], node->rotation[2], node->rotation[3] };
-    
-    // Start with identity
-    glm_mat4_identity(node->local_transform);
-    
-    // Apply translation
-    glm_translate(node->local_transform, translation);
-    
-    // Apply rotation (quaternion to matrix)
-    mat4 rot_mat;
-    glm_quat_mat4(rotation, rot_mat);
-    glm_mul(node->local_transform, rot_mat, node->local_transform);
-    
-    // Apply scale
-    glm_scale(node->local_transform, scale);
+	// Convert double to float if needed
+	vec3 translation = { node->translation[0], node->translation[1], node->translation[2] };
+	vec3 scale = { node->scale[0], node->scale[1], node->scale[2] };
+	vec4 rotation = { node->rotation[0], node->rotation[1], node->rotation[2], node->rotation[3] };
+
+	// Start with identity
+	glm_mat4_identity(node->local_transform);
+
+	// Apply translation
+	glm_translate(node->local_transform, translation);
+
+	// Apply rotation (quaternion to matrix)
+	mat4 rot_mat;
+	glm_quat_mat4(rotation, rot_mat);
+	glm_mul(node->local_transform, rot_mat, node->local_transform);
+
+	// Apply scale
+	glm_scale(node->local_transform, scale);
 }
 
-static void compute_world_transforms(Node* nodes, u32 node_count) {
-    // First compute all local transforms
-    for (u32 i = 0; i < node_count; i++) {
-        compute_node_transform(&nodes[i]);
-    }
-    
-    // Then compute world transforms for all nodes
-    for (u32 i = 0; i < node_count; i++) {
-        Node* node = &nodes[i];
-        
-        if (node->parent == -1) {
-            // Root node: world = local
-            glm_mat4_copy(node->local_transform, node->world_transform);
-        } else {
-            // Child node: world = parent_world * local
-            Node* parent = &nodes[node->parent];
-            glm_mat4_mul(parent->world_transform, node->local_transform, node->world_transform);
-        }
-    }
+static void compute_world_transform_recursive(Node *nodes, u32 index)
+{
+	Node *node = &nodes[index];
+	if (node->parent == -1) {
+		glm_mat4_copy(node->local_transform, node->world_transform);
+	} else {
+		// ensure parent is computed first
+		compute_world_transform_recursive(nodes, node->parent);
+		glm_mat4_mul(nodes[node->parent].world_transform, node->local_transform, node->world_transform);
+	}
 }
+
+static void compute_world_transforms(Node *nodes, u32 node_count)
+{
+	for (u32 i = 0; i < node_count; i++)
+		compute_node_transform(&nodes[i]);
+	for (u32 i = 0; i < node_count; i++)
+		compute_world_transform_recursive(nodes, i);
+}
+
 /*	Temp code	*/
 
 static void	gltfBuildSceneGraph(GLTFModel *model, tg3_model gltf_model)

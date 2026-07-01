@@ -43,9 +43,13 @@ typedef struct Material
 	Texture		normal_texture;
 	Texture		occlusion_texture;
 	Texture		emissive_texture;
-	double		base_color_factor[4];
-	double		roughness_factor;
-	double		metallic_factor;
+
+	float		base_color_factor[4];
+	float		roughness_factor;
+	float		metallic_factor;
+	float		emissive_factor[3];
+	float		alpha_cutoff;
+
 	VkDescriptorSet	descriptor_set;
 }	Material;
 
@@ -167,6 +171,7 @@ typedef struct PushConstantBlock
 
 typedef struct UniformBufferObject
 {
+	mat4	model;
 	mat4	view;
 	mat4	proj;
 
