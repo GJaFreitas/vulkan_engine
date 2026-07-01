@@ -2,7 +2,6 @@
 
 struct UniformBufferObject
 {
-    float4x4 model;
     float4x4 view;
     float4x4 proj;
     float4 lightPositions[4];
@@ -13,6 +12,15 @@ struct UniformBufferObject
     float prefilteredCubeMipLevels;
     float scaleIBLAmbient;
 };
+
+// Add this after your UniformBufferObject struct
+struct PushConstants
+{
+    float4x4 model;
+};
+
+[[vk::push_constant]]
+ConstantBuffer<PushConstants> pc;
 
 [[vk::binding(0, 0)]]
 ConstantBuffer<UniformBufferObject> ubo;
@@ -42,10 +50,10 @@ struct VSOutput
 VSOutput vertMain(VertexInput input)
 {
     VSOutput output;
-    float4 worldPos = mul(ubo.model, float4(input.pos, 1.0));
+    float4 worldPos = mul(pc.model, float4(input.pos, 1.0));
     output.worldPos = worldPos.xyz;
     output.clipPos = mul(ubo.proj, mul(ubo.view, worldPos));
-    output.normal = mul((float3x3)ubo.model, input.normal);
+    output.normal = mul((float3x3)pc.model, input.normal);
     output.uv = input.uv;
     return output;
 }

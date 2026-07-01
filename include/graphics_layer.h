@@ -166,7 +166,6 @@ typedef struct PushConstantBlock
 
 typedef struct UniformBufferObject
 {
-	mat4	model;
 	mat4	view;
 	mat4	proj;
 

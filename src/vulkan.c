@@ -428,12 +428,20 @@ static void	createShaders(GraphicsContext *ctx)
 
 static void	createGraphicsPipeline(GraphicsContext *ctx)
 {
-	VkPushConstantRange	push_constant_range = {
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-		.offset = 0,
-		.size = sizeof(PushConstantBlock),
+	VkPushConstantRange	push_constant_ranges[] = {
+		// Mat push constant
+		// {
+		// 	.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		// 	.offset = 0,
+		// 	.size = sizeof(PushConstantBlock),
+		// },
+		// Push constant to change model transformation
+		{
+			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+			.offset = 0,
+			.size = sizeof(mat4),
+		},
 	};
-	(void)push_constant_range;
 
 	VkDescriptorSetLayout	layouts[] = {
 		ctx->ubo_descriptor_layout,
@@ -444,9 +452,8 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = sizeofarray(layouts),
 		.pSetLayouts = layouts,
-		// TODO: Add push constants back
-		.pushConstantRangeCount = 0,
-		.pPushConstantRanges = NULL,
+		.pushConstantRangeCount = sizeofarray(push_constant_ranges),
+		.pPushConstantRanges = push_constant_ranges,
 	};
 
 
@@ -863,7 +870,6 @@ static void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx, Camera *cam
 {
 
 	UniformBufferObject ubo = {};
-	glm_mat4_identity(ubo.model);
 	getViewMatrix(ubo.view, cam);
 	getProjectionMatrix(ubo.proj, cam, (float)ctx->swapchain_width / (float)ctx->swapchain_height);
 
@@ -1042,6 +1048,8 @@ void	render(GraphicsContext *ctx, Camera *camera)
 
 			if (mesh->vertex_count == 0)
 				continue ;
+
+			vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mat4), &ctx->model.linear_nodes[i].world_transform);
 
 			// TODO: Again this could be a big buffer and the binding done with offsets
 			// »speed
