@@ -24,6 +24,21 @@
 #define TINYGLTF3_ENABLE_FS
 #include "tiny_gltf_v3.h"
 
+typedef struct UniformBufferObject
+{
+	mat4	model;
+	mat4	view;
+	mat4	proj;
+
+	vec4	light_positions[4];		// Pos and radius
+	vec4	light_colors[4];		// Color and intensity
+	vec4	cam_pos;			// For view dependent effects
+	float	exposure;			// for HDR rendering
+	float	gamma;				// gamma correction
+	float	prefiltered_cube_miplevels;	// for image based lighting
+	float	scale_ibl_ambient;		// Scale factor for ambient light
+}	UniformBufferObject;
+
 typedef struct Texture
 {
 	// TODO: Not a good identifier outside of debug, find another way
@@ -153,6 +168,8 @@ typedef struct GLTFModel
 	Node		*linear_nodes;	u32	node_count;
 	Mesh		*meshes;	u32	mesh_count;
 	Animation	*animations;	u32	animation_count;
+
+	UniformBufferObject	ubo;
 }	GLTFModel;
 
 typedef struct PushConstantBlock
@@ -168,21 +185,6 @@ typedef struct PushConstantBlock
 	float	alpha_mask;				// whether to use alpha masking
 	float	alpha_mask_cut_off;			// alpha threshold for masking
 }	PushConstantBlock;
-
-typedef struct UniformBufferObject
-{
-	mat4	model;
-	mat4	view;
-	mat4	proj;
-
-	vec4	light_positions[4];		// Pos and radius
-	vec4	light_colors[4];		// Color and intensity
-	vec4	cam_pos;			// For view dependent effects
-	float	exposure;			// for HDR rendering
-	float	gamma;				// gamma correction
-	float	prefiltered_cube_miplevels;	// for image based lighting
-	float	scale_ibl_ambient;		// Scale factor for ambient light
-}	UniformBufferObject;
 
 typedef struct FrameResources
 {
@@ -253,6 +255,12 @@ typedef struct GraphicsContext
 
 	GLTFModel		model;
 
+	Texture			default_base_color_texture;
+	Texture			default_metallic_texture;
+	Texture			default_normal_texture;
+	Texture			default_occlusion_texture;
+	Texture			default_emissive_texture;
+
 }	GraphicsContext;
 
 
@@ -294,5 +302,6 @@ void	endGraphics(GraphicsContext *ctx);
 void	render(GraphicsContext *ctx, Camera *world);
 
 
-void	gltf_load(String filename, GLTFModel *model, GraphicsContext *ctx);
+void	gltfLoad(String filename, GLTFModel *model, GraphicsContext *ctx);
 void	gltf_destroy(GLTFModel model);
+void	createDefaultTextures(GraphicsContext *ctx);

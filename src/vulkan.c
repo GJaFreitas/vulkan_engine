@@ -528,6 +528,7 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 		.colorBlendOp = VK_BLEND_OP_ADD,
 		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
 		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+		.alphaBlendOp = VK_BLEND_OP_ADD,
 		.colorWriteMask =\
 		VK_COLOR_COMPONENT_R_BIT
 		| VK_COLOR_COMPONENT_G_BIT
@@ -716,6 +717,20 @@ static void	createUniformBuffers(GraphicsContext *ctx)
 
 		wrapperVMAcreateBuffer(ctx->vma_allocator, &buf_info, &ctx->uniform_buffers[i], &ctx->uniform_buffer_allocations[i], 1);
 		wrapperVMAmapMemory(ctx->vma_allocator, ctx->uniform_buffer_allocations[i], &ctx->uniform_buffers_mapped[i]);
+
+		UniformBufferObject	ubo = {};
+
+		glm_vec4_copy((vec4){-10.0f,  10.0f, 10.0f, 1.0f}, ubo.light_positions[0]);
+		glm_vec4_copy((vec4){ 10.0f,  10.0f, 10.0f, 1.0f}, ubo.light_positions[1]);
+		glm_vec4_copy((vec4){-10.0f, -10.0f, 10.0f, 1.0f}, ubo.light_positions[2]);
+		glm_vec4_copy((vec4){ 10.0f, -10.0f, 10.0f, 1.0f}, ubo.light_positions[3]);
+
+		glm_vec4_copy((vec4){300.0f, 300.0f, 300.0f, 1.0f}, ubo.light_colors[0]);
+		glm_vec4_copy((vec4){300.0f, 300.0f,   0.0f, 1.0f}, ubo.light_colors[1]);
+		glm_vec4_copy((vec4){  0.0f,   0.0f, 300.0f, 1.0f}, ubo.light_colors[2]);
+		glm_vec4_copy((vec4){300.0f,   0.0f,   0.0f, 1.0f}, ubo.light_colors[3]);
+
+		memcpy(ctx->uniform_buffers_mapped[i], &ubo, sizeof(UniformBufferObject));
 	}
 }
 
@@ -804,7 +819,10 @@ static void	initVulkan(GraphicsContext *ctx)
 	createUniformBuffers(ctx);
 	createDescriptorPoolSets(ctx);
 	createCommandBuffers(ctx);
-	gltf_load(STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"), &ctx->model, ctx);
+
+	createDefaultTextures(ctx);
+
+	gltfLoad(STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"), &ctx->model, ctx);
 	createGraphicsPipeline(ctx);
 	ctx->frame_index = 0;
 	ctx->next_signal_value = ctx->frames_in_flight_count + 1;
@@ -860,17 +878,6 @@ static void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx, Camera *cam
 	ubo.proj[1][1] *= -1;
 
 	glm_vec4_copy((vec4){cam->position[0], cam->position[1], cam->position[2], 1.0f}, ubo.cam_pos);
-
-	glm_vec4_copy((vec4){-10.0f,  10.0f, 10.0f, 1.0f}, ubo.light_positions[0]);
-	glm_vec4_copy((vec4){ 10.0f,  10.0f, 10.0f, 1.0f}, ubo.light_positions[1]);
-	glm_vec4_copy((vec4){-10.0f, -10.0f, 10.0f, 1.0f}, ubo.light_positions[2]);
-	glm_vec4_copy((vec4){ 10.0f, -10.0f, 10.0f, 1.0f}, ubo.light_positions[3]);
-
-	glm_vec4_copy((vec4){300.0f, 300.0f, 300.0f, 1.0f}, ubo.light_colors[0]);
-	glm_vec4_copy((vec4){300.0f, 300.0f,   0.0f, 1.0f}, ubo.light_colors[1]);
-	glm_vec4_copy((vec4){  0.0f,   0.0f, 300.0f, 1.0f}, ubo.light_colors[2]);
-	glm_vec4_copy((vec4){300.0f,   0.0f,   0.0f, 1.0f}, ubo.light_colors[3]);
-
 	ubo.exposure = 4.5f;
 	ubo.gamma = 2.2f;
 
@@ -955,7 +962,7 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		.srcStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
 		.srcAccessMask = 0,
 		.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
-				VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT ,
+		VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT ,
 		.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 		.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
@@ -1028,7 +1035,7 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline);
 		VkDeviceSize	offset = 0;
 
-			// »speed
+		// »speed
 		for (u32 i = 0; i < ctx->model.node_count; i++) {
 			const Mesh	*mesh = &ctx->model.linear_nodes[i].mesh;
 			const Node	*node = &ctx->model.linear_nodes[i];
@@ -1061,7 +1068,8 @@ void	render(GraphicsContext *ctx, Camera *camera)
 				mat = NULL;
 			}
 
-			memcpy(ctx->uniform_buffers_mapped[frame_res_index] + offsetof(UniformBufferObject, model), &node->world_transform, sizeof(mat4));
+			// TODO: Implement this ubo
+			memcpy(ctx->uniform_buffers_mapped[frame_res_index], &ctx->model.ubo, sizeof(UniformBufferObject));
 
 			vkCmdBindVertexBuffers(resource.command_buffer, 0, 1, &mesh->gpu_vertex_data, &offset);
 			vkCmdBindIndexBuffer(resource.command_buffer, mesh->gpu_index_data, 0, mesh->index_type);

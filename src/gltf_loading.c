@@ -118,20 +118,9 @@ static inline String	tg3_to_String(tg3_str str)
 	return s;
 }
 
-static void	loadFromPNG(GraphicsContext *ctx, tg3_model model, tg3_image image, Texture *tex)
+static void	uploadTexture(GraphicsContext *ctx, VkFormat format, i32 width, i32 height, const u8 *pixels, Texture *tex)
 {
-	const tg3_buffer_view	buffer_view = model.buffer_views[image.buffer_view];
-	const tg3_buffer	buffer = model.buffers[buffer_view.buffer];
-	const tg3_span_u8	buf_data = buffer.data;
 
-
-	i32	width, height, channels;
-	u8	*pixels;
-
-	pixels = stbi_load_from_memory(buf_data.data + buffer_view.byte_offset, buffer_view.byte_length, &width, &height, &channels, STBI_rgb_alpha);
-
-	// PNGs come in this format
-	VkFormat	format = VK_FORMAT_R8G8B8A8_SRGB;
 	VkExtent3D	extent = {
 		.width = width,
 		.height = height,
@@ -168,7 +157,6 @@ static void	loadFromPNG(GraphicsContext *ctx, tg3_model model, tg3_image image, 
 	tex->gpu_image = vk_image;
 	tex->gpu_image_alloc = image_allocation;
 
-
 	// Creating a staging buffer for upload
 	// rgba format means 4 bytes per pixel
 	VkDeviceSize	image_size = width * height * 4;
@@ -186,7 +174,6 @@ static void	loadFromPNG(GraphicsContext *ctx, tg3_model model, tg3_image image, 
 	wrapperVMAmapMemory(ctx->vma_allocator, staging_allocation, &mapped);
 	memcpy(mapped, pixels, image_size);
 	wrapperVMAunmapMemory(ctx->vma_allocator, staging_allocation);
-	stbi_image_free(pixels);
 
 	// Submit the image to the GPU
 	// Creating the command buffer
@@ -357,6 +344,25 @@ static void	loadFromPNG(GraphicsContext *ctx, tg3_model model, tg3_image image, 
 		.anisotropyEnable = VK_FALSE
 	};
 	vkCreateSampler(ctx->device, &sampler_info, NULL, &tex->sampler);
+}
+
+static void	loadFromPNG(GraphicsContext *ctx, tg3_model model, tg3_image image, Texture *tex)
+{
+	const tg3_buffer_view	buffer_view = model.buffer_views[image.buffer_view];
+	const tg3_buffer	buffer = model.buffers[buffer_view.buffer];
+	const tg3_span_u8	buf_data = buffer.data;
+
+
+	i32	width, height, channels;
+	u8	*pixels;
+
+	pixels = stbi_load_from_memory(buf_data.data + buffer_view.byte_offset, buffer_view.byte_length, &width, &height, &channels, STBI_rgb_alpha);
+
+	// PNGs come in this format
+	VkFormat	format = VK_FORMAT_R8G8B8A8_SRGB;
+
+	uploadTexture(ctx, format, width, height, pixels, tex);
+	stbi_image_free(pixels);
 }
 
 static void	gltfLoadTextures(GraphicsContext *ctx, GLTFModel *model, tg3_model gltf_model)
@@ -548,6 +554,38 @@ static void	gltfBuildSceneGraph(GLTFModel *model, tg3_model gltf_model)
 	compute_world_transforms(model->linear_nodes, model->node_count);
 }
 
+static inline void	calculate_tangent_triangle(Vertex v0, Vertex v1, Vertex v2, vec3 *tangent, vec3 *bitangent)
+{
+	vec3	edge1, edge2;
+
+	glm_vec3_sub(v1.pos, v0.pos, edge1);
+	glm_vec3_sub(v2.pos, v0.pos, edge2);
+
+	vec2	delta_uv1 = {v1.uv[0] - v0.uv[0], v1.uv[1] - v0.uv[1]};
+	vec2	delta_uv2 = {v2.uv[0] - v0.uv[0], v2.uv[1] - v0.uv[1]};
+
+	float	det = delta_uv1[0] * delta_uv2[1] - delta_uv1[1] * delta_uv2[0];
+
+	if (fabsf(det) < 1e-8f) {
+		*tangent[0] = 1;
+		*tangent[1] = 0;
+		*tangent[2] = 0;
+		*bitangent[0] = 0;
+		*bitangent[1] = 1;
+		*bitangent[2] = 0;
+		return ;
+	}
+
+	float	inv_det = 1.0f / det;
+
+	*tangent[0] = inv_det * (delta_uv2[1] * edge1[0] - delta_uv1[1] * edge2[0]);
+	*tangent[1] = inv_det * (delta_uv2[1] * edge1[1] - delta_uv1[1] * edge2[1]);
+	*tangent[2] = inv_det * (delta_uv2[1] * edge1[2] - delta_uv1[1] * edge2[2]);
+
+	*bitangent[0] = inv_det * (-delta_uv2[0] * edge1[0] + delta_uv1[0] * edge2[0]);
+	*bitangent[1] = inv_det * (-delta_uv2[0] * edge1[1] + delta_uv1[0] * edge2[1]);
+	*bitangent[2] = inv_det * (-delta_uv2[0] * edge1[2] + delta_uv1[0] * edge2[2]);
+}
 
 static void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
 {
@@ -565,7 +603,7 @@ static void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
 				mesh.material_index = primitive.material;
 
 				// The index for the attributes
-				i32	pos_idx = -1, normal_idx = -1, uv_idx = -1;
+				i32	pos_idx = -1, normal_idx = -1, uv_idx = -1, tangent_idx = -1;
 				for (u32 a = 0; a < primitive.attributes_count; a++) {
 					if (stringIsEqual(tg3_to_String(primitive.attributes[a].key), STRING_LIT("POSITION"))) {
 						pos_idx = primitive.attributes[a].value;
@@ -573,6 +611,9 @@ static void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
 						normal_idx = primitive.attributes[a].value;
 					} else if (stringIsEqual(tg3_to_String(primitive.attributes[a].key), STRING_LIT("TEXCOORD_0"))) {
 						uv_idx = primitive.attributes[a].value;
+					} else if (stringIsEqual(tg3_to_String(primitive.attributes[a].key), STRING_LIT("TANGENT"))) {
+						tangent_idx = primitive.attributes[a].value;
+						printf("We got free tangents\n");
 					}
 				}
 
@@ -623,6 +664,40 @@ static void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
 				// TODO: Bad allocation
 				mesh.indices = malloc(index_type_size * mesh.index_count);
 				memcpy(mesh.indices, idx_data, index_type_size * mesh.index_count);
+
+				for (u32 i = 0; i < mesh.index_count; i++) {
+					u32	i0 = *(u8 *)mesh.indices + (index_type_size * (i * 3));
+					u32	i1 = *(u8 *)mesh.indices + (index_type_size * (i * 3) + 1);
+					u32	i2 = *(u8 *)mesh.indices + (index_type_size * (i * 3) + 2);
+
+					Vertex	v0 = mesh.vertices[i0];
+					Vertex	v1 = mesh.vertices[i1];
+					Vertex	v2 = mesh.vertices[i2];
+
+					vec3	tangent, bitangent;
+
+					calculate_tangent_triangle(v0, v1, v2, &tangent, &bitangent);
+
+					vec3	cross0, cross1, cross2;
+					float	dot0, dot1, dot2;
+
+					glm_vec3_cross(tangent, v0.normal, cross0);
+					dot0 = glm_vec3_dot(bitangent, cross0);
+
+					glm_vec3_cross(tangent, v1.normal, cross1);
+					dot1 = glm_vec3_dot(bitangent, cross1);
+
+					glm_vec3_cross(tangent, v2.normal, cross2);
+					dot2 = glm_vec3_dot(bitangent, cross2);
+
+					float	handedness0 = dot0 < 0.0f ? -1.0f : 1.0f;
+					float	handedness1 = dot1 < 0.0f ? -1.0f : 1.0f;
+					float	handedness2 = dot2 < 0.0f ? -1.0f : 1.0f;
+					
+					glm_vec4(tangent, handedness0, v0.tangent);
+					glm_vec4(tangent, handedness1, v1.tangent);
+					glm_vec4(tangent, handedness2, v2.tangent);
+				}
 
 				model->linear_nodes[n].mesh = mesh;
 			}
@@ -773,51 +848,67 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 
 		// »speed
 		// TODO: Investigate possible optimizations here
+		Texture		used;
+
 		if (mat->base_color_texture.sampler) {
-			img_infos[written].sampler = mat->base_color_texture.sampler;
-			img_infos[written].imageView = mat->base_color_texture.image_view;
-			img_infos[written].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-			all_sets[written].pImageInfo = &img_infos[written];
-			all_sets[written].dstBinding = 0;
-			written++;
+			used = mat->base_color_texture;
+		} else {
+			used = ctx->default_base_color_texture;
 		}
+		img_infos[0].sampler = used.sampler;
+		img_infos[0].imageView = used.image_view;
+		img_infos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+		all_sets[0].pImageInfo = &img_infos[0];
+		all_sets[0].dstBinding = 0;
+
 		if (mat->metallic_roughness_texture.sampler) {
-			img_infos[written].sampler = mat->metallic_roughness_texture.sampler;
-			img_infos[written].imageView = mat->metallic_roughness_texture.image_view;
-			img_infos[written].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-			all_sets[written].pImageInfo = &img_infos[written];
-			all_sets[written].dstBinding = 1;
-			written++;
+			used = mat->metallic_roughness_texture;
+		} else {
+			used = ctx->default_metallic_texture;
 		}
+		img_infos[1].sampler = used.sampler;
+		img_infos[1].imageView = used.image_view;
+		img_infos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+		all_sets[1].pImageInfo = &img_infos[1];
+		all_sets[1].dstBinding = 1;
+
 		if (mat->normal_texture.sampler) {
-			img_infos[written].sampler = mat->normal_texture.sampler;
-			img_infos[written].imageView = mat->normal_texture.image_view;
-			img_infos[written].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-			all_sets[written].pImageInfo = &img_infos[written];
-			all_sets[written].dstBinding = 2;
-			written++;
+			used = mat->normal_texture;
+		} else {
+			used = ctx->default_normal_texture;
 		}
+		img_infos[2].sampler = used.sampler;
+		img_infos[2].imageView = used.image_view;
+		img_infos[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+		all_sets[2].pImageInfo = &img_infos[2];
+		all_sets[2].dstBinding = 2;
+
 		if (mat->occlusion_texture.sampler) {
-			img_infos[written].sampler = mat->occlusion_texture.sampler;
-			img_infos[written].imageView = mat->occlusion_texture.image_view;
-			img_infos[written].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-			all_sets[written].pImageInfo = &img_infos[written];
-			all_sets[written].dstBinding = 3;
-			written++;
+			used = mat->occlusion_texture;
+		} else {
+			used = ctx->default_occlusion_texture;
 		}
+		img_infos[3].sampler = used.sampler;
+		img_infos[3].imageView = used.image_view;
+		img_infos[3].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+		all_sets[3].pImageInfo = &img_infos[3];
+		all_sets[3].dstBinding = 3;
 		if (mat->emissive_texture.sampler) {
-			img_infos[written].sampler = mat->emissive_texture.sampler;
-			img_infos[written].imageView = mat->emissive_texture.image_view;
-			img_infos[written].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-			all_sets[written].pImageInfo = &img_infos[written];
-			all_sets[written].dstBinding = 4;
-			written++;
+			used = mat->emissive_texture;
+		} else {
+			used = ctx->default_emissive_texture;
 		}
+		img_infos[4].sampler = used.sampler;
+		img_infos[4].imageView = used.image_view;
+		img_infos[4].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+		all_sets[4].pImageInfo = &img_infos[4];
+		all_sets[4].dstBinding = 4;
+
 		vkUpdateDescriptorSets(ctx->device, written, all_sets, 0, NULL);
 	}
 }
@@ -857,6 +948,7 @@ static void	gltfCreateMeshBuffers(Mesh *mesh, GraphicsContext *ctx)
 			break;
 		default:
 			engine_error("Gltf loading", "Unrecognized index type, please check it out");
+			index_size = 0;
 			break;
 	}
 	VkBufferCreateInfo	i_buffer_info = {
@@ -889,7 +981,22 @@ static void	gltfCreateMeshBuffers(Mesh *mesh, GraphicsContext *ctx)
 	mesh->gpu_index_data = i_buf;
 }
 
-void	gltf_load(String filename, GLTFModel *model, GraphicsContext *ctx)
+void	createDefaultTextures(GraphicsContext *ctx)
+{
+	const u8 white[] = {255, 255, 255, 255};
+	const u8 black[] = {0, 0, 0, 255};
+	const u8 normal[] = {128, 128, 255, 255};
+	const u8 mr[] = {0, 255, 0, 255};
+
+	VkFormat	format = VK_FORMAT_R8G8B8A8_SRGB;
+	uploadTexture(ctx, format, 1, 1, white, &ctx->default_base_color_texture);
+	uploadTexture(ctx, format, 1, 1, normal, &ctx->default_normal_texture);
+	uploadTexture(ctx, format, 1, 1, mr, &ctx->default_metallic_texture);
+	uploadTexture(ctx, format, 1, 1, white, &ctx->default_occlusion_texture);
+	uploadTexture(ctx, format, 1, 1, black, &ctx->default_emissive_texture);
+}
+
+void	gltfLoad(String filename, GLTFModel *model, GraphicsContext *ctx)
 {
 	tg3_parse_options	opts;
 	tg3_model		gltf_model;
