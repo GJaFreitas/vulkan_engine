@@ -665,10 +665,13 @@ static void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
 				mesh.indices = malloc(index_type_size * mesh.index_count);
 				memcpy(mesh.indices, idx_data, index_type_size * mesh.index_count);
 
-				for (u32 i = 0; i < mesh.index_count; i++) {
-					u32	i0 = *(u8 *)mesh.indices + (index_type_size * (i * 3));
-					u32	i1 = *(u8 *)mesh.indices + (index_type_size * (i * 3) + 1);
-					u32	i2 = *(u8 *)mesh.indices + (index_type_size * (i * 3) + 2);
+
+				const u32	triangle_count = mesh.index_count / 3;
+				engine_debug(__FILE_NAME__, "triangle count: %u is divisible by 3: %i", triangle_count, mesh.index_count % 3);
+				for (u32 i = 0; i < triangle_count; i++) {
+					u32	i0 = *((u8 *)mesh.indices + (index_type_size * (i * 3)));
+					u32	i1 = *((u8 *)mesh.indices + (index_type_size * (i * 3) + 1));
+					u32	i2 = *((u8 *)mesh.indices + (index_type_size * (i * 3) + 2));
 
 					Vertex	v0 = mesh.vertices[i0];
 					Vertex	v1 = mesh.vertices[i1];
@@ -842,7 +845,6 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 			.pImageInfo = NULL	// Set after
 		};
 
-		u32			written = 0;
 		VkWriteDescriptorSet	all_sets[5] = {write_set, write_set, write_set, write_set, write_set};
 		VkDescriptorImageInfo	img_infos[5];
 
@@ -909,7 +911,7 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 		all_sets[4].pImageInfo = &img_infos[4];
 		all_sets[4].dstBinding = 4;
 
-		vkUpdateDescriptorSets(ctx->device, written, all_sets, 0, NULL);
+		vkUpdateDescriptorSets(ctx->device, 5, all_sets, 0, NULL);
 	}
 }
 

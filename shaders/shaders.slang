@@ -19,7 +19,7 @@ struct UniformBufferObject
 };
 
 // Push constants - Fast, small data updated frequently per material/object
-struct PushConstants {
+struct MaterialProperties {
     float4 baseColorFactor;             // Base color tint/multiplier
     float metallicFactor;               // Metallic property multiplier
     float roughnessFactor;              // Surface roughness multiplier
@@ -32,6 +32,10 @@ struct PushConstants {
     float alphaMaskCutoff;              // Alpha cutoff threshold
 };
 
+struct ModelMatrix {
+	[[vk::offset(64)]] float4x4 mat;	// The model matrix
+};
+
 // Resource bindings - Connect CPU resources to GPU shader registers
 [[vk::binding(0, 0)]] ConstantBuffer<UniformBufferObject> ubo;
 
@@ -41,7 +45,8 @@ struct PushConstants {
 [[vk::binding(3, 1)]] Sampler2D occlusionMap;
 [[vk::binding(4, 1)]] Sampler2D emissiveMap;
 
-[[vk::push_constant]] PushConstants material;
+[[vk::push_constant]] ModelMatrix model;
+[[vk::push_constant]] MaterialProperties material;
 
 // vertex stage
 
@@ -104,7 +109,7 @@ VSOutput vertMain(VSInput input)
 
     // Transform vertex position through the rendering pipeline
     // Model -> World -> Camera -> Clip space transformation chain
-    float4 worldPos = mul(ubo.model, float4(input.Position, 1.0));
+    float4 worldPos = mul(mul(ubo.model, model.mat), float4(input.Position, 1.0));
     output.Position = mul(ubo.proj, mul(ubo.view, worldPos));
 
     // Pass world position for fragment lighting calculations

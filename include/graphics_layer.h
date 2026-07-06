@@ -172,7 +172,7 @@ typedef struct GLTFModel
 	UniformBufferObject	ubo;
 }	GLTFModel;
 
-typedef struct PushConstantBlock
+typedef struct MaterialProperties
 {
 	vec4	base_color_factor;			// rgb base color and alpha
 	float	metallic_factor;			// how metallic the surface is
@@ -184,7 +184,7 @@ typedef struct PushConstantBlock
 	i32	emissive_texture_set;			// texture coordinate set for emission
 	float	alpha_mask;				// whether to use alpha masking
 	float	alpha_mask_cut_off;			// alpha threshold for masking
-}	PushConstantBlock;
+}	MaterialProperties;
 
 typedef struct FrameResources
 {
@@ -192,6 +192,13 @@ typedef struct FrameResources
 	VkCommandBuffer	command_buffer;
 	VkSemaphore	image_acquired_semaphore;
 }	FrameResources;
+
+typedef struct PipelinePushConstants
+{
+	u32			push_constant_count;
+	VkPushConstantRange	*push_constant_ranges;
+	u32			*push_constant_offsets;
+}	PipelinePushConstants;
 
 typedef struct GraphicsContext
 {
@@ -231,6 +238,8 @@ typedef struct GraphicsContext
 
 	VkShaderModule		vertex_shader;
 	VkShaderModule		frag_shader;
+
+	PipelinePushConstants	pipeline_push_constants;
 
 	VkPipelineLayout	pipeline_layout;
 	VkPipeline		pipeline;

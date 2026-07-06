@@ -427,7 +427,13 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 		{
 			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
 			.offset = 0,
-			.size = sizeof(PushConstantBlock),
+			.size = sizeof(MaterialProperties),
+		},
+		// Model matrix
+		{
+			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+			.offset = sizeof(MaterialProperties),
+			.size = sizeof(mat4),
 		},
 	};
 
@@ -822,7 +828,7 @@ static void	initVulkan(GraphicsContext *ctx)
 
 	createDefaultTextures(ctx);
 
-	gltfLoad(STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"), &ctx->model, ctx);
+	gltfLoad(STRING_LIT("data/models/DiffuseTransmissionTeacup.glb"), &ctx->model, ctx);
 	createGraphicsPipeline(ctx);
 	ctx->frame_index = 0;
 	ctx->next_signal_value = ctx->frames_in_flight_count + 1;
@@ -1043,6 +1049,11 @@ void	render(GraphicsContext *ctx, Camera *camera)
 			if (mesh->vertex_count == 0)
 				continue ;
 
+			mat4	node_transform;
+			glm_mat4_copy(node->world_transform, node_transform);
+
+			vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(MaterialProperties), sizeof(mat4), &node_transform);
+
 			VkDescriptorSet	descriptor_sets[2] = { ctx->ubo_descriptor_sets[frame_res_index], VK_NULL_HANDLE };
 			u32		descriptor_set_count = 1;
 			Material	*mat;
@@ -1050,7 +1061,7 @@ void	render(GraphicsContext *ctx, Camera *camera)
 				mat = &ctx->model.materials[mesh->material_index];
 				descriptor_set_count += 1;
 				descriptor_sets[1] = mat->descriptor_set;
-				PushConstantBlock	push_constants_mat = {
+				MaterialProperties	push_constants_mat = {
 					.roughness_factor = mat->roughness_factor,
 					.metallic_factor = mat->metallic_factor,
 					.alpha_mask_cut_off = mat->alpha_cutoff,
@@ -1062,14 +1073,11 @@ void	render(GraphicsContext *ctx, Camera *camera)
 					.alpha_mask = 0.0f,
 				};
 				glm_vec4_copy(mat->base_color_factor, push_constants_mat.base_color_factor);
-
-				vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstantBlock), &push_constants_mat);
+				vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
 			} else {
 				mat = NULL;
 			}
 
-			// TODO: Implement this ubo
-			memcpy(ctx->uniform_buffers_mapped[frame_res_index], &ctx->model.ubo, sizeof(UniformBufferObject));
 
 			vkCmdBindVertexBuffers(resource.command_buffer, 0, 1, &mesh->gpu_vertex_data, &offset);
 			vkCmdBindIndexBuffer(resource.command_buffer, mesh->gpu_index_data, 0, mesh->index_type);

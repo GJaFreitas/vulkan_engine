@@ -8,7 +8,7 @@
 static void updateCamera(Camera *camera, SDL_Window *window, double dt)
 {
 	// Mouse look - only when right mouse button is held
-	if (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_RMASK)
+	if (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_LMASK)
 	{
 		SDL_SetWindowRelativeMouseMode(window, true);
 		float xrel, yrel;
@@ -43,8 +43,6 @@ static void updateCamera(Camera *camera, SDL_Window *window, double dt)
 
 	glm_vec3_add(camera->position, move, camera->position);
 }
-
-
 
 
 int	loop(World world)
