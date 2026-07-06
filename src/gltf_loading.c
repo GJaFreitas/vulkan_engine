@@ -667,11 +667,34 @@ static void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
 
 
 				const u32	triangle_count = mesh.index_count / 3;
-				engine_debug(__FILE_NAME__, "triangle count: %u is divisible by 3: %i", triangle_count, mesh.index_count % 3);
+				// engine_debug(__FILE_NAME__, "triangle count: %u i: %u", triangle_count, i);
 				for (u32 i = 0; i < triangle_count; i++) {
-					u32	i0 = *((u8 *)mesh.indices + (index_type_size * (i * 3)));
-					u32	i1 = *((u8 *)mesh.indices + (index_type_size * (i * 3) + 1));
-					u32	i2 = *((u8 *)mesh.indices + (index_type_size * (i * 3) + 2));
+					u32	i0;
+					u32	i1;
+					u32	i2;
+					switch (mesh.index_type) {
+						case VK_INDEX_TYPE_UINT8:
+							i0 = *((u8 *)mesh.indices + (i * 3));
+							i1 = *((u8 *)mesh.indices + (i * 3) + 1);
+							i2 = *((u8 *)mesh.indices + (i * 3) + 2);
+						break;
+						case VK_INDEX_TYPE_UINT16:
+							i0 = *((u16 *)mesh.indices + (i * 3));
+							i1 = *((u16 *)mesh.indices + (i * 3) + 1);
+							i2 = *((u16 *)mesh.indices + (i * 3) + 2);
+						break;
+						case VK_INDEX_TYPE_UINT32:
+							i0 = *((u32 *)mesh.indices + (i * 3));
+							i1 = *((u32 *)mesh.indices + (i * 3) + 1);
+							i2 = *((u32 *)mesh.indices + (i * 3) + 2);
+						break;
+						default:
+							i0 = *((u16 *)mesh.indices + (i * 3));
+							i1 = *((u16 *)mesh.indices + (i * 3) + 1);
+							i2 = *((u16 *)mesh.indices + (i * 3) + 2);
+							engine_error(__FILE__, "Very wrong index type, u16 assumed");
+						break;
+					}
 
 					Vertex	v0 = mesh.vertices[i0];
 					Vertex	v1 = mesh.vertices[i1];
@@ -700,6 +723,10 @@ static void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
 					glm_vec4(tangent, handedness0, v0.tangent);
 					glm_vec4(tangent, handedness1, v1.tangent);
 					glm_vec4(tangent, handedness2, v2.tangent);
+
+					mesh.vertices[i0] = v0;
+					mesh.vertices[i1] = v1;
+					mesh.vertices[i2] = v2;
 				}
 
 				model->linear_nodes[n].mesh = mesh;
