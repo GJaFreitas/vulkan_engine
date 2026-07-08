@@ -107,9 +107,11 @@ VSOutput vertMain(VSInput input)
 {
     VSOutput output;
 
+    float4x4	model_mat = mul(ubo.model, model.mat);
+
     // Transform vertex position through the rendering pipeline
     // Model -> World -> Camera -> Clip space transformation chain
-    float4 worldPos = mul(mul(ubo.model, model.mat), float4(input.Position, 1.0));
+    float4 worldPos = mul(model_mat, float4(input.Position, 1.0));
     output.Position = mul(ubo.proj, mul(ubo.view, worldPos));
 
     // Pass world position for fragment lighting calculations
@@ -119,7 +121,7 @@ VSOutput vertMain(VSInput input)
     // Transform normal from model space to world space
     // Use only rotation/scale part of model matrix (upper-left 3x3)
     // Normalize to ensure unit length after transformation
-    output.Normal = normalize(mul((float3x3)ubo.model, input.Normal));
+    output.Normal = normalize(mul((float3x3)model_mat, input.Normal));
 
     // Pass through texture coordinates unchanged
     // UV coordinates are typically in [0,1] range and don't need transformation
@@ -243,7 +245,6 @@ float4 fragMain(VSOutput input) : SV_TARGET
 
     // Apply gamma correction for sRGB display (inverse gamma)
     color = pow(color, float3(1.0 / ubo.gamma, 1.0 / ubo.gamma, 1.0 / ubo.gamma));
-
     // Output final color with original alpha
     return float4(color, baseColor.a);
 }

@@ -881,6 +881,7 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 
 		if (mat->base_color_texture.sampler) {
 			used = mat->base_color_texture;
+			engine_debug(__FILE__, "Mat has base texture");
 		} else {
 			used = ctx->default_base_color_texture;
 		}
@@ -893,6 +894,7 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 
 		if (mat->metallic_roughness_texture.sampler) {
 			used = mat->metallic_roughness_texture;
+			engine_debug(__FILE__, "Mat has metallic texture");
 		} else {
 			used = ctx->default_metallic_texture;
 		}
@@ -905,6 +907,7 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 
 		if (mat->normal_texture.sampler) {
 			used = mat->normal_texture;
+			engine_debug(__FILE__, "Mat has normal texture");
 		} else {
 			used = ctx->default_normal_texture;
 		}
@@ -917,6 +920,7 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 
 		if (mat->occlusion_texture.sampler) {
 			used = mat->occlusion_texture;
+			engine_debug(__FILE__, "Mat has occlusion texture");
 		} else {
 			used = ctx->default_occlusion_texture;
 		}
@@ -928,6 +932,7 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 		all_sets[3].dstBinding = 3;
 		if (mat->emissive_texture.sampler) {
 			used = mat->emissive_texture;
+			engine_debug(__FILE__, "Mat has emissive texture");
 		} else {
 			used = ctx->default_emissive_texture;
 		}

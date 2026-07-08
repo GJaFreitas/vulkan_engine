@@ -80,7 +80,8 @@ int	loop(World world)
 
 		check_var_modify();
 	}
-
+	engine_debug(__FILE__, "Killing proccess");
+	exit(0);
 	endGraphics(world.graphics_ctx);
 	return (0);
 }

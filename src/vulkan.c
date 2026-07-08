@@ -527,7 +527,7 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
 	};
 
-	VkPipelineColorBlendAttachmentState	attach_state = {
+	VkPipelineColorBlendAttachmentState	color_blend_attach = {
 		.blendEnable = VK_TRUE,
 		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
 		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
@@ -545,7 +545,7 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 	VkPipelineColorBlendStateCreateInfo	blend_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 		.attachmentCount = 1,
-		.pAttachments = &attach_state
+		.pAttachments = &color_blend_attach
 	};
 
 	VkDynamicState	dynamic_states[] = {
@@ -828,7 +828,7 @@ static void	initVulkan(GraphicsContext *ctx)
 
 	createDefaultTextures(ctx);
 
-	gltfLoad(STRING_LIT("data/models/DiffuseTransmissionTeacup.glb"), &ctx->model, ctx);
+	gltfLoad(STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"), &ctx->model, ctx);
 	createGraphicsPipeline(ctx);
 	ctx->frame_index = 0;
 	ctx->next_signal_value = ctx->frames_in_flight_count + 1;
@@ -1055,33 +1055,39 @@ void	render(GraphicsContext *ctx, Camera *camera)
 			vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(MaterialProperties), sizeof(mat4), &node_transform);
 
 			VkDescriptorSet	descriptor_sets[2] = { ctx->ubo_descriptor_sets[frame_res_index], VK_NULL_HANDLE };
+			MaterialProperties	push_constants_mat = {
+				.basecolor_texture_set = -1,
+				.physical_descriptor_texture_set = -1,
+				.normal_texture_set = -1,
+				.occlusion_texture_set = -1,
+				.emissive_texture_set = -1,
+			};
 			u32		descriptor_set_count = 1;
 			Material	*mat;
 			if (mesh->material_index >= 0) {
 				mat = &ctx->model.materials[mesh->material_index];
+
 				descriptor_set_count += 1;
 				descriptor_sets[1] = mat->descriptor_set;
-				MaterialProperties	push_constants_mat = {
-					.roughness_factor = mat->roughness_factor,
-					.metallic_factor = mat->metallic_factor,
-					.alpha_mask_cut_off = mat->alpha_cutoff,
-					.basecolor_texture_set = 0,
-					.physical_descriptor_texture_set = 1,
-					.normal_texture_set = 2,
-					.occlusion_texture_set = 3,
-					.emissive_texture_set = 4,
-					.alpha_mask = 0.0f,
-				};
+
+				push_constants_mat.roughness_factor = mat->roughness_factor;
+				push_constants_mat.metallic_factor = mat->metallic_factor;
+				push_constants_mat.alpha_mask_cut_off = mat->alpha_cutoff;
+				push_constants_mat.basecolor_texture_set = 0;
+				push_constants_mat.physical_descriptor_texture_set = 1;
+				push_constants_mat.normal_texture_set = 2;
+				push_constants_mat.occlusion_texture_set = 3;
+				push_constants_mat.emissive_texture_set = 4;
+				push_constants_mat.alpha_mask = 0.0f;
 				glm_vec4_copy(mat->base_color_factor, push_constants_mat.base_color_factor);
-				vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
 			} else {
 				mat = NULL;
 			}
+			vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
 
-
+			vkCmdBindDescriptorSets(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_layout, 0, descriptor_set_count, descriptor_sets, 0, NULL);
 			vkCmdBindVertexBuffers(resource.command_buffer, 0, 1, &mesh->gpu_vertex_data, &offset);
 			vkCmdBindIndexBuffer(resource.command_buffer, mesh->gpu_index_data, 0, mesh->index_type);
-			vkCmdBindDescriptorSets(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_layout, 0, descriptor_set_count, descriptor_sets, 0, NULL);
 
 			vkCmdDrawIndexed(resource.command_buffer, mesh->index_count, 1, 0, 0, 0);
 		}
