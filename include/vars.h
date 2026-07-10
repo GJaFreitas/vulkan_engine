@@ -9,6 +9,7 @@
 
 void	init_vars();
 void	check_var_modify();
+void	vars_callback(void *udata);
 
 enum ConfigType
 {

@@ -49,8 +49,6 @@ int	loop(World world)
 {
 
 	startGraphics(world.graphics_ctx);
-	// TODO: Create destruction function
-
 
 	bool	running = true;
 	u64	last_time = SDL_GetTicks();
@@ -60,6 +58,7 @@ int	loop(World world)
 		world.dt_ms = (double)(now - last_time) / 1000.0f;
 		last_time = now;
 		SDL_Event	event = {0};
+		do_callbacks();
 		while (SDL_PollEvent(&event))
 		{
 			if (event.type == SDL_EVENT_QUIT) {
@@ -77,8 +76,6 @@ int	loop(World world)
 		}
 		render(world.graphics_ctx, &world.player->camera);
 		updateCamera(&world.player->camera, world.graphics_ctx->window, world.dt_ms);
-
-		check_var_modify();
 	}
 	engine_debug(__FILE__, "Killing proccess");
 	exit(0);
@@ -88,6 +85,13 @@ int	loop(World world)
 
 int	main(void)
 {
+	start_logs();
+	set_log_severity(LOG_WARN);
+	init_vars();
+	start_hotload_callbacks();
+
+	register_callback(STRING_LIT("data/All.variables"), vars_callback, NULL);
+
 	World	world = {};
 	GraphicsContext	gctx = {};
 	Player		p = {};
@@ -98,13 +102,7 @@ int	main(void)
 
 	initPlayer(world.player);
 
-
-
-	set_log_severity(LOG_ERROR);
-	start_logs();
-	init_vars();
 	loop(world);
-	// gltf_load(STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"), &model);
 	printf("\n\n\n");
 	return (0);
 }

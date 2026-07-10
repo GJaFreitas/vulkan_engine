@@ -265,7 +265,7 @@ String	stringDup(StringView str, Allocator *allocator)
 
 	new_str.count = str.count;
 	if (allocator)
-		new_str.data = allocator->fp_allocation(allocator, new_str.count, 8);
+		new_str.data = allocator->fp_allocation(allocator, new_str.count, DEFAULT_ALIGN);
 	else
 		new_str.data = standard_alloc(new_str.count, DEFAULT_ALIGN);
 	memcpy(new_str.data, str.data, str.count);

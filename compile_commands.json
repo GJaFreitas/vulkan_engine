@@ -17,6 +17,23 @@
     "output": "obj/c/logs.o"
   },
   {
+    "file": "src/hotload_callbacks.c",
+    "arguments": [
+      "/bin/gcc",
+      "-Iinclude",
+      "-Ideps",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/hotload_callbacks.c",
+      "-o",
+      "obj/c/hotload_callbacks.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine",
+    "output": "obj/c/hotload_callbacks.o"
+  },
+  {
     "file": "src/main.c",
     "arguments": [
       "/bin/gcc",

@@ -1,5 +1,7 @@
 #pragma once
 #include "typedefs.h"
+#include <SDL3/SDL_vulkan.h>
+#include <SDL3/SDL.h>
 
 #include <stddef.h>
 #include <stdbool.h>
@@ -91,5 +93,15 @@ u64	queryTimer(void);
 u64	getFrameDeltaNano(void);
 double	getFrameDelta(void);
 
+
+
+// Callbacks
+// ---------
+
+typedef void (*FP_HotloadCallback)(void *data);
+
+void	start_hotload_callbacks(void);
+void	register_callback(String filename, FP_HotloadCallback function, void *user_data);
+void	do_callbacks(void);
 
 #include "stb_sprintf.h"

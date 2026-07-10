@@ -607,7 +607,7 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
          if (S.data == 0)
             S.data = (u8 *)"null";
 
-	 l = S.count;
+	 l = (S.count >= ~0u) ? ~0u : S.count;
 	 s = S.data;
          lead[0] = 0;
          tail[0] = 0;

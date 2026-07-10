@@ -178,6 +178,16 @@ void	check_var_modify()
 	}
 }
 
+void	vars_callback(void *udata)
+{
+	(void)udata;
+
+	usleep(1000);
+	engine_log(__FILE__, "Variables changed, hotloading");
+	init_vars();
+	print_variables();
+}
+
 void	init_vars()
 {
 	String	file_data = readFile(STRING_LIT("data/All.variables"));

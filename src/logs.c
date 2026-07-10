@@ -19,7 +19,7 @@ static enum LogLevel	print_severity = LOG_LOG;
 
 void	start_logs(void)
 {
-	log_allocator = newArenaAllocator(1 << 19, NULL, 8);
+	log_allocator = newArenaAllocator(1 << 19, NULL, DEFAULT_ALIGN);
 	logs.file_name.data = (u8 *)cstrdup("nil", &logs.file_name.count, &log_allocator);
 	logs.log.data = (u8 *)cstrdup("Engine started", &logs.log.count, &log_allocator);
 }
