@@ -90,8 +90,6 @@ int	main(void)
 	init_vars();
 	start_hotload_callbacks();
 
-	register_callback(STRING_LIT("data/All.variables"), vars_callback, NULL);
-
 	World	world = {};
 	GraphicsContext	gctx = {};
 	Player		p = {};
@@ -100,6 +98,8 @@ int	main(void)
 	world.graphics_ctx = &gctx;
 	world.key_states = SDL_GetKeyboardState(NULL);
 
+	register_callback(STRING_LIT("data/All.variables"), vars_callback, NULL);
+	register_callback(STRING_LIT("shaders/shaders.slang"), recreatePipeline, world.graphics_ctx);
 	initPlayer(world.player);
 
 	loop(world);

@@ -312,3 +312,4 @@ void	render(GraphicsContext *ctx, Camera *world);
 void	gltfLoad(String filename, GLTFModel *model, GraphicsContext *ctx);
 void	gltf_destroy(GLTFModel model);
 void	createDefaultTextures(GraphicsContext *ctx);
+void	recreatePipeline(void *user_data);

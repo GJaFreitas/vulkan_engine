@@ -806,6 +806,16 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 	engine_log("vulkan", "Successfully created descriptor pools and sets");
 }
 
+// NOTE: This doesnt work since im not using runtime compilation
+void	recreatePipeline(void *user_data)
+{
+	GraphicsContext	*ctx = user_data;
+
+	engine_log(__FILE__, "Recompiling shaders and recreating pipeline");
+	createShaders(ctx);
+	createGraphicsPipeline(ctx);
+}
+
 static void	initVulkan(GraphicsContext *ctx)
 {
 	createInstance(ctx);
@@ -819,7 +829,6 @@ static void	initVulkan(GraphicsContext *ctx)
 		exit(1);
 	}
 	createSwapchain(ctx, ctx->window_width, ctx->window_height);
-	createShaders(ctx);
 	createDescriptorSetLayout(ctx);
 	createSyncResources(ctx);
 	createUniformBuffers(ctx);
@@ -829,6 +838,7 @@ static void	initVulkan(GraphicsContext *ctx)
 	createDefaultTextures(ctx);
 
 	gltfLoad(STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"), &ctx->model, ctx);
+	createShaders(ctx);
 	createGraphicsPipeline(ctx);
 	ctx->frame_index = 0;
 	ctx->next_signal_value = ctx->frames_in_flight_count + 1;
