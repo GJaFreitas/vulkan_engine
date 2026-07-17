@@ -459,6 +459,15 @@ static void	gltfLoadMaterials(GLTFModel *model, tg3_model gltf_model)
 			mat.emissive_texture = model->textures[gltf_texture.source];
 		}
 
+		for (u32 i = 0; i < gltf_material.ext.extensions_count; i++) {
+			if (stringIsEqual(tg3_to_String(gltf_material.ext.extensions[i].name), STRING_LIT("KHR_materials_trans"))) {
+				mat.transmission_factor = gltf_material.ext.extensions[i].value.real_val;
+			}
+			if (stringIsEqual(tg3_to_String(gltf_material.ext.extensions[i].name), STRING_LIT("KHR_materials_volum"))) {
+				mat.ior = gltf_material.ext.extensions[i].value.real_val;
+			}
+		}
+
 		model->materials[i] = mat;
 	}
 }
@@ -617,30 +626,42 @@ static void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
 					}
 				}
 
+				if (pos_idx == -1 || uv_idx == -1 || normal_idx == -1) {
+					engine_error(__FILE__, "Model doesnt contain position, uv or normal index");
+					exit(0);
+				}
 				const tg3_accessor *pos_acc    = &gltf_model.accessors[pos_idx];
 				const tg3_accessor *normal_acc = &gltf_model.accessors[normal_idx];
 				const tg3_accessor *uv_acc     = &gltf_model.accessors[uv_idx];
 
-				const tg3_buffer_view *pos_bv    = &gltf_model.buffer_views[pos_acc->buffer_view];
-				const tg3_buffer_view *normal_bv = &gltf_model.buffer_views[normal_acc->buffer_view];
-				const tg3_buffer_view *uv_bv     = &gltf_model.buffer_views[uv_acc->buffer_view];
+				if (uv_acc->component_type != TG3_COMPONENT_TYPE_FLOAT) {
+					engine_error(__FILE__, "uv Component type isnt float");
+				}
 
-				float *positions = (float *)(gltf_model.buffers[pos_bv->buffer].data.data + pos_bv->byte_offset + pos_acc->byte_offset);
-				float *normals   = (float *)(gltf_model.buffers[normal_bv->buffer].data.data + normal_bv->byte_offset + normal_acc->byte_offset);
-				float *uvs       = (float *)(gltf_model.buffers[uv_bv->buffer].data.data + uv_bv->byte_offset + uv_acc->byte_offset);
+				const tg3_buffer_view	*pos_bv    = &gltf_model.buffer_views[pos_acc->buffer_view];
+				const tg3_buffer_view	*normal_bv = &gltf_model.buffer_views[normal_acc->buffer_view];
+				const tg3_buffer_view	*uv_bv     = &gltf_model.buffer_views[uv_acc->buffer_view];
+
+				const float	*positions = (float *)(gltf_model.buffers[pos_bv->buffer].data.data + pos_bv->byte_offset + pos_acc->byte_offset);
+				const float	*normals   = (float *)(gltf_model.buffers[normal_bv->buffer].data.data + normal_bv->byte_offset + normal_acc->byte_offset);
+				const float	*uvs       = (float *)(gltf_model.buffers[uv_bv->buffer].data.data + uv_bv->byte_offset + uv_acc->byte_offset);
+
+				const u32	pos_stride    = pos_bv->byte_stride ? (pos_bv->byte_stride / sizeof(float)) : 3;
+				const u32	normal_stride = normal_bv->byte_stride ? (normal_bv->byte_stride / sizeof(float)) : 3;
+				const u32	uv_stride     = uv_bv->byte_stride ? (uv_bv->byte_stride / sizeof(float)) : 2;
 
 				mesh.vertex_count = (u32)pos_acc->count;
 				// TODO: Bad allocation
 				mesh.vertices = malloc(sizeof(Vertex) * mesh.vertex_count);
 				for (u32 i = 0; i < mesh.vertex_count; i++) {
-					mesh.vertices[i].pos[0]    = positions[i*3];
-					mesh.vertices[i].pos[1]    = positions[i*3+1];
-					mesh.vertices[i].pos[2]    = positions[i*3+2];
-					mesh.vertices[i].normal[0] = normals[i*3];
-					mesh.vertices[i].normal[1] = normals[i*3+1];
-					mesh.vertices[i].normal[2] = normals[i*3+2];
-					mesh.vertices[i].uv[0]     = uvs[i*2];
-					mesh.vertices[i].uv[1]     = uvs[i*2+1];
+					mesh.vertices[i].pos[0]    = positions[i*pos_stride];
+					mesh.vertices[i].pos[1]    = positions[i*pos_stride+1];
+					mesh.vertices[i].pos[2]    = positions[i*pos_stride+2];
+					mesh.vertices[i].normal[0] = normals[i*normal_stride];
+					mesh.vertices[i].normal[1] = normals[i*normal_stride+1];
+					mesh.vertices[i].normal[2] = normals[i*normal_stride+2];
+					mesh.vertices[i].uv[0]     = uvs[i*uv_stride];
+					mesh.vertices[i].uv[1]     = uvs[i*uv_stride+1];
 				}
 
 				// Indices
@@ -667,7 +688,6 @@ static void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
 
 
 				const u32	triangle_count = mesh.index_count / 3;
-				// engine_debug(__FILE_NAME__, "triangle count: %u i: %u", triangle_count, i);
 				for (u32 i = 0; i < triangle_count; i++) {
 					u32	i0;
 					u32	i1;
@@ -865,7 +885,6 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.dstSet = mat->descriptor_set,
 			// dstBinding is set in each material
-			// .dstBinding = 0,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -881,7 +900,6 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 
 		if (mat->base_color_texture.sampler) {
 			used = mat->base_color_texture;
-			engine_debug(__FILE__, "Mat has base texture");
 		} else {
 			used = ctx->default_base_color_texture;
 		}
@@ -894,7 +912,6 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 
 		if (mat->metallic_roughness_texture.sampler) {
 			used = mat->metallic_roughness_texture;
-			engine_debug(__FILE__, "Mat has metallic texture");
 		} else {
 			used = ctx->default_metallic_texture;
 		}
@@ -907,7 +924,6 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 
 		if (mat->normal_texture.sampler) {
 			used = mat->normal_texture;
-			engine_debug(__FILE__, "Mat has normal texture");
 		} else {
 			used = ctx->default_normal_texture;
 		}
@@ -920,7 +936,6 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 
 		if (mat->occlusion_texture.sampler) {
 			used = mat->occlusion_texture;
-			engine_debug(__FILE__, "Mat has occlusion texture");
 		} else {
 			used = ctx->default_occlusion_texture;
 		}
@@ -932,7 +947,6 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 		all_sets[3].dstBinding = 3;
 		if (mat->emissive_texture.sampler) {
 			used = mat->emissive_texture;
-			engine_debug(__FILE__, "Mat has emissive texture");
 		} else {
 			used = ctx->default_emissive_texture;
 		}

@@ -26,7 +26,6 @@
 
 typedef struct UniformBufferObject
 {
-	mat4	model;
 	mat4	view;
 	mat4	proj;
 
@@ -64,6 +63,9 @@ typedef struct Material
 	float		metallic_factor;
 	float		emissive_factor[3];
 	float		alpha_cutoff;
+
+	float		transmission_factor;
+	float		ior;
 
 	VkDescriptorSet	descriptor_set;
 }	Material;
@@ -184,6 +186,8 @@ typedef struct MaterialProperties
 	i32	emissive_texture_set;			// texture coordinate set for emission
 	float	alpha_mask;				// whether to use alpha masking
 	float	alpha_mask_cut_off;			// alpha threshold for masking
+	float	transmission_factor;			// 0 - opaque, 1 - fully transmissive
+	float	ior;					// Index of refraction
 }	MaterialProperties;
 
 typedef struct FrameResources
@@ -192,13 +196,6 @@ typedef struct FrameResources
 	VkCommandBuffer	command_buffer;
 	VkSemaphore	image_acquired_semaphore;
 }	FrameResources;
-
-typedef struct PipelinePushConstants
-{
-	u32			push_constant_count;
-	VkPushConstantRange	*push_constant_ranges;
-	u32			*push_constant_offsets;
-}	PipelinePushConstants;
 
 typedef struct GraphicsContext
 {
@@ -239,10 +236,8 @@ typedef struct GraphicsContext
 	VkShaderModule		vertex_shader;
 	VkShaderModule		frag_shader;
 
-	PipelinePushConstants	pipeline_push_constants;
-
-	VkPipelineLayout	pipeline_layout;
-	VkPipeline		pipeline;
+	VkPipelineLayout	pbr_pipeline_layout;
+	VkPipeline		pbr_pipeline;
 
 	u32			frames_in_flight_count;
 	VkSemaphore		timeline_semaphore;

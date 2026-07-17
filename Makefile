@@ -58,7 +58,7 @@ run: all
 clean:
 	rm -rf $(OBJ_DIR) $(TARGET)
 
-compdb:
+bear:
 	bear -- make clean all
 
-.PHONY: compdb all clean run
+.PHONY: bear all clean run

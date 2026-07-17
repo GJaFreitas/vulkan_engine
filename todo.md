@@ -3,6 +3,7 @@
 [X] have a file with all the global variables and be able to modify it on the fly with hot reloading kind of thing;
 [X] create logging functionality;
 [] create keyboard detection functionality that maps physical keys to keycodes (wasd for moving but if keyboard is azerty its zqsd)
+[] get text on screen
 
 outfits should be customizable with an unlock like a spell for doing it
 re-enactement should work in cutscenes
