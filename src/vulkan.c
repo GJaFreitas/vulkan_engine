@@ -451,7 +451,7 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 	};
 
 
-	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &ctx->pipeline_layout) != VK_SUCCESS) {
+	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &ctx->pbr_pipeline_layout) != VK_SUCCESS) {
 		engine_error("vulkan", "Failed to create pipeline layout\n");
 		exit(1);
 	}
@@ -579,11 +579,11 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 		.pDepthStencilState = &depth_stencil_info,
 		.pColorBlendState = &blend_info,
 		.pDynamicState = &dynamic_state_info,
-		.layout = ctx->pipeline_layout,
+		.layout = ctx->pbr_pipeline_layout,
 		.renderPass = VK_NULL_HANDLE
 	};
 
-	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline) != VK_SUCCESS) {
+	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pbr_pipeline) != VK_SUCCESS) {
 		engine_error("vulkan", "Failed to create graphics pipeline\n");
 		exit(1);
 	}
@@ -806,16 +806,6 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 	engine_log("vulkan", "Successfully created descriptor pools and sets");
 }
 
-// NOTE: This doesnt work since im not using runtime compilation
-void	recreatePipeline(void *user_data)
-{
-	GraphicsContext	*ctx = user_data;
-
-	engine_log(__FILE__, "Recompiling shaders and recreating pipeline");
-	createShaders(ctx);
-	createGraphicsPipeline(ctx);
-}
-
 static void	initVulkan(GraphicsContext *ctx)
 {
 	createInstance(ctx);
@@ -834,11 +824,8 @@ static void	initVulkan(GraphicsContext *ctx)
 	createUniformBuffers(ctx);
 	createDescriptorPoolSets(ctx);
 	createCommandBuffers(ctx);
-
 	createDefaultTextures(ctx);
-
-	gltfLoad(STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"), &ctx->model, ctx);
-	createShaders(ctx);
+	createMaterialDescriptorSetLayout(ctx);
 	createGraphicsPipeline(ctx);
 	ctx->frame_index = 0;
 	ctx->next_signal_value = ctx->frames_in_flight_count + 1;
@@ -847,8 +834,8 @@ static void	initVulkan(GraphicsContext *ctx)
 static void	destroyVulkan(GraphicsContext *ctx)
 {
 	destroySyncResources(ctx);
-	vkDestroyPipelineLayout(ctx->device, ctx->pipeline_layout, NULL);
-	vkDestroyPipeline(ctx->device, ctx->pipeline, NULL);
+	vkDestroyPipelineLayout(ctx->device, ctx->pbr_pipeline_layout, NULL);
+	vkDestroyPipeline(ctx->device, ctx->pbr_pipeline, NULL);
 	destroyShaders(ctx);
 	destroySwapchain(ctx);
 	destroyVMA(ctx->vma_allocator);
@@ -1048,7 +1035,7 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		};
 		vkCmdSetScissor(resource.command_buffer, 0, 1, &scissor);
 
-		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline);
+		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pbr_pipeline);
 		VkDeviceSize	offset = 0;
 
 		// »speed
@@ -1061,8 +1048,6 @@ void	render(GraphicsContext *ctx, Camera *camera)
 
 			mat4	node_transform;
 			glm_mat4_copy(node->world_transform, node_transform);
-
-			vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(MaterialProperties), sizeof(mat4), &node_transform);
 
 			VkDescriptorSet	descriptor_sets[2] = { ctx->ubo_descriptor_sets[frame_res_index], VK_NULL_HANDLE };
 			MaterialProperties	push_constants_mat = {
@@ -1093,9 +1078,11 @@ void	render(GraphicsContext *ctx, Camera *camera)
 			} else {
 				mat = NULL;
 			}
-			vkCmdPushConstants(resource.command_buffer, ctx->pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
 
-			vkCmdBindDescriptorSets(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_layout, 0, descriptor_set_count, descriptor_sets, 0, NULL);
+			vkCmdPushConstants(resource.command_buffer, ctx->pbr_pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
+			vkCmdPushConstants(resource.command_buffer, ctx->pbr_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(MaterialProperties), sizeof(mat4), &node_transform);
+
+			vkCmdBindDescriptorSets(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pbr_pipeline_layout, 0, descriptor_set_count, descriptor_sets, 0, NULL);
 			vkCmdBindVertexBuffers(resource.command_buffer, 0, 1, &mesh->gpu_vertex_data, &offset);
 			vkCmdBindIndexBuffer(resource.command_buffer, mesh->gpu_index_data, 0, mesh->index_type);
 

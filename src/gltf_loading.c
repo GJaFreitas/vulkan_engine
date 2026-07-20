@@ -800,7 +800,7 @@ static void	gltfLoadAnimations(GLTFModel *model, tg3_model gltf_model)
 	}
 }
 
-void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials, u32 material_count)
+void	createMaterialDescriptorSetLayout(GraphicsContext *ctx)
 {
 	VkDescriptorSetLayoutBinding	bindings[] = {
 		// Base Color Texture binding
@@ -848,6 +848,10 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 		.pBindings = bindings
 	};
 	vkCreateDescriptorSetLayout(ctx->device, &descriptor_set_layout_info, NULL, &ctx->material_descriptor_layout);
+}
+
+void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials, u32 material_count)
+{
 
 	for (u32 i = 0; i < material_count; i++) {
 		Material	*mat = &materials[i];

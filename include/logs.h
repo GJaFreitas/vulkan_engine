@@ -2,6 +2,11 @@
 
 //  ──────────────────────────────── LOGS ─────────────────────────────
 
+#define LOG_E(x) engine_error(__FILE__, (x))
+#define LOG_L(x) engine_log(__FILE__, (x))
+#define LOG_W(x) engine_warn(__FILE__, (x))
+#define LOG_D(x) engine_debug(__FILE__, (x))
+
 enum LogLevel
 {
 	LOG_LOG,

@@ -237,10 +237,8 @@ typedef struct GraphicsContext
 	VkShaderModule		vertex_shader;
 	VkShaderModule		frag_shader;
 
-	PipelinePushConstants	pipeline_push_constants;
-
-	VkPipelineLayout	pipeline_layout;
-	VkPipeline		pipeline;
+	VkPipelineLayout	pbr_pipeline_layout;
+	VkPipeline		pbr_pipeline;
 
 	u32			frames_in_flight_count;
 	VkSemaphore		timeline_semaphore;
@@ -312,4 +310,4 @@ void	render(GraphicsContext *ctx, Camera *world);
 void	gltfLoad(String filename, GLTFModel *model, GraphicsContext *ctx);
 void	gltf_destroy(GLTFModel model);
 void	createDefaultTextures(GraphicsContext *ctx);
-void	recreatePipeline(void *user_data);
+void	createMaterialDescriptorSetLayout(GraphicsContext *ctx);

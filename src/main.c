@@ -99,7 +99,6 @@ int	main(void)
 	world.key_states = SDL_GetKeyboardState(NULL);
 
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, NULL);
-	register_callback(STRING_LIT("shaders/shaders.slang"), recreatePipeline, world.graphics_ctx);
 	initPlayer(world.player);
 
 	loop(world);
