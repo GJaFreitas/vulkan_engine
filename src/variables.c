@@ -1,6 +1,8 @@
 #include "vars.h"
 #include <errno.h>
 
+// TODO: Make this hotload
+
 Settings	g_settings;
 
 ConfigField	audio_fields[] = {

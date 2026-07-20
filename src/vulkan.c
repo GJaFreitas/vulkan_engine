@@ -420,7 +420,7 @@ static void	createShaders(GraphicsContext *ctx)
 	ctx->frag_shader = ctx->vertex_shader;
 }
 
-static void	createPBRPipeline(GraphicsContext *ctx)
+static void	createGraphicsPipeline(GraphicsContext *ctx)
 {
 	VkPushConstantRange	push_constant_ranges[] = {
 		// Mat push constant
@@ -825,11 +825,9 @@ static void	initVulkan(GraphicsContext *ctx)
 	createUniformBuffers(ctx);
 	createDescriptorPoolSets(ctx);
 	createCommandBuffers(ctx);
-
 	createDefaultTextures(ctx);
-
-	gltfLoad(STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"), &ctx->model, ctx);
-	createPBRPipeline(ctx);
+	createMaterialDescriptorSetLayout(ctx);
+	createGraphicsPipeline(ctx);
 	ctx->frame_index = 0;
 	ctx->next_signal_value = ctx->frames_in_flight_count + 1;
 }
@@ -876,6 +874,7 @@ static void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx, Camera *cam
 {
 
 	UniformBufferObject ubo = {};
+	glm_mat4_identity(ubo.model);
 	getViewMatrix(ubo.view, cam);
 	getProjectionMatrix(ubo.proj, cam, (float)ctx->swapchain_width / (float)ctx->swapchain_height);
 
@@ -1058,8 +1057,6 @@ void	render(GraphicsContext *ctx, Camera *camera)
 				.normal_texture_set = -1,
 				.occlusion_texture_set = -1,
 				.emissive_texture_set = -1,
-				.transmission_factor = -1,
-				.ior = -1,
 			};
 			u32		descriptor_set_count = 1;
 			Material	*mat;
@@ -1078,11 +1075,6 @@ void	render(GraphicsContext *ctx, Camera *camera)
 				push_constants_mat.occlusion_texture_set = 3;
 				push_constants_mat.emissive_texture_set = 4;
 				push_constants_mat.alpha_mask = 0.0f;
-				push_constants_mat.transmission_factor = mat->transmission_factor;
-				push_constants_mat.ior = mat->ior;
-				engine_debug(__FILE__, "Right here it dies");
-				engine_debug(__FILE__, "mat: %p", mat);
-				engine_debug(__FILE__, "base color factor: %.2f %.2f %.2f %.2f", mat->base_color_factor[0], mat->base_color_factor[1], mat->base_color_factor[2], mat->base_color_factor[3]);
 				glm_vec4_copy(mat->base_color_factor, push_constants_mat.base_color_factor);
 			} else {
 				mat = NULL;

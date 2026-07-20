@@ -2,7 +2,7 @@
   {
     "file": "src/logs.c",
     "arguments": [
-      "/bin/gcc",
+      "/usr/bin/gcc",
       "-Iinclude",
       "-Ideps",
       "-Wall",
@@ -19,7 +19,7 @@
   {
     "file": "src/main.c",
     "arguments": [
-      "/bin/gcc",
+      "/usr/bin/gcc",
       "-Iinclude",
       "-Ideps",
       "-Wall",
@@ -36,7 +36,7 @@
   {
     "file": "src/vulkan.c",
     "arguments": [
-      "/bin/gcc",
+      "/usr/bin/gcc",
       "-Iinclude",
       "-Ideps",
       "-Wall",
@@ -53,7 +53,7 @@
   {
     "file": "src/base_layer.c",
     "arguments": [
-      "/bin/gcc",
+      "/usr/bin/gcc",
       "-Iinclude",
       "-Ideps",
       "-Wall",
@@ -70,7 +70,7 @@
   {
     "file": "src/variables.c",
     "arguments": [
-      "/bin/gcc",
+      "/usr/bin/gcc",
       "-Iinclude",
       "-Ideps",
       "-Wall",
@@ -87,7 +87,7 @@
   {
     "file": "src/player.c",
     "arguments": [
-      "/bin/gcc",
+      "/usr/bin/gcc",
       "-Iinclude",
       "-Ideps",
       "-Wall",
@@ -104,7 +104,7 @@
   {
     "file": "src/gltf_loading.c",
     "arguments": [
-      "/bin/gcc",
+      "/usr/bin/gcc",
       "-Iinclude",
       "-Ideps",
       "-Wall",
@@ -121,7 +121,7 @@
   {
     "file": "cpp_layer/vma.cpp",
     "arguments": [
-      "/bin/g++",
+      "/usr/bin/g++",
       "-Iinclude",
       "-Ideps",
       "-g",
@@ -136,7 +136,7 @@
   {
     "file": "deps/tiny_gltf_v3.c",
     "arguments": [
-      "/bin/gcc",
+      "/usr/bin/gcc",
       "deps/tiny_gltf_v3.c",
       "-o",
       "engine"

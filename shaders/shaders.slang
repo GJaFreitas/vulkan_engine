@@ -6,6 +6,7 @@ static const float PI = 3.14159265359;
 
 struct UniformBufferObject
 {
+    float4x4 model;
     float4x4 view;
     float4x4 proj;
     float4 lightPositions[4];
@@ -29,8 +30,6 @@ struct MaterialProperties {
     int emissiveTextureSet;             // Texture binding for emissive maps
     float alphaMask;                    // Alpha masking enable flag
     float alphaMaskCutoff;              // Alpha cutoff threshold
-    // float transmission_factor;		// 0 - opaque, 1 - fully transmissive
-    // float ior;				// Index of refraction
 };
 
 struct ModelMatrix {
@@ -108,7 +107,7 @@ VSOutput vertMain(VSInput input)
 {
     VSOutput output;
 
-    float4x4	model_mat = model.mat;
+    float4x4	model_mat = mul(ubo.model, model.mat);
 
     // Transform vertex position through the rendering pipeline
     // Model -> World -> Camera -> Clip space transformation chain
@@ -142,7 +141,6 @@ float4 fragMain(VSOutput input) : SV_TARGET
     // === MATERIAL PROPERTY SAMPLING ===
     // Sample base color texture and apply material color factor
     float4 baseColor = baseColorMap.Sample(input.UV) * material.baseColorFactor;
-    float  alpha = baseColor.a;
 
     // Sample metallic-roughness texture (metallic=B channel, roughness=G channel)
     // glTF standard: metallic stored in blue, roughness in green
@@ -248,5 +246,5 @@ float4 fragMain(VSOutput input) : SV_TARGET
     // Apply gamma correction for sRGB display (inverse gamma)
     color = pow(color, float3(1.0 / ubo.gamma, 1.0 / ubo.gamma, 1.0 / ubo.gamma));
     // Output final color with original alpha
-    return float4(color, alpha);
+    return float4(color, baseColor.a);
 }
