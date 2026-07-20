@@ -826,6 +826,7 @@ static void	initVulkan(GraphicsContext *ctx)
 	createCommandBuffers(ctx);
 	createDefaultTextures(ctx);
 	createMaterialDescriptorSetLayout(ctx);
+	createShaders(ctx);
 	createGraphicsPipeline(ctx);
 	ctx->frame_index = 0;
 	ctx->next_signal_value = ctx->frames_in_flight_count + 1;
