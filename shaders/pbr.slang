@@ -1,22 +1,4 @@
-// Mathematical constants
-static const float PI = 3.14159265359;
-
-
-// shared structs
-
-struct UniformBufferObject
-{
-    float4x4 model;
-    float4x4 view;
-    float4x4 proj;
-    float4 lightPositions[4];
-    float4 lightColors[4];
-    float4 camPos;
-    float exposure;
-    float gamma;
-    float prefilteredCubeMipLevels;
-    float scaleIBLAmbient;
-};
+import common;
 
 // Push constants - Fast, small data updated frequently per material/object
 struct MaterialProperties {
@@ -35,9 +17,6 @@ struct MaterialProperties {
 struct ModelMatrix {
 	[[vk::offset(64)]] float4x4 mat;	// The model matrix
 };
-
-// Resource bindings - Connect CPU resources to GPU shader registers
-[[vk::binding(0, 0)]] ConstantBuffer<UniformBufferObject> ubo;
 
 [[vk::binding(0, 1)]] Sampler2D baseColorMap;
 [[vk::binding(1, 1)]] Sampler2D metallicRoughnessMap;

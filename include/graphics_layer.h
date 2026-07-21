@@ -27,6 +27,8 @@ typedef struct UniformBufferObject
 	mat4	model;
 	mat4	view;
 	mat4	proj;
+	mat4	inv_view;
+	mat4	inv_proj;
 
 	vec4	light_positions[4];		// Pos and radius
 	vec4	light_colors[4];		// Color and intensity
@@ -184,6 +186,14 @@ typedef struct MaterialProperties
 	float	alpha_mask_cut_off;			// alpha threshold for masking
 }	MaterialProperties;
 
+typedef struct GridProperties
+{
+	float gridSize;		// spacing between minor lines, e.g. 1.0
+	float lineWidth;	// in world units, e.g. 0.02
+	float majorLineEvery;	// e.g. every 10th line is "major" (thicker/brighter)
+	float fadeDistance;	// distance at which grid fully fades out
+}	GridProperties;
+
 typedef struct FrameResources
 {
 	VkCommandPool	command_pool;
@@ -191,12 +201,15 @@ typedef struct FrameResources
 	VkSemaphore	image_acquired_semaphore;
 }	FrameResources;
 
-typedef struct PipelinePushConstants
-{
-	u32			push_constant_count;
-	VkPushConstantRange	*push_constant_ranges;
-	u32			*push_constant_offsets;
-}	PipelinePushConstants;
+typedef struct PipelineObject {
+
+	VkPipeline		handle;
+	VkPipelineLayout	layout;
+
+	VkShaderModule		vertex_shader;
+	VkShaderModule		frag_shader;
+
+}	PipelineObject;
 
 typedef struct GraphicsContext
 {
@@ -234,11 +247,18 @@ typedef struct GraphicsContext
 	u32			swapchain_height;
 	bool			swapchain_require_recreate;
 
-	VkShaderModule		vertex_shader;
-	VkShaderModule		frag_shader;
+	PipelineObject		pipeline_pbr;
+	VkDescriptorSetLayout	material_descriptor_layout;
+	VkDescriptorSet		material_descriptor_sets;
+	Texture			default_base_color_texture;
+	Texture			default_metallic_texture;
+	Texture			default_normal_texture;
+	Texture			default_occlusion_texture;
+	Texture			default_emissive_texture;
 
-	VkPipelineLayout	pbr_pipeline_layout;
-	VkPipeline		pbr_pipeline;
+	//PipelineObject		pipeline_glass;
+	PipelineObject		pipeline_grid;
+	GridProperties		grid_properties;
 
 	u32			frames_in_flight_count;
 	VkSemaphore		timeline_semaphore;
@@ -255,16 +275,7 @@ typedef struct GraphicsContext
 	VkDescriptorPool	descriptor_pool;
 	VkDescriptorSet		ubo_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
 
-	VkDescriptorSetLayout	material_descriptor_layout;
-	VkDescriptorSet		material_descriptor_sets;
-
 	GLTFModel		model;
-
-	Texture			default_base_color_texture;
-	Texture			default_metallic_texture;
-	Texture			default_normal_texture;
-	Texture			default_occlusion_texture;
-	Texture			default_emissive_texture;
 
 }	GraphicsContext;
 

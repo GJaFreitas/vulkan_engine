@@ -172,9 +172,13 @@ static void	createDevice(GraphicsContext *ctx)
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
 		.pNext = &supported_features13
 	};
+	VkPhysicalDeviceVulkan11Features	supported_features11 = {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+		.pNext = &supported_features12
+	};
 	VkPhysicalDeviceFeatures2	supported_features = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-		.pNext = &supported_features12
+		.pNext = &supported_features11
 	};
 	vkGetPhysicalDeviceFeatures2(chosen_phys_device, &supported_features);
 
@@ -188,6 +192,10 @@ static void	createDevice(GraphicsContext *ctx)
 	}
 	if (!supported_features12.timelineSemaphore) {
 		engine_error("vulkan", "Card doesnt support timeline semaphore\n");
+		exit(1);
+	}
+	if (!supported_features11.shaderDrawParameters) {
+		engine_error("vulkan", "Card doesnt support shader draw parameters\n");
 		exit(1);
 	}
 
@@ -207,9 +215,14 @@ static void	createDevice(GraphicsContext *ctx)
 		.timelineSemaphore = VK_TRUE,
 		.pNext = &features13,
 	};
+	VkPhysicalDeviceVulkan11Features	features11 = {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+		.shaderDrawParameters = VK_TRUE,
+		.pNext = &features12,
+	};
 	VkPhysicalDeviceFeatures2	features = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-		.pNext = &features12,
+		.pNext = &features11,
 	};
 
 	float	q_priorities = 1.0f;
@@ -414,13 +427,25 @@ static VkShaderModule	createShaderModule(String filename, shaderc_shader_kind ki
 	return module;
 }
 
-static void	createShaders(GraphicsContext *ctx)
+static void	createShaders(GraphicsContext *ctx, StringView shader_name, PipelineObject *pipeline)
 {
-	ctx->vertex_shader = createShaderModule(STRING_LIT("shaders/compiled/slang.spv"), shaderc_vertex_shader, ctx);
-	ctx->frag_shader = ctx->vertex_shader;
+	u8	buf[128] = "shaders/compiled/";
+	String	shader = { .data = buf, .count = 17 };
+	// full shader path: shaders/compiled/
+
+	memcpy(buf + shader.count, shader_name.data, shader_name.count);
+	shader.count += shader_name.count;
+	// full shader path: shaders/compiled/{shader_name}
+
+	memcpy(buf + shader.count, ".spv", 4);
+	shader.count += 4;
+	// full shader path: shaders/compiled/{shader_name}.spv
+
+	pipeline->vertex_shader = createShaderModule(shader, shaderc_vertex_shader, ctx);
+	pipeline->frag_shader = pipeline->vertex_shader;
 }
 
-static void	createGraphicsPipeline(GraphicsContext *ctx)
+static void	createPBRPipeline(GraphicsContext *ctx)
 {
 	VkPushConstantRange	push_constant_ranges[] = {
 		// Mat push constant
@@ -451,22 +476,23 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 	};
 
 
-	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &ctx->pbr_pipeline_layout) != VK_SUCCESS) {
+	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &ctx->pipeline_pbr.layout) != VK_SUCCESS) {
 		engine_error("vulkan", "Failed to create pipeline layout\n");
 		exit(1);
 	}
 
+	createShaders(ctx, STRING_LIT("pbr"), &ctx->pipeline_pbr);
 	VkPipelineShaderStageCreateInfo	shader_stages[] = {
 		{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = VK_SHADER_STAGE_VERTEX_BIT,
-			.module = ctx->vertex_shader,
+			.module = ctx->pipeline_pbr.vertex_shader,
 			.pName = "vertMain"
 		},
 		{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-			.module = ctx->frag_shader,
+			.module = ctx->pipeline_pbr.frag_shader,
 			.pName = "fragMain"
 		}
 	};
@@ -579,11 +605,170 @@ static void	createGraphicsPipeline(GraphicsContext *ctx)
 		.pDepthStencilState = &depth_stencil_info,
 		.pColorBlendState = &blend_info,
 		.pDynamicState = &dynamic_state_info,
-		.layout = ctx->pbr_pipeline_layout,
+		.layout = ctx->pipeline_pbr.layout,
 		.renderPass = VK_NULL_HANDLE
 	};
 
-	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pbr_pipeline) != VK_SUCCESS) {
+	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_pbr.handle) != VK_SUCCESS) {
+		engine_error("vulkan", "Failed to create graphics pipeline\n");
+		exit(1);
+	}
+
+	engine_log("vulkan", "Successfully created graphics pipeline");
+}
+
+static void	createGRIDPipeline(GraphicsContext *ctx)
+{
+	VkPushConstantRange	push_constant_ranges[] = {
+		// Grid Properties
+		{
+			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+			.offset = 0,
+			.size = sizeof(GridProperties),
+		},
+	};
+	GridProperties	grid = {
+		.gridSize = 2.0f,
+		.lineWidth = 0.001f,
+		.majorLineEvery = 10.0f,
+		.fadeDistance = 100.0f,
+	};
+	ctx->grid_properties = grid;
+
+	VkDescriptorSetLayout	layouts[] = {
+		ctx->ubo_descriptor_layout,
+	};
+
+	VkPipelineLayoutCreateInfo	layout_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		.setLayoutCount = sizeofarray(layouts),
+		.pSetLayouts = layouts,
+		.pushConstantRangeCount = sizeofarray(push_constant_ranges),
+		.pPushConstantRanges = push_constant_ranges,
+	};
+
+
+	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &ctx->pipeline_grid.layout) != VK_SUCCESS) {
+		engine_error("vulkan", "Failed to create pipeline layout\n");
+		exit(1);
+	}
+
+	createShaders(ctx, STRING_LIT("grid"), &ctx->pipeline_grid);
+	VkPipelineShaderStageCreateInfo	shader_stages[] = {
+		{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_VERTEX_BIT,
+			.module = ctx->pipeline_grid.vertex_shader,
+			.pName = "vertMain"
+		},
+		{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+			.module = ctx->pipeline_grid.frag_shader,
+			.pName = "fragMain"
+		}
+	};
+
+
+	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		.pVertexBindingDescriptions = NULL,
+		.vertexBindingDescriptionCount = 0,
+		.pVertexAttributeDescriptions = NULL,
+		.vertexAttributeDescriptionCount = 0,
+	};
+
+	VkPipelineInputAssemblyStateCreateInfo	imput_assembly_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+	};
+
+	VkPipelineDepthStencilStateCreateInfo	depth_stencil_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		.depthTestEnable = VK_TRUE,
+		.depthWriteEnable = VK_FALSE,
+		.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+		.stencilTestEnable = VK_FALSE
+	};
+
+	VkPipelineViewportStateCreateInfo	viewport_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+		.viewportCount = 1,
+		.pViewports = NULL,
+		.scissorCount = 1,
+		.pScissors = NULL
+	};
+
+	VkPipelineRasterizationStateCreateInfo	rasterization_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		.polygonMode = VK_POLYGON_MODE_FILL,
+		.cullMode = VK_CULL_MODE_NONE,
+		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+		.lineWidth = 1.0f
+	};
+
+	VkPipelineMultisampleStateCreateInfo	multisample_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
+	};
+
+	VkPipelineColorBlendAttachmentState	color_blend_attach = {
+		.blendEnable = VK_TRUE,
+		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+		.colorBlendOp = VK_BLEND_OP_ADD,
+		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+		.alphaBlendOp = VK_BLEND_OP_ADD,
+		.colorWriteMask =\
+		VK_COLOR_COMPONENT_R_BIT
+		| VK_COLOR_COMPONENT_G_BIT
+		| VK_COLOR_COMPONENT_B_BIT
+		| VK_COLOR_COMPONENT_A_BIT,
+	};
+
+	VkPipelineColorBlendStateCreateInfo	blend_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		.attachmentCount = 1,
+		.pAttachments = &color_blend_attach
+	};
+
+	VkDynamicState	dynamic_states[] = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR
+	};
+
+	VkPipelineDynamicStateCreateInfo	dynamic_state_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+		.dynamicStateCount = sizeofarray(dynamic_states),
+		.pDynamicStates = dynamic_states
+	};
+
+	VkPipelineRenderingCreateInfo	render_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+		.colorAttachmentCount = 1,
+		.pColorAttachmentFormats = &ctx->swapchain_format.format,
+		.depthAttachmentFormat = ctx->swapchain_depth_format
+	};
+
+	VkGraphicsPipelineCreateInfo	pipeline_info = {
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext = &render_info,
+		.stageCount = sizeofarray(shader_stages),
+		.pStages = shader_stages,
+		.pVertexInputState = &vertex_input_info,
+		.pInputAssemblyState = &imput_assembly_info,
+		.pViewportState = &viewport_info,
+		.pRasterizationState = &rasterization_info,
+		.pMultisampleState = &multisample_info,
+		.pDepthStencilState = &depth_stencil_info,
+		.pColorBlendState = &blend_info,
+		.pDynamicState = &dynamic_state_info,
+		.layout = ctx->pipeline_grid.layout,
+		.renderPass = VK_NULL_HANDLE
+	};
+
+	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_grid.handle) != VK_SUCCESS) {
 		engine_error("vulkan", "Failed to create graphics pipeline\n");
 		exit(1);
 	}
@@ -660,8 +845,8 @@ static void	createCommandBuffers(GraphicsContext *ctx)
 
 static void	destroyShaders(GraphicsContext *ctx)
 {
-	vkDestroyShaderModule(ctx->device, ctx->vertex_shader, NULL);
-	vkDestroyShaderModule(ctx->device, ctx->frag_shader, NULL);
+	vkDestroyShaderModule(ctx->device, ctx->pipeline_pbr.vertex_shader, NULL);
+	vkDestroyShaderModule(ctx->device, ctx->pipeline_pbr.frag_shader, NULL);
 }
 
 static void	destroySwapchain(GraphicsContext *ctx)
@@ -826,8 +1011,8 @@ static void	initVulkan(GraphicsContext *ctx)
 	createCommandBuffers(ctx);
 	createDefaultTextures(ctx);
 	createMaterialDescriptorSetLayout(ctx);
-	createShaders(ctx);
-	createGraphicsPipeline(ctx);
+	createPBRPipeline(ctx);
+	createGRIDPipeline(ctx);
 	ctx->frame_index = 0;
 	ctx->next_signal_value = ctx->frames_in_flight_count + 1;
 }
@@ -835,8 +1020,8 @@ static void	initVulkan(GraphicsContext *ctx)
 static void	destroyVulkan(GraphicsContext *ctx)
 {
 	destroySyncResources(ctx);
-	vkDestroyPipelineLayout(ctx->device, ctx->pbr_pipeline_layout, NULL);
-	vkDestroyPipeline(ctx->device, ctx->pbr_pipeline, NULL);
+	vkDestroyPipelineLayout(ctx->device, ctx->pipeline_pbr.layout, NULL);
+	vkDestroyPipeline(ctx->device, ctx->pipeline_pbr.handle, NULL);
 	destroyShaders(ctx);
 	destroySwapchain(ctx);
 	destroyVMA(ctx->vma_allocator);
@@ -880,10 +1065,13 @@ static void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx, Camera *cam
 
 	// Vulkan y shift
 	ubo.proj[1][1] *= -1;
+	glm_mat4_inv(ubo.proj, ubo.inv_proj);
+	glm_mat4_inv(ubo.view, ubo.inv_view);
 
 	glm_vec4_copy((vec4){cam->position[0], cam->position[1], cam->position[2], 1.0f}, ubo.cam_pos);
 	ubo.exposure = 4.5f;
 	ubo.gamma = 2.2f;
+
 
 	memcpy(ctx->uniform_buffers_mapped[frame_idx], &ubo, sizeof(UniformBufferObject));
 }
@@ -1036,7 +1224,10 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		};
 		vkCmdSetScissor(resource.command_buffer, 0, 1, &scissor);
 
-		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pbr_pipeline);
+		const VkDescriptorSet	ubo_descriptor_set = ctx->ubo_descriptor_sets[frame_res_index];
+
+		// ---- PBR Pass --------------- //
+		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.handle);
 		VkDeviceSize	offset = 0;
 
 		// »speed
@@ -1050,7 +1241,7 @@ void	render(GraphicsContext *ctx, Camera *camera)
 			mat4	node_transform;
 			glm_mat4_copy(node->world_transform, node_transform);
 
-			VkDescriptorSet	descriptor_sets[2] = { ctx->ubo_descriptor_sets[frame_res_index], VK_NULL_HANDLE };
+			VkDescriptorSet		pbr_descriptor_sets[2] = { ubo_descriptor_set, VK_NULL_HANDLE };
 			MaterialProperties	push_constants_mat = {
 				.basecolor_texture_set = -1,
 				.physical_descriptor_texture_set = -1,
@@ -1058,13 +1249,13 @@ void	render(GraphicsContext *ctx, Camera *camera)
 				.occlusion_texture_set = -1,
 				.emissive_texture_set = -1,
 			};
-			u32		descriptor_set_count = 1;
+			u32		pbr_descriptor_set_count = 1;
 			Material	*mat;
 			if (mesh->material_index >= 0) {
 				mat = &ctx->model.materials[mesh->material_index];
 
-				descriptor_set_count += 1;
-				descriptor_sets[1] = mat->descriptor_set;
+				pbr_descriptor_set_count += 1;
+				pbr_descriptor_sets[1] = mat->descriptor_set;
 
 				push_constants_mat.roughness_factor = mat->roughness_factor;
 				push_constants_mat.metallic_factor = mat->metallic_factor;
@@ -1079,16 +1270,21 @@ void	render(GraphicsContext *ctx, Camera *camera)
 			} else {
 				mat = NULL;
 			}
-
-			vkCmdPushConstants(resource.command_buffer, ctx->pbr_pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
-			vkCmdPushConstants(resource.command_buffer, ctx->pbr_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(MaterialProperties), sizeof(mat4), &node_transform);
-
-			vkCmdBindDescriptorSets(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pbr_pipeline_layout, 0, descriptor_set_count, descriptor_sets, 0, NULL);
+			vkCmdPushConstants(resource.command_buffer, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
+			vkCmdPushConstants(resource.command_buffer, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(MaterialProperties), sizeof(mat4), &node_transform);
+			vkCmdBindDescriptorSets(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.layout, 0, pbr_descriptor_set_count, pbr_descriptor_sets, 0, NULL);
 			vkCmdBindVertexBuffers(resource.command_buffer, 0, 1, &mesh->gpu_vertex_data, &offset);
 			vkCmdBindIndexBuffer(resource.command_buffer, mesh->gpu_index_data, 0, mesh->index_type);
-
 			vkCmdDrawIndexed(resource.command_buffer, mesh->index_count, 1, 0, 0, 0);
 		}
+
+		// ---- GRID Pass ------------------ //
+		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.handle);
+		VkDescriptorSet	grid_descriptor_sets[] = { ubo_descriptor_set };
+
+		vkCmdPushConstants(resource.command_buffer, ctx->pipeline_grid.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GridProperties), &ctx->grid_properties);
+		vkCmdBindDescriptorSets(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.layout, 0, 1, grid_descriptor_sets, 0, NULL);
+		vkCmdDraw(resource.command_buffer, 3, 1, 0, 0);
 	}
 	vkCmdEndRendering(resource.command_buffer);
 

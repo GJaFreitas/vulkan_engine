@@ -18,8 +18,9 @@ SRCS := $(shell find $(SRC_DIR) -type f -name '*.c')
 SRCS += $(shell find $(DEP_DIR) -type f -name '*.c')
 OBJS := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/c/%.o,$(SRCS))
 
-SHADER_SRCS := $(shell find $(SHADER_DIR) -type f -name '*.slang')
-SHADERS := $(COMPILED_SHADER_DIR)/slang.spv
+SHADER_SRCS := $(shell find $(SHADER_DIR) -maxdepth 1 -type f -name '*.slang')
+SHADERS := $(patsubst $(SHADER_DIR)/%.slang,$(COMPILED_SHADER_DIR)/%.spv,$(SHADER_SRCS))
+SHADER_INC := -I$(SHADER_DIR)/include
 ENTRY_POINTS := -entry vertMain -entry fragMain
 SLANGC := tools/slang/bin/slangc
 
@@ -35,8 +36,8 @@ all: $(OBJ_DIR) $(COMPILED_SHADER_DIR) $(TARGET) $(SHADERS)
 $(COMPILED_SHADER_DIR):
 	@mkdir -p shaders/compiled
 
-$(SHADERS): $(SHADER_SRCS)
-	$(SLANGC) $(SHADER_SRCS) -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o $(COMPILED_SHADER_DIR)/slang.spv
+$(COMPILED_SHADER_DIR)/%.spv: $(SHADER_DIR)/%.slang
+	$(SLANGC) $< $(SHADER_INC) -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o $@
 
 $(TARGET): $(OBJS) $(CPP_OBJS)
 	@$(CC) $^ -o $@ $(LDFLAGS) $(LDLIBS)

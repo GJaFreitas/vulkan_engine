@@ -1,5 +1,6 @@
 engine
 tools/
+*.spv
 
 # Prerequisites
 *.d
