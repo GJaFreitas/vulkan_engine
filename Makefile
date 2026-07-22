@@ -22,7 +22,7 @@ SHADER_SRCS := $(shell find $(SHADER_DIR) -maxdepth 1 -type f -name '*.slang')
 SHADERS := $(patsubst $(SHADER_DIR)/%.slang,$(COMPILED_SHADER_DIR)/%.spv,$(SHADER_SRCS))
 SHADER_INC := -I$(SHADER_DIR)/include
 ENTRY_POINTS := -entry vertMain -entry fragMain
-SLANGC := tools/slang/bin/slangc
+SLANGC := slangc
 
 CXXFLAGS := -g
 CFLAGS := -Wall -Wextra -g
