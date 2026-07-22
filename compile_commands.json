@@ -156,9 +156,9 @@
       "/usr/bin/gcc",
       "deps/tiny_gltf_v3.c",
       "-o",
-      "engine"
+      "engine.out"
     ],
     "directory": "/home/bag/Documents/projects/game_engine",
-    "output": "engine"
+    "output": "engine.out"
   }
 ]
