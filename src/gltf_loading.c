@@ -464,7 +464,7 @@ static void	gltfLoadMaterials(GLTFModel *model, tg3_model gltf_model)
 }
 
 /*	Temp code	*/
-static void compute_node_transform(Node* node) {
+static void computeNodeTransform(Node* node) {
 	// Convert double to float if needed
 	vec3 translation = { node->translation[0], node->translation[1], node->translation[2] };
 	vec3 scale = { node->scale[0], node->scale[1], node->scale[2] };
@@ -485,24 +485,24 @@ static void compute_node_transform(Node* node) {
 	glm_scale(node->local_transform, scale);
 }
 
-static void compute_world_transform_recursive(Node *nodes, u32 index)
+static void computeWorldTransformRecursive(Node *nodes, u32 index)
 {
 	Node *node = &nodes[index];
 	if (node->parent == -1) {
 		glm_mat4_copy(node->local_transform, node->world_transform);
 	} else {
 		// ensure parent is computed first
-		compute_world_transform_recursive(nodes, node->parent);
+		computeWorldTransformRecursive(nodes, node->parent);
 		glm_mat4_mul(nodes[node->parent].world_transform, node->local_transform, node->world_transform);
 	}
 }
 
-static void compute_world_transforms(Node *nodes, u32 node_count)
+static void computeWorldTransforms(Node *nodes, u32 node_count)
 {
 	for (u32 i = 0; i < node_count; i++)
-		compute_node_transform(&nodes[i]);
+		computeNodeTransform(&nodes[i]);
 	for (u32 i = 0; i < node_count; i++)
-		compute_world_transform_recursive(nodes, i);
+		computeWorldTransformRecursive(nodes, i);
 }
 
 /*	Temp code	*/
@@ -551,7 +551,7 @@ static void	gltfBuildSceneGraph(GLTFModel *model, tg3_model gltf_model)
 	}
 
 	// TODO: Possible optimization? I mean 4 passes is a lot 01/07/26
-	compute_world_transforms(model->linear_nodes, model->node_count);
+	computeWorldTransforms(model->linear_nodes, model->node_count);
 }
 
 static inline void	calculate_tangent_triangle(Vertex v0, Vertex v1, Vertex v2, vec3 *tangent, vec3 *bitangent)

@@ -3,8 +3,6 @@
 #include "world.h"
 #include "vars.h"
 
-
-
 static void updateCamera(Camera *camera, SDL_Window *window, double dt)
 {
 	// Mouse look - only when right mouse button is held

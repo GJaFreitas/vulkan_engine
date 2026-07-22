@@ -100,9 +100,9 @@ typedef struct Node
 	Mesh	mesh;
 	u32	index;
 
-	double	rotation[4];     /* Default: {0,0,0,1} */
-	double	scale[3];        /* Default: {1,1,1} */
-	double	translation[3];  /* Default: {0,0,0} */
+	float	rotation[4];     /* Default: {0,0,0,1} */
+	float	scale[3];        /* Default: {1,1,1} */
+	float	translation[3];  /* Default: {0,0,0} */
 
 	i32	*children;
 	u32	children_count;
@@ -312,7 +312,7 @@ typedef struct Camera
 
 }	Camera;
 
-void immediate_submit(GraphicsContext *ctx, void (*fn)(VkCommandBuffer cmd, void *data), void *data);
+void	immediate_submit(GraphicsContext *ctx, void (*fn)(VkCommandBuffer cmd, void *data), void *data);
 void	startGraphics(GraphicsContext *ctx);
 void	endGraphics(GraphicsContext *ctx);
 void	render(GraphicsContext *ctx, Camera *world);
