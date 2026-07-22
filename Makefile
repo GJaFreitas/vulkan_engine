@@ -1,7 +1,7 @@
 CC := gcc
 CXX := g++
 
-TARGET := engine
+TARGET := engine.out
 
 CPP_DIR := cpp_layer
 SRC_DIR := src
