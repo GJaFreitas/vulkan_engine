@@ -81,6 +81,17 @@ int	loop(World world)
 	return (0);
 }
 
+void	updateGridProperties(void *udata)
+{
+	World *world = (World *)udata;
+	GraphicsContext	*ctx = world->graphics_ctx;
+
+	ctx->grid_properties.grid_size = g_settings.dev.grid_size;
+	ctx->grid_properties.fade_distance = g_settings.dev.fade_distance;
+	ctx->grid_properties.line_width = g_settings.dev.line_width;
+	ctx->grid_properties.major_line_every = g_settings.dev.major_line_every;
+}
+
 int	main(void)
 {
 	start_logs();
@@ -95,8 +106,9 @@ int	main(void)
 	world.player = &p;
 	world.graphics_ctx = &gctx;
 	world.key_states = SDL_GetKeyboardState(NULL);
+	updateGridProperties(&world);
 
-	register_callback(STRING_LIT("data/All.variables"), vars_callback, NULL);
+	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);
 	initPlayer(world.player);
 
 	loop(world);

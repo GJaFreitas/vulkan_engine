@@ -11,6 +11,10 @@ ConfigField	audio_fields[] = {
 
 ConfigField	dev_fields[] = {
 	RegisterField(profiling, CONFIG_BOOL, Dev),
+	RegisterField(grid_size, CONFIG_FLOAT, Dev),
+	RegisterField(line_width, CONFIG_FLOAT, Dev),
+	RegisterField(major_line_every, CONFIG_FLOAT, Dev),
+	RegisterField(fade_distance, CONFIG_FLOAT, Dev),
 };
 
 ConfigField	display_fields[] = {
@@ -38,12 +42,18 @@ static void	print_field(ConfigField fields[], u32 field_size, String subdir)
 	const char	*false_string = "false";
 
 	void	*section;
-	if (stringIsEqual(subdir, audio_string))
+	if (stringIsEqual(subdir, audio_string)) {
 		section = &g_settings.audio;
-	else if (stringIsEqual(subdir, dev_string))
+		fprintf(stdout, "AUDIO SETTINGS ----------\n");
+	}
+	else if (stringIsEqual(subdir, dev_string)) {
 		section = &g_settings.dev;
-	else if (stringIsEqual(subdir, display_string))
+		fprintf(stdout, "DEV SETTINGS ----------\n");
+	}
+	else if (stringIsEqual(subdir, display_string)) {
 		section = &g_settings.display;
+		fprintf(stdout, "DISPLAY SETTINGS ----------\n");
+	}
 
 	for (u32 i = 0; i < field_size; i++) {
 		ConfigField	current_field = fields[i];
@@ -68,14 +78,17 @@ static void	print_field(ConfigField fields[], u32 field_size, String subdir)
 		}
 		printf("%s\n", printable_buffer);
 	}
+	fprintf(stdout, "\n");
 }
 
 static void	print_variables()
 {
 	// MODIFY IF SETTINGS CHANGED: SUBDIRS
+	fprintf(stdout, "---------- VARIABLES ----------\n");
 	print_field(audio_fields, sizeofarray(audio_fields), audio_string);
 	print_field(dev_fields, sizeofarray(dev_fields), dev_string);
 	print_field(display_fields, sizeofarray(display_fields), display_string);
+	fprintf(stdout, "---------- DONE ----------\n");
 }
 
 static enum assignFielddError 	modify_field(ConfigField field, String field_value, void *section)
@@ -180,12 +193,13 @@ void	check_var_modify()
 
 void	vars_callback(void *udata)
 {
-	(void)udata;
-
 	usleep(1000);
 	engine_log(__FILE__, "Variables changed, hotloading");
 	init_vars();
 	print_variables();
+
+	// TODO: Check if its worth logging which vars changed and then update things accordingly
+	updateGridProperties(udata);
 }
 
 void	init_vars()

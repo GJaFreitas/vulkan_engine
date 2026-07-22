@@ -627,13 +627,6 @@ static void	createGRIDPipeline(GraphicsContext *ctx)
 			.size = sizeof(GridProperties),
 		},
 	};
-	GridProperties	grid = {
-		.gridSize = 2.0f,
-		.lineWidth = 0.001f,
-		.majorLineEvery = 10.0f,
-		.fadeDistance = 100.0f,
-	};
-	ctx->grid_properties = grid;
 
 	VkDescriptorSetLayout	layouts[] = {
 		ctx->ubo_descriptor_layout,

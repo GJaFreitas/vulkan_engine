@@ -3,6 +3,10 @@ mix_all 1.80
 
 :/Dev
 profiling false
+grid_size 1.0
+line_width 1.0
+major_line_every 10.0
+fade_distance 50.0
 
 :/Display
 vsync true

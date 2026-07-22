@@ -188,10 +188,10 @@ typedef struct MaterialProperties
 
 typedef struct GridProperties
 {
-	float gridSize;		// spacing between minor lines, e.g. 1.0
-	float lineWidth;	// in world units, e.g. 0.02
-	float majorLineEvery;	// e.g. every 10th line is "major" (thicker/brighter)
-	float fadeDistance;	// distance at which grid fully fades out
+	float grid_size;		// spacing between minor lines, e.g. 1.0
+	float line_width;	// in world units, e.g. 0.02
+	float major_line_every;	// e.g. every 10th line is "major" (thicker/brighter)
+	float fade_distance;	// distance at which grid fully fades out
 }	GridProperties;
 
 typedef struct FrameResources

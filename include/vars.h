@@ -35,6 +35,10 @@ typedef struct Audio
 typedef struct Dev
 {
 	bool	profiling;
+	float	grid_size;
+	float	line_width;
+	float	major_line_every;
+	float	fade_distance;
 }	Dev;
 
 typedef struct Display
@@ -50,3 +54,5 @@ typedef struct Settings
 }	Settings;
 
 extern Settings	g_settings;
+
+void	updateGridProperties(void *udata);
