@@ -687,7 +687,7 @@ static void	createGRIDPipeline(GraphicsContext *ctx)
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		.depthTestEnable = VK_TRUE,
 		.depthWriteEnable = VK_FALSE,
-		.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+		.depthCompareOp = VK_COMPARE_OP_LESS,
 		.stencilTestEnable = VK_FALSE
 	};
 
@@ -1011,6 +1011,7 @@ static void	initVulkan(GraphicsContext *ctx)
 	createCommandBuffers(ctx);
 	createDefaultTextures(ctx);
 	createMaterialDescriptorSetLayout(ctx);
+	gltfLoad(STRING_LIT("data/models/DiffuseTransmissionTeacup.glb"), &ctx->model, ctx);
 	createPBRPipeline(ctx);
 	createGRIDPipeline(ctx);
 	ctx->frame_index = 0;
@@ -1226,6 +1227,14 @@ void	render(GraphicsContext *ctx, Camera *camera)
 
 		const VkDescriptorSet	ubo_descriptor_set = ctx->ubo_descriptor_sets[frame_res_index];
 
+		// ---- GRID Pass ------------------ //
+		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.handle);
+		VkDescriptorSet	grid_descriptor_sets[] = { ubo_descriptor_set };
+
+		vkCmdPushConstants(resource.command_buffer, ctx->pipeline_grid.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GridProperties), &ctx->grid_properties);
+		vkCmdBindDescriptorSets(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.layout, 0, 1, grid_descriptor_sets, 0, NULL);
+		vkCmdDraw(resource.command_buffer, 3, 1, 0, 0);
+
 		// ---- PBR Pass --------------- //
 		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.handle);
 		VkDeviceSize	offset = 0;
@@ -1277,14 +1286,6 @@ void	render(GraphicsContext *ctx, Camera *camera)
 			vkCmdBindIndexBuffer(resource.command_buffer, mesh->gpu_index_data, 0, mesh->index_type);
 			vkCmdDrawIndexed(resource.command_buffer, mesh->index_count, 1, 0, 0, 0);
 		}
-
-		// ---- GRID Pass ------------------ //
-		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.handle);
-		VkDescriptorSet	grid_descriptor_sets[] = { ubo_descriptor_set };
-
-		vkCmdPushConstants(resource.command_buffer, ctx->pipeline_grid.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GridProperties), &ctx->grid_properties);
-		vkCmdBindDescriptorSets(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.layout, 0, 1, grid_descriptor_sets, 0, NULL);
-		vkCmdDraw(resource.command_buffer, 3, 1, 0, 0);
 	}
 	vkCmdEndRendering(resource.command_buffer);
 
