@@ -790,29 +790,21 @@ static void	createSyncResources(GraphicsContext *ctx)
 		exit(1);
 	}
 
-	for (u32 i = 0; i < ctx->frames_in_flight_count; i++) {
+	for(u32 i = 0; i < ctx->frames_in_flight_count; i++) {
+		FrameResources	*resource = &ctx->frame_resources[i];
+
 		VkSemaphoreCreateInfo semaphore_info = {
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
 		};
 
-		if (vkCreateSemaphore(ctx->device, &semaphore_info, NULL,
-			&ctx->frame_resources[i].image_acquired_semaphore) != VK_SUCCESS) {
+		if (vkCreateSemaphore(ctx->device, &semaphore_info, NULL, &resource->image_acquired_semaphore) != VK_SUCCESS) {
 			engine_error("vulkan", "Failed to create semaphore for frame resources nr: %u\n", i);
 			exit(1);
 		}
-	}
-
-	engine_log("vulkan", "Successfully created sync resources");
-}
-
-static void	createCommandBuffers(GraphicsContext *ctx)
-{
-	for(u32 i = 0; i < ctx->frames_in_flight_count; i++) {
-		FrameResources	*resource = &ctx->frame_resources[i];
 
 		VkCommandPoolCreateInfo pool_info = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-			.queueFamilyIndex = ctx->queue_family_index
+			.queueFamilyIndex = ctx->queue_family_index,
 		};
 
 		if (vkCreateCommandPool(ctx->device, &pool_info, NULL, &resource->command_pool) != VK_SUCCESS) {
@@ -831,9 +823,47 @@ static void	createCommandBuffers(GraphicsContext *ctx)
 			engine_error("vulkan", "Failed to create command buffer nr: %u", i);
 			exit(1);
 		}
+
+		VkBufferCreateInfo	instance_buffer_info = {
+			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+			.size = sizeof(InstanceData) * MAX_INSTANCES,
+			.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		};
+
+		if (wrapperVMAcreateBuffer(ctx->vma_allocator, &instance_buffer_info, &resource->instance_buffer, &resource->instance_buffer_allocation, 1) != VK_SUCCESS) {
+			engine_error(__FILE__, "Failed to create instance buffer nr: %u", i);
+			exit(1);
+		}
+		wrapperVMAmapMemory(ctx->vma_allocator, resource->instance_buffer_allocation, &resource->instance_buffer_mapped);
+
+		VkBufferCreateInfo	buf_info = {
+			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+			.size = sizeof(UniformBufferObject),
+		};
+
+		wrapperVMAcreateBuffer(ctx->vma_allocator, &buf_info, &resource->uniform_buffer, &resource->uniform_buffer_allocation, 1);
+		wrapperVMAmapMemory(ctx->vma_allocator, resource->uniform_buffer_allocation, &resource->uniform_buffer_mapped);
+
+		UniformBufferObject	ubo = {};
+
+		// TODO: REMOVE YOURSELF NOW
+		glm_vec4_copy((vec4){-10.0f,  10.0f, 10.0f, 1.0f}, ubo.light_positions[0]);
+		glm_vec4_copy((vec4){ 10.0f,  10.0f, 10.0f, 1.0f}, ubo.light_positions[1]);
+		glm_vec4_copy((vec4){-10.0f, -10.0f, 10.0f, 1.0f}, ubo.light_positions[2]);
+		glm_vec4_copy((vec4){ 10.0f, -10.0f, 10.0f, 1.0f}, ubo.light_positions[3]);
+
+		glm_vec4_copy((vec4){300.0f, 300.0f, 300.0f, 1.0f}, ubo.light_colors[0]);
+		glm_vec4_copy((vec4){300.0f, 300.0f,   0.0f, 1.0f}, ubo.light_colors[1]);
+		glm_vec4_copy((vec4){  0.0f,   0.0f, 300.0f, 1.0f}, ubo.light_colors[2]);
+		glm_vec4_copy((vec4){300.0f,   0.0f,   0.0f, 1.0f}, ubo.light_colors[3]);
+
+		memcpy(resource->uniform_buffer_mapped, &ubo, sizeof(UniformBufferObject));
 	}
 
-	engine_log("vulkan", "Successfully created command buffers");
+	engine_log("vulkan", "Successfully created sync resources");
 }
 
 static void	destroyShaders(GraphicsContext *ctx)
@@ -860,8 +890,14 @@ static void	destroySwapchain(GraphicsContext *ctx)
 static void	destroySyncResources(GraphicsContext *ctx)
 {
 	for (u32 i = 0; i < ctx->frames_in_flight_count; i++) {
-		vkDestroySemaphore(ctx->device, ctx->frame_resources[i].image_acquired_semaphore, NULL);
-		vkDestroyCommandPool(ctx->device, ctx->frame_resources[i].command_pool, NULL);
+		FrameResources	*resource = &ctx->frame_resources[i];
+
+		vkDestroySemaphore(ctx->device, resource->image_acquired_semaphore, NULL);
+		vkDestroyCommandPool(ctx->device, resource->command_pool, NULL);
+		wrapperVMAunmapMemory(ctx->vma_allocator, resource->instance_buffer_allocation);
+		wrapperVMAunmapMemory(ctx->vma_allocator, resource->uniform_buffer_allocation);
+		wrapperVMAdestroyBuffer(ctx->vma_allocator, resource->instance_buffer, resource->instance_buffer_allocation);
+		wrapperVMAdestroyBuffer(ctx->vma_allocator, resource->uniform_buffer, resource->uniform_buffer_allocation);
 	}
 	vkDestroySemaphore(ctx->device, ctx->timeline_semaphore, NULL);
 }
@@ -886,35 +922,6 @@ static void	createDescriptorSetLayout(GraphicsContext *ctx)
 
 	if (vkCreateDescriptorSetLayout(ctx->device, &create_info, NULL, &ctx->ubo_descriptor_layout) != VK_SUCCESS) {
 		engine_error("vulkan", "Failed to create ubo layout");
-	}
-}
-
-static void	createUniformBuffers(GraphicsContext *ctx)
-{
-	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		VkBufferCreateInfo	buf_info = {
-			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-			.size = sizeof(UniformBufferObject)
-		};
-
-		wrapperVMAcreateBuffer(ctx->vma_allocator, &buf_info, &ctx->uniform_buffers[i], &ctx->uniform_buffer_allocations[i], 1);
-		wrapperVMAmapMemory(ctx->vma_allocator, ctx->uniform_buffer_allocations[i], &ctx->uniform_buffers_mapped[i]);
-
-		UniformBufferObject	ubo = {};
-
-		glm_vec4_copy((vec4){-10.0f,  10.0f, 10.0f, 1.0f}, ubo.light_positions[0]);
-		glm_vec4_copy((vec4){ 10.0f,  10.0f, 10.0f, 1.0f}, ubo.light_positions[1]);
-		glm_vec4_copy((vec4){-10.0f, -10.0f, 10.0f, 1.0f}, ubo.light_positions[2]);
-		glm_vec4_copy((vec4){ 10.0f, -10.0f, 10.0f, 1.0f}, ubo.light_positions[3]);
-
-		glm_vec4_copy((vec4){300.0f, 300.0f, 300.0f, 1.0f}, ubo.light_colors[0]);
-		glm_vec4_copy((vec4){300.0f, 300.0f,   0.0f, 1.0f}, ubo.light_colors[1]);
-		glm_vec4_copy((vec4){  0.0f,   0.0f, 300.0f, 1.0f}, ubo.light_colors[2]);
-		glm_vec4_copy((vec4){300.0f,   0.0f,   0.0f, 1.0f}, ubo.light_colors[3]);
-
-		memcpy(ctx->uniform_buffers_mapped[i], &ubo, sizeof(UniformBufferObject));
 	}
 }
 
@@ -962,8 +969,10 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 	}
 
 	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		FrameResources	*resource = &ctx->frame_resources[i];
+
 		VkDescriptorBufferInfo	buf_info = {
-			.buffer = ctx->uniform_buffers[i],
+			.buffer = resource->uniform_buffer,
 			.offset = 0,
 			.range = sizeof(UniformBufferObject),
 		};
@@ -999,9 +1008,7 @@ static void	initVulkan(GraphicsContext *ctx)
 	createSwapchain(ctx, ctx->window_width, ctx->window_height);
 	createDescriptorSetLayout(ctx);
 	createSyncResources(ctx);
-	createUniformBuffers(ctx);
 	createDescriptorPoolSets(ctx);
-	createCommandBuffers(ctx);
 	createDefaultTextures(ctx);
 	createMaterialDescriptorSetLayout(ctx);
 	gltfLoad(STRING_LIT("data/models/DiffuseTransmissionTeacup.glb"), &ctx->model, ctx);
@@ -1049,7 +1056,7 @@ static inline void	getViewMatrix(mat4 dst, Camera *c)
 	glm_lookat(c->position, center, c->up, dst);
 }
 
-static void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx, Camera *cam)
+static void	updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, Camera *cam)
 {
 
 	UniformBufferObject ubo = {};
@@ -1067,7 +1074,7 @@ static void	updateUniformBuffer(GraphicsContext *ctx, u32 frame_idx, Camera *cam
 	ubo.gamma = 2.2f;
 
 
-	memcpy(ctx->uniform_buffers_mapped[frame_idx], &ubo, sizeof(UniformBufferObject));
+	memcpy(resource->uniform_buffer_mapped, &ubo, sizeof(UniformBufferObject));
 }
 
 void	render(GraphicsContext *ctx, Camera *camera)
@@ -1080,13 +1087,13 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		ctx->swapchain_require_recreate = false;
 	}
 
-	// engine_log("vulkan", "frame index: %u, next_signal_value: %lu, frames_in_flight_count: %u\n", ctx->frame_index, ctx->next_signal_value, ctx->frames_in_flight_count);
 	const u32	frame_res_index = ctx->frame_index++ % ctx->frames_in_flight_count;
 	const u64	signal_value = ctx->next_signal_value++;
 	const u64	wait_value = signal_value - ctx->frames_in_flight_count;
-	// engine_log("vulkan", "res_index: %u, signal_value: %lu, wait_value: %lu\n", frame_res_index, signal_value, wait_value);
 
-	updateUniformBuffer(ctx, frame_res_index, camera);
+	FrameResources	*resource = &ctx->frame_resources[frame_res_index];
+
+	updateUniformBuffer(ctx, resource, camera);
 
 	VkSemaphoreWaitInfo	wait_info = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
@@ -1096,10 +1103,9 @@ void	render(GraphicsContext *ctx, Camera *camera)
 	};
 	vkWaitSemaphores(ctx->device, &wait_info, UINT64_MAX);
 
-	FrameResources	resource = ctx->frame_resources[frame_res_index];
-	vkResetCommandPool(ctx->device, resource.command_pool, 0);
+	vkResetCommandPool(ctx->device, resource->command_pool, 0);
 
-	VkSemaphore	image_acquire_semaphore = resource.image_acquired_semaphore;
+	VkSemaphore	image_acquire_semaphore = resource->image_acquired_semaphore;
 
 	u32	img_idx = 0;
 	VkResult acquire_result = vkAcquireNextImageKHR(ctx->device,
@@ -1123,7 +1129,7 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
 	};
-	vkBeginCommandBuffer(resource.command_buffer, &cmd_begin_info);
+	vkBeginCommandBuffer(resource->command_buffer, &cmd_begin_info);
 
 	VkImageMemoryBarrier2	layout_barriers[2] = {0};
 	layout_barriers[0] = (VkImageMemoryBarrier2){
@@ -1167,7 +1173,7 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		.imageMemoryBarrierCount = sizeofarray(layout_barriers),
 		.pImageMemoryBarriers = layout_barriers
 	};
-	vkCmdPipelineBarrier2(resource.command_buffer, &dep_info);
+	vkCmdPipelineBarrier2(resource->command_buffer, &dep_info);
 
 	VkRenderingAttachmentInfo	color_attach_info = {
 		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -1201,7 +1207,7 @@ void	render(GraphicsContext *ctx, Camera *camera)
 	};
 
 
-	vkCmdBeginRendering(resource.command_buffer, &render_info);
+	vkCmdBeginRendering(resource->command_buffer, &render_info);
 	{
 		VkViewport	viewport = {
 			.x = 0, .y = 0,
@@ -1210,26 +1216,26 @@ void	render(GraphicsContext *ctx, Camera *camera)
 			.minDepth = 0.0f,
 			.maxDepth = 1.0f,
 		};
-		vkCmdSetViewport(resource.command_buffer, 0, 1, &viewport);
+		vkCmdSetViewport(resource->command_buffer, 0, 1, &viewport);
 
 		VkRect2D	scissor = {
 			.offset = {0, 0},
 			.extent = { .width = ctx->swapchain_width, .height = ctx->swapchain_height, }
 		};
-		vkCmdSetScissor(resource.command_buffer, 0, 1, &scissor);
+		vkCmdSetScissor(resource->command_buffer, 0, 1, &scissor);
 
 		const VkDescriptorSet	ubo_descriptor_set = ctx->ubo_descriptor_sets[frame_res_index];
 
 		// ---- GRID Pass ------------------ //
-		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.handle);
+		vkCmdBindPipeline(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.handle);
 		VkDescriptorSet	grid_descriptor_sets[] = { ubo_descriptor_set };
 
-		vkCmdPushConstants(resource.command_buffer, ctx->pipeline_grid.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GridProperties), &ctx->grid_properties);
-		vkCmdBindDescriptorSets(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.layout, 0, 1, grid_descriptor_sets, 0, NULL);
-		vkCmdDraw(resource.command_buffer, 3, 1, 0, 0);
+		vkCmdPushConstants(resource->command_buffer, ctx->pipeline_grid.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GridProperties), &ctx->grid_properties);
+		vkCmdBindDescriptorSets(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.layout, 0, 1, grid_descriptor_sets, 0, NULL);
+		vkCmdDraw(resource->command_buffer, 3, 1, 0, 0);
 
 		// ---- PBR Pass --------------- //
-		vkCmdBindPipeline(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.handle);
+		vkCmdBindPipeline(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.handle);
 		VkDeviceSize	offset = 0;
 
 		// »speed
@@ -1272,15 +1278,15 @@ void	render(GraphicsContext *ctx, Camera *camera)
 			} else {
 				mat = NULL;
 			}
-			vkCmdPushConstants(resource.command_buffer, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
-			vkCmdPushConstants(resource.command_buffer, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(MaterialProperties), sizeof(mat4), &node_transform);
-			vkCmdBindDescriptorSets(resource.command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.layout, 0, pbr_descriptor_set_count, pbr_descriptor_sets, 0, NULL);
-			vkCmdBindVertexBuffers(resource.command_buffer, 0, 1, &mesh->gpu_vertex_data, &offset);
-			vkCmdBindIndexBuffer(resource.command_buffer, mesh->gpu_index_data, 0, mesh->index_type);
-			vkCmdDrawIndexed(resource.command_buffer, mesh->index_count, 1, 0, 0, 0);
+			vkCmdPushConstants(resource->command_buffer, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
+			vkCmdPushConstants(resource->command_buffer, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(MaterialProperties), sizeof(mat4), &node_transform);
+			vkCmdBindDescriptorSets(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.layout, 0, pbr_descriptor_set_count, pbr_descriptor_sets, 0, NULL);
+			vkCmdBindVertexBuffers(resource->command_buffer, 0, 1, &mesh->gpu_vertex_data, &offset);
+			vkCmdBindIndexBuffer(resource->command_buffer, mesh->gpu_index_data, 0, mesh->index_type);
+			vkCmdDrawIndexed(resource->command_buffer, mesh->index_count, 1, 0, 0, 0);
 		}
 	}
-	vkCmdEndRendering(resource.command_buffer);
+	vkCmdEndRendering(resource->command_buffer);
 
 	VkImageMemoryBarrier2	present_layout_barrier = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -1304,9 +1310,9 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		.imageMemoryBarrierCount = 1,
 		.pImageMemoryBarriers = &present_layout_barrier
 	};
-	vkCmdPipelineBarrier2(resource.command_buffer, &present_dep_info);
+	vkCmdPipelineBarrier2(resource->command_buffer, &present_dep_info);
 
-	vkEndCommandBuffer(resource.command_buffer);
+	vkEndCommandBuffer(resource->command_buffer);
 
 	VkSemaphoreSubmitInfo	image_acquired_wait_info = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
@@ -1329,7 +1335,7 @@ void	render(GraphicsContext *ctx, Camera *camera)
 
 	VkCommandBufferSubmitInfo	cmd_submit_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-		.commandBuffer = resource.command_buffer,
+		.commandBuffer = resource->command_buffer,
 	};
 
 	VkSubmitInfo2	submit_info = {

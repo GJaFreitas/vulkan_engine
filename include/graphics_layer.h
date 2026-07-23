@@ -194,11 +194,27 @@ typedef struct GridProperties
 	float fade_distance;	// distance at which grid fully fades out
 }	GridProperties;
 
+// TODO: Test test test, how many instances are needed? Am i gonna use particles like this later? (2026-07-23)
+#define	MAX_INSTANCES	4096
+typedef struct InstanceData
+{
+	mat4	model_mat;
+}	InstanceData;
+
 typedef struct FrameResources
 {
 	VkCommandPool	command_pool;
 	VkCommandBuffer	command_buffer;
 	VkSemaphore	image_acquired_semaphore;
+
+	VkBuffer	uniform_buffer;
+	void		*uniform_buffer_mapped;
+	void		*uniform_buffer_allocation;
+
+	VkBuffer	instance_buffer;
+	void		*instance_buffer_mapped;
+	void		*instance_buffer_allocation;
+
 }	FrameResources;
 
 typedef struct PipelineObject {
@@ -268,9 +284,6 @@ typedef struct GraphicsContext
 	u64			next_signal_value;
 
 	VkDescriptorSetLayout	ubo_descriptor_layout;
-	VkBuffer		uniform_buffers[MAX_FRAMES_IN_FLIGHT];
-	void			*uniform_buffers_mapped[MAX_FRAMES_IN_FLIGHT];
-	void			*uniform_buffer_allocations[MAX_FRAMES_IN_FLIGHT];
 
 	VkDescriptorPool	descriptor_pool;
 	VkDescriptorSet		ubo_descriptor_sets[MAX_FRAMES_IN_FLIGHT];

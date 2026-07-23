@@ -57,7 +57,7 @@ run: all
 	@./$(TARGET)
 
 clean:
-	rm -rf $(OBJ_DIR) $(TARGET)
+	rm -rf $(OBJ_DIR) $(TARGET) $(COMPILED_SHADER_DIR)
 
 compdb:
 	bear -- make clean all
