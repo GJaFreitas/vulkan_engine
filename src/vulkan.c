@@ -902,25 +902,37 @@ static void	destroySyncResources(GraphicsContext *ctx)
 	vkDestroySemaphore(ctx->device, ctx->timeline_semaphore, NULL);
 }
 
-static void	createDescriptorSetLayout(GraphicsContext *ctx)
+static void	createDescriptorSetLayouts(GraphicsContext *ctx)
 {
-	VkDescriptorSetLayoutBinding	layout_bindings[] = {
-		// UBO binding
-		{
-			.binding = 0,
-			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-		}
+	VkDescriptorSetLayoutBinding	ubo_layout_binding = {
+		.binding = 0,
+		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+	};
+	VkDescriptorSetLayoutBinding	instance_layout_binding = {
+		.binding = 0,
+		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 	};
 
-	VkDescriptorSetLayoutCreateInfo	create_info = {
+	VkDescriptorSetLayoutCreateInfo	ubo_create_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = sizeofarray(layout_bindings),
-		.pBindings = layout_bindings,
+		.bindingCount = 1,
+		.pBindings = &ubo_layout_binding,
 	};
 
-	if (vkCreateDescriptorSetLayout(ctx->device, &create_info, NULL, &ctx->ubo_descriptor_layout) != VK_SUCCESS) {
+	VkDescriptorSetLayoutCreateInfo	instance_create_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.bindingCount = 1,
+		.pBindings = &instance_layout_binding,
+	};
+
+	if (vkCreateDescriptorSetLayout(ctx->device, &ubo_create_info, NULL, &ctx->ubo_descriptor_layout) != VK_SUCCESS) {
+		engine_error("vulkan", "Failed to create ubo layout");
+	}
+	if (vkCreateDescriptorSetLayout(ctx->device, &instance_create_info, NULL, &ctx->instance_descriptor_layout) != VK_SUCCESS) {
 		engine_error("vulkan", "Failed to create ubo layout");
 	}
 }
@@ -1006,7 +1018,7 @@ static void	initVulkan(GraphicsContext *ctx)
 		exit(1);
 	}
 	createSwapchain(ctx, ctx->window_width, ctx->window_height);
-	createDescriptorSetLayout(ctx);
+	createDescriptorSetLayouts(ctx);
 	createSyncResources(ctx);
 	createDescriptorPoolSets(ctx);
 	createDefaultTextures(ctx);
@@ -1249,7 +1261,8 @@ void	render(GraphicsContext *ctx, Camera *camera)
 			mat4	node_transform;
 			glm_mat4_copy(node->world_transform, node_transform);
 
-			VkDescriptorSet		pbr_descriptor_sets[2] = { ubo_descriptor_set, VK_NULL_HANDLE };
+			VkDescriptorSet		pbr_descriptor_sets[] = { ubo_descriptor_set, VK_NULL_HANDLE };
+
 			MaterialProperties	push_constants_mat = {
 				.basecolor_texture_set = -1,
 				.physical_descriptor_texture_set = -1,

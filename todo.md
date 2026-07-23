@@ -6,3 +6,5 @@
 
 outfits should be customizable with an unlock like a spell for doing it
 re-enactement should work in cutscenes
+
+Do the shader and render part of instance data

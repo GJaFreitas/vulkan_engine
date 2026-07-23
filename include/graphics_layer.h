@@ -263,18 +263,32 @@ typedef struct GraphicsContext
 	u32			swapchain_height;
 	bool			swapchain_require_recreate;
 
+	// Shared between pipelines
+	VkDescriptorSetLayout	ubo_descriptor_layout;
+	VkDescriptorSetLayout	instance_descriptor_layout;
+
+	VkDescriptorPool	descriptor_pool;
+	VkDescriptorSet		ubo_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
+	// ------------------------
+
+	// PBR Pipeline ------------
 	PipelineObject		pipeline_pbr;
 	VkDescriptorSetLayout	material_descriptor_layout;
-	VkDescriptorSet		material_descriptor_sets;
 	Texture			default_base_color_texture;
 	Texture			default_metallic_texture;
 	Texture			default_normal_texture;
 	Texture			default_occlusion_texture;
 	Texture			default_emissive_texture;
+	// -------------------------
 
+	// Transparent Pipeline ------------
 	//PipelineObject		pipeline_glass;
+	// ---------------------------------
+	
+	// Grid Pipeline ------------
 	PipelineObject		pipeline_grid;
 	GridProperties		grid_properties;
+	// --------------------------
 
 	u32			frames_in_flight_count;
 	VkSemaphore		timeline_semaphore;
@@ -283,10 +297,6 @@ typedef struct GraphicsContext
 	u32			frame_index;
 	u64			next_signal_value;
 
-	VkDescriptorSetLayout	ubo_descriptor_layout;
-
-	VkDescriptorPool	descriptor_pool;
-	VkDescriptorSet		ubo_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
 
 	GLTFModel		model;
 
