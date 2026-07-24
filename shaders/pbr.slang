@@ -14,17 +14,18 @@ struct MaterialProperties {
     float alphaMaskCutoff;              // Alpha cutoff threshold
 };
 
-struct ModelMatrix {
-	[[vk::offset(64)]] float4x4 mat;	// The model matrix
+struct InstanceData {
+     float4x4	model_mat;
 };
 
-[[vk::binding(0, 1)]] Sampler2D baseColorMap;
-[[vk::binding(1, 1)]] Sampler2D metallicRoughnessMap;
-[[vk::binding(2, 1)]] Sampler2D normalMap;
-[[vk::binding(3, 1)]] Sampler2D occlusionMap;
-[[vk::binding(4, 1)]] Sampler2D emissiveMap;
+[[vk::binding(0, 2)]] Sampler2D baseColorMap;
+[[vk::binding(1, 2)]] Sampler2D metallicRoughnessMap;
+[[vk::binding(2, 2)]] Sampler2D normalMap;
+[[vk::binding(3, 2)]] Sampler2D occlusionMap;
+[[vk::binding(4, 2)]] Sampler2D emissiveMap;
 
-[[vk::push_constant]] ModelMatrix model;
+[[vk::binding(0, 1)]] StructuredBuffer<InstanceData> instances;
+
 [[vk::push_constant]] MaterialProperties material;
 
 // vertex stage
@@ -82,11 +83,11 @@ float3 FresnelSchlick(float cosTheta, float3 F0) {
 
 // Vertex shader entry point - Executes once per vertex
 [[shader("vertex")]]
-VSOutput vertMain(VSInput input)
+VSOutput vertMain(VSInput input, uint instanceID: SV_InstanceID)
 {
     VSOutput output;
 
-    float4x4	model_mat = mul(ubo.model, model.mat);
+    float4x4	model_mat = instances[instanceID].model_mat;
 
     // Transform vertex position through the rendering pipeline
     // Model -> World -> Camera -> Clip space transformation chain

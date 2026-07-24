@@ -86,6 +86,9 @@ typedef struct Mesh
 	u32		index_count;
 	VkIndexType	index_type;
 
+	u32		instance_count;
+	u32		first_instance;
+
 	VkBuffer	gpu_vertex_data;
 	void		*gpu_vertex_alloc;
 	VkBuffer	gpu_index_data;
@@ -269,6 +272,7 @@ typedef struct GraphicsContext
 
 	VkDescriptorPool	descriptor_pool;
 	VkDescriptorSet		ubo_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
+	VkDescriptorSet		instance_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
 	// ------------------------
 
 	// PBR Pipeline ------------

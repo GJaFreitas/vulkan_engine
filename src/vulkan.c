@@ -454,16 +454,11 @@ static void	createPBRPipeline(GraphicsContext *ctx)
 			.offset = 0,
 			.size = sizeof(MaterialProperties),
 		},
-		// Model matrix
-		{
-			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-			.offset = sizeof(MaterialProperties),
-			.size = sizeof(mat4),
-		},
 	};
 
 	VkDescriptorSetLayout	layouts[] = {
 		ctx->ubo_descriptor_layout,
+		ctx->instance_descriptor_layout,
 		ctx->material_descriptor_layout
 	};
 
@@ -912,9 +907,9 @@ static void	createDescriptorSetLayouts(GraphicsContext *ctx)
 	};
 	VkDescriptorSetLayoutBinding	instance_layout_binding = {
 		.binding = 0,
-		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
 	};
 
 	VkDescriptorSetLayoutCreateInfo	ubo_create_info = {
@@ -946,15 +941,24 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 			.descriptorCount = MAX_FRAMES_IN_FLIGHT,
 		},
 		{
+			.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			.descriptorCount = MAX_FRAMES_IN_FLIGHT,
+		},
+		{
 			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.descriptorCount = material_descriptor_count,
-		}
+		},
 	};
+
+	u64	total_sets = 0;
+	for (u32 i = 0; i < sizeofarray(pool_sizes); i++) {
+		total_sets += pool_sizes[i].descriptorCount;
+	}
 
 	VkDescriptorPoolCreateInfo	create_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-		.maxSets = MAX_FRAMES_IN_FLIGHT + material_descriptor_count,
+		.maxSets = total_sets,
 		.poolSizeCount = sizeofarray(pool_sizes),
 		.pPoolSizes = pool_sizes,
 	};
@@ -963,19 +967,31 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 		engine_error("vulkan", "Failed to create descriptor pool");
 	}
 
-	VkDescriptorSetLayout layouts[MAX_FRAMES_IN_FLIGHT];
+	VkDescriptorSetLayout ubo_layouts[MAX_FRAMES_IN_FLIGHT];
+	VkDescriptorSetLayout instance_layouts[MAX_FRAMES_IN_FLIGHT];
 	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		layouts[i] = ctx->ubo_descriptor_layout;
+		ubo_layouts[i] = ctx->ubo_descriptor_layout;
+		instance_layouts[i] = ctx->instance_descriptor_layout;
 	}
 
-	VkDescriptorSetAllocateInfo	alloc_info = {
+	VkDescriptorSetAllocateInfo	ubo_alloc_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		.descriptorPool = ctx->descriptor_pool,
 		.descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
-		.pSetLayouts = layouts,
+		.pSetLayouts = ubo_layouts,
+	};
+	VkDescriptorSetAllocateInfo	instance_alloc_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = ctx->descriptor_pool,
+		.descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
+		.pSetLayouts = instance_layouts,
 	};
 
-	if (vkAllocateDescriptorSets(ctx->device, &alloc_info, ctx->ubo_descriptor_sets) != VK_SUCCESS) {
+	if (vkAllocateDescriptorSets(ctx->device, &ubo_alloc_info, ctx->ubo_descriptor_sets) != VK_SUCCESS) {
+		engine_error("vulkan", "Failed to allocate descriptor sets");
+		exit(1);
+	}
+	if (vkAllocateDescriptorSets(ctx->device, &instance_alloc_info, ctx->instance_descriptor_sets) != VK_SUCCESS) {
 		engine_error("vulkan", "Failed to allocate descriptor sets");
 		exit(1);
 	}
@@ -983,23 +999,41 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 		FrameResources	*resource = &ctx->frame_resources[i];
 
-		VkDescriptorBufferInfo	buf_info = {
+		VkDescriptorBufferInfo	instance_buf_info = {
+			.buffer = resource->instance_buffer,
+			.offset = 0,
+			.range = sizeof(InstanceData) * MAX_INSTANCES,
+		};
+
+		VkWriteDescriptorSet	instance_descriptor_write = {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = ctx->instance_descriptor_sets[i],
+			.dstBinding = 0,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			.pBufferInfo = &instance_buf_info,
+		};
+
+
+		VkDescriptorBufferInfo	ubo_buf_info = {
 			.buffer = resource->uniform_buffer,
 			.offset = 0,
 			.range = sizeof(UniformBufferObject),
 		};
 
-		VkWriteDescriptorSet	descriptor_write = {
+		VkWriteDescriptorSet	ubo_descriptor_write = {
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.dstSet = ctx->ubo_descriptor_sets[i],
 			.dstBinding = 0,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.pBufferInfo = &buf_info,
+			.pBufferInfo = &ubo_buf_info,
 		};
 
-		vkUpdateDescriptorSets(ctx->device, 1, &descriptor_write, 0, NULL);
+		VkWriteDescriptorSet	writes[] = { ubo_descriptor_write, instance_descriptor_write };
+		vkUpdateDescriptorSets(ctx->device, sizeofarray(writes), writes, 0, NULL);
 	}
 
 	engine_log("vulkan", "Successfully created descriptor pools and sets");
@@ -1237,6 +1271,7 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		vkCmdSetScissor(resource->command_buffer, 0, 1, &scissor);
 
 		const VkDescriptorSet	ubo_descriptor_set = ctx->ubo_descriptor_sets[frame_res_index];
+		const VkDescriptorSet	instance_descriptor_set = ctx->instance_descriptor_sets[frame_res_index];
 
 		// ---- GRID Pass ------------------ //
 		vkCmdBindPipeline(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.handle);
@@ -1250,18 +1285,18 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		vkCmdBindPipeline(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.handle);
 		VkDeviceSize	offset = 0;
 
+		InstanceData	*instance_data = (InstanceData *)resource->instance_buffer_mapped;
+
 		// »speed
 		for (u32 i = 0; i < ctx->model.node_count; i++) {
 			const Mesh	*mesh = &ctx->model.linear_nodes[i].mesh;
-			const Node	*node = &ctx->model.linear_nodes[i];
-
+			Node	*node = &ctx->model.linear_nodes[i];
 			if (mesh->vertex_count == 0)
 				continue ;
 
-			mat4	node_transform;
-			glm_mat4_copy(node->world_transform, node_transform);
+			glm_mat4_copy(node->world_transform, instance_data->model_mat);
 
-			VkDescriptorSet		pbr_descriptor_sets[] = { ubo_descriptor_set, VK_NULL_HANDLE };
+			VkDescriptorSet		pbr_descriptor_sets[] = { ubo_descriptor_set, instance_descriptor_set, VK_NULL_HANDLE };
 
 			MaterialProperties	push_constants_mat = {
 				.basecolor_texture_set = -1,
@@ -1270,13 +1305,13 @@ void	render(GraphicsContext *ctx, Camera *camera)
 				.occlusion_texture_set = -1,
 				.emissive_texture_set = -1,
 			};
-			u32		pbr_descriptor_set_count = 1;
+			u32		pbr_descriptor_set_count = 2;
 			Material	*mat;
 			if (mesh->material_index >= 0) {
 				mat = &ctx->model.materials[mesh->material_index];
 
 				pbr_descriptor_set_count += 1;
-				pbr_descriptor_sets[1] = mat->descriptor_set;
+				pbr_descriptor_sets[2] = mat->descriptor_set;
 
 				push_constants_mat.roughness_factor = mat->roughness_factor;
 				push_constants_mat.metallic_factor = mat->metallic_factor;
@@ -1292,11 +1327,10 @@ void	render(GraphicsContext *ctx, Camera *camera)
 				mat = NULL;
 			}
 			vkCmdPushConstants(resource->command_buffer, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
-			vkCmdPushConstants(resource->command_buffer, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(MaterialProperties), sizeof(mat4), &node_transform);
 			vkCmdBindDescriptorSets(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.layout, 0, pbr_descriptor_set_count, pbr_descriptor_sets, 0, NULL);
 			vkCmdBindVertexBuffers(resource->command_buffer, 0, 1, &mesh->gpu_vertex_data, &offset);
 			vkCmdBindIndexBuffer(resource->command_buffer, mesh->gpu_index_data, 0, mesh->index_type);
-			vkCmdDrawIndexed(resource->command_buffer, mesh->index_count, 1, 0, 0, 0);
+			vkCmdDrawIndexed(resource->command_buffer, mesh->index_count, 1, 0, 0, i);
 		}
 	}
 	vkCmdEndRendering(resource->command_buffer);
