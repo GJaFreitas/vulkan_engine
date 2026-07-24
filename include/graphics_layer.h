@@ -24,7 +24,6 @@
 
 typedef struct UniformBufferObject
 {
-	mat4	model;
 	mat4	view;
 	mat4	proj;
 	mat4	inv_view;
@@ -85,9 +84,6 @@ typedef struct Mesh
 	void		*indices;
 	u32		index_count;
 	VkIndexType	index_type;
-
-	u32		instance_count;
-	u32		first_instance;
 
 	VkBuffer	gpu_vertex_data;
 	void		*gpu_vertex_alloc;
@@ -174,6 +170,11 @@ typedef struct GLTFModel
 
 	UniformBufferObject	ubo;
 }	GLTFModel;
+
+typedef struct TextureCache
+{
+
+}	TextureCache;
 
 typedef struct MaterialProperties
 {

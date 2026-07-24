@@ -1106,7 +1106,6 @@ static void	updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 {
 
 	UniformBufferObject ubo = {};
-	glm_mat4_identity(ubo.model);
 	getViewMatrix(ubo.view, cam);
 	getProjectionMatrix(ubo.proj, cam, (float)ctx->swapchain_width / (float)ctx->swapchain_height);
 

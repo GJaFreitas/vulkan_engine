@@ -4,7 +4,6 @@ public static const float PI = 3.14159265359;
 
 public struct UniformBufferObject
 {
-    public float4x4 model;
     public float4x4 view;
     public float4x4 proj;
     public float4x4 inv_view;
