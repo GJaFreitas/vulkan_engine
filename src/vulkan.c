@@ -11,7 +11,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
 	(void)message_type;
 	if (message_severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
 	{
-		engine_error("vulkan", "%i - %s: %s\n", callback_data->messageIdNumber, callback_data->pMessageIdName, callback_data->pMessage);
+		engine_error(LOG_FILE, "%i - %s: %s\n", callback_data->messageIdNumber, callback_data->pMessageIdName, callback_data->pMessage);
 	}
 	return VK_FALSE;
 }
@@ -19,7 +19,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
 static void	createInstance(GraphicsContext *ctx)
 {
 	if (volkInitialize() != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to initialized volk\n");
+		engine_error(LOG_FILE, "Failed to initialized volk\n");
 		exit(1);
 	}
 
@@ -33,16 +33,16 @@ static void	createInstance(GraphicsContext *ctx)
 	const char *const *sdl_extensions = SDL_Vulkan_GetInstanceExtensions(&extensionCount);
 
 	const char **extensions = malloc(sizeof(char *) * (extensionCount + ctx->required_extension_count));
-	engine_log("vulkan", "Extensions ---------------");
+	engine_log(LOG_FILE, "Extensions ---------------");
 	for (u32 i = 0; i < extensionCount + ctx->required_extension_count; i++) {
 		if (i < extensionCount) {
 			extensions[i] = strdup(sdl_extensions[i]);
 		} else {
 			extensions[i] = strdup(ctx->required_extensions[i - extensionCount]);
 		}
-		engine_log("vulkan", "%s", extensions[i]);
+		engine_log(LOG_FILE, "%s", extensions[i]);
 	}
-	engine_log("vulkan", "Extensions ---------------");
+	engine_log(LOG_FILE, "Extensions ---------------");
 
 	VkDebugUtilsMessengerCreateInfoEXT debugInfo = {
 		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
@@ -67,22 +67,22 @@ static void	createInstance(GraphicsContext *ctx)
 	};
 
 	if (vkCreateInstance(&instanceInfo, NULL, &ctx->vk_instance) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to create vulkan instance\n");
+		engine_error(LOG_FILE, "Failed to create vulkan instance\n");
 		exit(1);
 	}
 
 
-	engine_log("vulkan", "Successfully created vulkan instance");
+	engine_log(LOG_FILE, "Successfully created vulkan instance");
 }
 
 static void	createSurface(GraphicsContext *ctx)
 {
-	engine_log("vulkan", "SDL video driver: %s", SDL_GetCurrentVideoDriver());
+	engine_log(LOG_FILE, "SDL video driver: %s", SDL_GetCurrentVideoDriver());
 	if (!SDL_Vulkan_CreateSurface(ctx->window, ctx->vk_instance, NULL, &ctx->surface)) {
-		engine_error("vulkan", "Failed to create surface, error: %s\n", SDL_GetError());
+		engine_error(LOG_FILE, "Failed to create surface, error: %s\n", SDL_GetError());
 		exit(1);
 	}
-	engine_log("vulkan", "Successfully created surface");
+	engine_log(LOG_FILE, "Successfully created surface");
 }
 
 static VkPresentModeKHR chooseSwapPresentMode(VkPresentModeKHR *presentModes, u32 presentModesCount)
@@ -183,19 +183,19 @@ static void	createDevice(GraphicsContext *ctx)
 	vkGetPhysicalDeviceFeatures2(chosen_phys_device, &supported_features);
 
 	if (!supported_features13.dynamicRendering) {
-		engine_error("vulkan", "Card doesnt support dynamic rendering\n");
+		engine_error(LOG_FILE, "Card doesnt support dynamic rendering\n");
 		exit(1);
 	}
 	if (!supported_features13.synchronization2) {
-		engine_error("vulkan", "Card doesnt support sync2\n");
+		engine_error(LOG_FILE, "Card doesnt support sync2\n");
 		exit(1);
 	}
 	if (!supported_features12.timelineSemaphore) {
-		engine_error("vulkan", "Card doesnt support timeline semaphore\n");
+		engine_error(LOG_FILE, "Card doesnt support timeline semaphore\n");
 		exit(1);
 	}
 	if (!supported_features11.shaderDrawParameters) {
-		engine_error("vulkan", "Card doesnt support shader draw parameters\n");
+		engine_error(LOG_FILE, "Card doesnt support shader draw parameters\n");
 		exit(1);
 	}
 
@@ -247,11 +247,11 @@ static void	createDevice(GraphicsContext *ctx)
 	};
 
 	if (vkCreateDevice(chosen_phys_device, &device_create_info, NULL, &ctx->device) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to create logical device");
+		engine_error(LOG_FILE, "Failed to create logical device");
 		exit(1);
 	}
 
-	engine_log("vulkan", "Successfully created logical device");
+	engine_log(LOG_FILE, "Successfully created logical device");
 
 	vkGetDeviceQueue(ctx->device, queue_family_index, 0, &ctx->queue);
 }
@@ -263,7 +263,7 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 
 	VkSurfaceCapabilitiesKHR	surface_capabilities = {0};
 	if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(ctx->phys_device, ctx->surface, &surface_capabilities) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to get surface capabilities\n");
+		engine_error(LOG_FILE, "Failed to get surface capabilities\n");
 		exit(1);
 	}
 
@@ -288,9 +288,9 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 	};
 
 	if (vkCreateSwapchainKHR(ctx->device, &swapchain_info, NULL, &ctx->swapchain) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to create swapchain\n");
+		engine_error(LOG_FILE, "Failed to create swapchain\n");
 	}
-	engine_log("vulkan", "Successfully created swapchain");
+	engine_log(LOG_FILE, "Successfully created swapchain");
 
 	u32	image_count = 0;
 	vkGetSwapchainImagesKHR(ctx->device, ctx->swapchain, &image_count, NULL);
@@ -313,7 +313,7 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 		};
 
 		if (vkCreateImageView(ctx->device, &img_info, NULL, &image_views[i]) != VK_SUCCESS) {
-			engine_error("vulkan", "Failed to create image view nr: %u\n", i);
+			engine_error(LOG_FILE, "Failed to create image view nr: %u\n", i);
 			exit(1);
 		}
 	}
@@ -325,7 +325,7 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 		};
 
 		if (vkCreateSemaphore(ctx->device, &semaphore_info, NULL, &semaphores[i]) != VK_SUCCESS) {
-			engine_error("vulkan", "Failed to create semaphore nr: %u\n", i);
+			engine_error(LOG_FILE, "Failed to create semaphore nr: %u\n", i);
 			exit(1);
 		}
 	}
@@ -346,7 +346,7 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 	};
 
 	if (wrapperVMAcreateImage(ctx->vma_allocator, &depth_info, &ctx->swapchain_depth_image, &ctx->swapchain_depth_image_allocation) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to allocate depth buffer\n");
+		engine_error(LOG_FILE, "Failed to allocate depth buffer\n");
 		exit(1);
 	}
 
@@ -363,11 +363,11 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 	};
 
 	if (vkCreateImageView(ctx->device, &depth_view_info, NULL, &ctx->swapchain_depth_image_view) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to create depth image view\n");
+		engine_error(LOG_FILE, "Failed to create depth image view\n");
 		exit(1);
 	}
 
-	engine_log("vulkan", "Successfully created depth buffer");
+	engine_log(LOG_FILE, "Successfully created depth buffer");
 
 	ctx->image_count = image_count;
 	ctx->swapchain_images = images;
@@ -381,22 +381,23 @@ static VkShaderModule	createShaderModule(String filename, shaderc_shader_kind ki
 	StringView	extension = filename;
 
 	// extension is at '.'
-	stringViewJumpToChar(&extension, '.');
+	strViewJumpToChar(&extension, '.');
 	// extension after '.'
-	stringViewAdvance(&extension, 1);
+	strViewAdvance(&extension, 1);
 
 	String shader_code = readFile(filename);
-	engine_log("vulkan", "Compiling shader: %S", filename);
+	engine_log(LOG_FILE, "Compiling shader: %S", filename);
 
 	u64	shader_size;
 	u32	*shader_data;
 
 	// Shader is already compiled
-	if (stringIsEqual(extension, STRING_LIT("spv"))) {
+	if (strEq(extension, STRING_LIT("spv"))) {
 		shader_data = (u32 *)shader_code.data;
 		shader_size = shader_code.count;
 	} else {
-		char	*filename_cstring = stringToCstr(filename, NULL);
+		// TODO: Give this an allocator
+		char	*filename_cstring = strToCstring(filename, NULL);
 
 		shaderc_compiler_t		compiler = shaderc_compiler_initialize();
 		shaderc_compile_options_t	opts = shaderc_compile_options_initialize();
@@ -405,7 +406,7 @@ static VkShaderModule	createShaderModule(String filename, shaderc_shader_kind ki
 		shaderc_compile_options_set_optimization_level(opts, shaderc_optimization_level_performance);
 		shaderc_compilation_result_t result = shaderc_compile_into_spv(compiler, (char *)shader_code.data, shader_code.count, kind, filename_cstring, "main", opts);
 		if (shaderc_result_get_compilation_status(result) != shaderc_compilation_status_success) {
-			engine_error("vulkan", "Shader compilation error: %s\n", shaderc_result_get_error_message(result));
+			engine_error(LOG_FILE, "Shader compilation error: %s\n", shaderc_result_get_error_message(result));
 			exit(1);
 		}
 		free(filename_cstring);
@@ -421,7 +422,7 @@ static VkShaderModule	createShaderModule(String filename, shaderc_shader_kind ki
 	};
 	VkShaderModule	module;
 	if (vkCreateShaderModule(ctx->device, &shader_info, NULL, &module) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to create shader module: %S\n", filename);
+		engine_error(LOG_FILE, "Failed to create shader module: %S\n", filename);
 		exit(1);
 	}
 	return module;
@@ -472,7 +473,7 @@ static void	createPBRPipeline(GraphicsContext *ctx)
 
 
 	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &ctx->pipeline_pbr.layout) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to create pipeline layout\n");
+		engine_error(LOG_FILE, "Failed to create pipeline layout\n");
 		exit(1);
 	}
 
@@ -605,11 +606,11 @@ static void	createPBRPipeline(GraphicsContext *ctx)
 	};
 
 	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_pbr.handle) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to create graphics pipeline\n");
+		engine_error(LOG_FILE, "Failed to create graphics pipeline\n");
 		exit(1);
 	}
 
-	engine_log("vulkan", "Successfully created graphics pipeline");
+	engine_log(LOG_FILE, "Successfully created graphics pipeline");
 }
 
 static void	createGRIDPipeline(GraphicsContext *ctx)
@@ -637,7 +638,7 @@ static void	createGRIDPipeline(GraphicsContext *ctx)
 
 
 	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &ctx->pipeline_grid.layout) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to create pipeline layout\n");
+		engine_error(LOG_FILE, "Failed to create pipeline layout\n");
 		exit(1);
 	}
 
@@ -757,11 +758,11 @@ static void	createGRIDPipeline(GraphicsContext *ctx)
 	};
 
 	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_grid.handle) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to create graphics pipeline\n");
+		engine_error(LOG_FILE, "Failed to create graphics pipeline\n");
 		exit(1);
 	}
 
-	engine_log("vulkan", "Successfully created graphics pipeline");
+	engine_log(LOG_FILE, "Successfully created graphics pipeline");
 }
 
 static void	createSyncResources(GraphicsContext *ctx)
@@ -781,7 +782,7 @@ static void	createSyncResources(GraphicsContext *ctx)
 	};
 
 	if (vkCreateSemaphore(ctx->device, &timeline_semaphore_info, NULL, &ctx->timeline_semaphore) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to create timeline semaphore");
+		engine_error(LOG_FILE, "Failed to create timeline semaphore");
 		exit(1);
 	}
 
@@ -793,7 +794,7 @@ static void	createSyncResources(GraphicsContext *ctx)
 		};
 
 		if (vkCreateSemaphore(ctx->device, &semaphore_info, NULL, &resource->image_acquired_semaphore) != VK_SUCCESS) {
-			engine_error("vulkan", "Failed to create semaphore for frame resources nr: %u\n", i);
+			engine_error(LOG_FILE, "Failed to create semaphore for frame resources nr: %u\n", i);
 			exit(1);
 		}
 
@@ -803,7 +804,7 @@ static void	createSyncResources(GraphicsContext *ctx)
 		};
 
 		if (vkCreateCommandPool(ctx->device, &pool_info, NULL, &resource->command_pool) != VK_SUCCESS) {
-			engine_error("vulkan", "Failed to create command pool nr: %u", i);
+			engine_error(LOG_FILE, "Failed to create command pool nr: %u", i);
 			exit(1);
 		}
 
@@ -815,7 +816,7 @@ static void	createSyncResources(GraphicsContext *ctx)
 		};
 
 		if (vkAllocateCommandBuffers(ctx->device, &buffer_alloc_info, &resource->command_buffer) != VK_SUCCESS) {
-			engine_error("vulkan", "Failed to create command buffer nr: %u", i);
+			engine_error(LOG_FILE, "Failed to create command buffer nr: %u", i);
 			exit(1);
 		}
 
@@ -827,7 +828,7 @@ static void	createSyncResources(GraphicsContext *ctx)
 		};
 
 		if (wrapperVMAcreateBuffer(ctx->vma_allocator, &instance_buffer_info, &resource->instance_buffer, &resource->instance_buffer_allocation, 1) != VK_SUCCESS) {
-			engine_error(__FILE__, "Failed to create instance buffer nr: %u", i);
+			engine_error(LOG_FILE, "Failed to create instance buffer nr: %u", i);
 			exit(1);
 		}
 		wrapperVMAmapMemory(ctx->vma_allocator, resource->instance_buffer_allocation, &resource->instance_buffer_mapped);
@@ -858,7 +859,7 @@ static void	createSyncResources(GraphicsContext *ctx)
 		memcpy(resource->uniform_buffer_mapped, &ubo, sizeof(UniformBufferObject));
 	}
 
-	engine_log("vulkan", "Successfully created sync resources");
+	engine_log(LOG_FILE, "Successfully created sync resources");
 }
 
 static void	destroyShaders(GraphicsContext *ctx)
@@ -925,10 +926,10 @@ static void	createDescriptorSetLayouts(GraphicsContext *ctx)
 	};
 
 	if (vkCreateDescriptorSetLayout(ctx->device, &ubo_create_info, NULL, &ctx->ubo_descriptor_layout) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to create ubo layout");
+		engine_error(LOG_FILE, "Failed to create ubo layout");
 	}
 	if (vkCreateDescriptorSetLayout(ctx->device, &instance_create_info, NULL, &ctx->instance_descriptor_layout) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to create ubo layout");
+		engine_error(LOG_FILE, "Failed to create ubo layout");
 	}
 }
 
@@ -964,7 +965,7 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 	};
 
 	if (vkCreateDescriptorPool(ctx->device, &create_info, NULL, &ctx->descriptor_pool) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to create descriptor pool");
+		engine_error(LOG_FILE, "Failed to create descriptor pool");
 	}
 
 	VkDescriptorSetLayout ubo_layouts[MAX_FRAMES_IN_FLIGHT];
@@ -988,11 +989,11 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 	};
 
 	if (vkAllocateDescriptorSets(ctx->device, &ubo_alloc_info, ctx->ubo_descriptor_sets) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to allocate descriptor sets");
+		engine_error(LOG_FILE, "Failed to allocate descriptor sets");
 		exit(1);
 	}
 	if (vkAllocateDescriptorSets(ctx->device, &instance_alloc_info, ctx->instance_descriptor_sets) != VK_SUCCESS) {
-		engine_error("vulkan", "Failed to allocate descriptor sets");
+		engine_error(LOG_FILE, "Failed to allocate descriptor sets");
 		exit(1);
 	}
 
@@ -1036,7 +1037,7 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 		vkUpdateDescriptorSets(ctx->device, sizeofarray(writes), writes, 0, NULL);
 	}
 
-	engine_log("vulkan", "Successfully created descriptor pools and sets");
+	engine_log(LOG_FILE, "Successfully created descriptor pools and sets");
 }
 
 static void	initVulkan(GraphicsContext *ctx)
@@ -1048,7 +1049,7 @@ static void	initVulkan(GraphicsContext *ctx)
 	volkLoadDevice(ctx->device);
 	ctx->vma_allocator = initializeVMA(ctx->phys_device, ctx->device, ctx->vk_instance);
 	if (ctx->vma_allocator == NULL) {
-		engine_error("vulkan", "Failed to create vma allocator\n");
+		engine_error(LOG_FILE, "Failed to create vma allocator\n");
 		exit(1);
 	}
 	createSwapchain(ctx, ctx->window_width, ctx->window_height);
@@ -1083,10 +1084,10 @@ static void	initSdl(GraphicsContext *ctx)
 	SDL_InitSubSystem(SDL_INIT_VIDEO);
 
 	if ((ctx->window = SDL_CreateWindow("Hello world", ctx->window_width, ctx->window_height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE)) == NULL) {
-		engine_error("vulkan", "Couldnt create window");
+		engine_error(LOG_FILE, "Couldnt create window");
 		exit(1);
 	} else {
-		engine_log("vulkan", "SDL window created");
+		engine_log(LOG_FILE, "SDL window created");
 	}
 }
 
@@ -1430,6 +1431,8 @@ void	startGraphics(GraphicsContext *ctx)
 
 	initSdl(ctx);
 	initVulkan(ctx);
+
+
 
 }
 

@@ -24,7 +24,7 @@ i32	read_file_fn(uint8_t **out_data, uint64_t *out_size,
 	(void)path_len;
 	int	fd = open(path, O_RDWR);
 	if (fd == -1) {
-		engine_error("gltf_loading.c", "Failed to open file: %s\n", path);
+		engine_error(LOG_FILE, "Failed to open file: %s\n", path);
 		return 0;
 	}
 
@@ -34,7 +34,7 @@ i32	read_file_fn(uint8_t **out_data, uint64_t *out_size,
 	u8	*data = mmap(NULL, stats.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
 	if (data == MAP_FAILED) {
 		close(fd);
-		engine_error("gltf_loading.c", "Failed to map file: %s\n", path);
+		engine_error(LOG_FILE, "Failed to map file: %s\n", path);
 		return 0;
 	}
 	close(fd);
@@ -59,7 +59,7 @@ i32	write_file_fn(const char *path, uint32_t path_len,
 	(void)user_data;
 	int	fd = open(path, O_RDWR);
 	if (fd == -1) {
-		engine_error("gltf_loading.c", "Failed to open file for writing: %s\n", path);
+		engine_error(LOG_FILE, "Failed to open file for writing: %s\n", path);
 		return 0;
 	}
 
@@ -78,7 +78,7 @@ i32	resolve_path_fn(char *out_path, uint32_t out_cap,
 	(void)path;
 	(void)user_data;
 	(void)out_cap;
-	engine_log("gltf_loading.c", "The resolve_path_fn was called and i dont know what it does\n");
+	engine_log(LOG_FILE, "The resolve_path_fn was called and i dont know what it does\n");
 	return 0;
 }
 
@@ -89,7 +89,7 @@ i32	get_file_size_fn(uint64_t *out_size, const char *path,
 	(void)user_data;
 	int	fd = open(path, O_RDWR);
 	if (fd == -1) {
-		engine_error("gltf_loading.c", "Failed to open file: %s\n", path);
+		engine_error(LOG_FILE, "Failed to open file: %s\n", path);
 		return 0;
 	}
 
@@ -151,7 +151,7 @@ static void	uploadTexture(GraphicsContext *ctx, VkFormat format, i32 width, i32 
 	VkImage	vk_image;
 	// Create, allocate and bind in one call, vma is awesome
 	if (wrapperVMAcreateImage(ctx->vma_allocator, &image_info, &vk_image, &image_allocation) != VK_SUCCESS) {
-		engine_log("Gltf loading", "Failed to create image: %S", tex->name);
+		engine_log(LOG_FILE, "Failed to create image: %S", tex->name);
 	}
 
 	tex->gpu_image = vk_image;
@@ -188,7 +188,7 @@ static void	uploadTexture(GraphicsContext *ctx, VkFormat format, i32 width, i32 
 	};
 
 	if (vkCreateCommandPool(ctx->device, &pool_info, NULL, &cmd_pool) != VK_SUCCESS) {
-		engine_error("Gltf loading", "Failed to create command pool");
+		engine_error(LOG_FILE, "Failed to create command pool");
 	}
 
 	VkCommandBufferAllocateInfo buffer_alloc_info = {
@@ -199,7 +199,7 @@ static void	uploadTexture(GraphicsContext *ctx, VkFormat format, i32 width, i32 
 	};
 
 	if (vkAllocateCommandBuffers(ctx->device, &buffer_alloc_info, &cmd) != VK_SUCCESS) {
-		engine_error("Gltf loading", "Failed to allocate command buffer");
+		engine_error(LOG_FILE, "Failed to allocate command buffer");
 	}
 
 	VkCommandBufferBeginInfo	cmd_begin_info = {
@@ -325,7 +325,7 @@ static void	uploadTexture(GraphicsContext *ctx, VkFormat format, i32 width, i32 
 		},
 	};
 	if (vkCreateImageView(ctx->device, &image_view_info, NULL, &tex->image_view) != VK_SUCCESS) {
-		engine_error("Gltf loading", "Failed to create image view");
+		engine_error(LOG_FILE, "Failed to create image view");
 	}
 
 	VkSamplerCreateInfo	sampler_info = {
@@ -379,24 +379,26 @@ static void	gltfLoadTextures(GraphicsContext *ctx, GLTFModel *model, tg3_model g
 		Texture	tex = {};
 
 		if (gltf_image.name.len) {
-			tex.name = stringCopy(tg3_to_String(gltf_image.name));
+			// TODO: Give this an allocator
+			tex.name = strDup(tg3_to_String(gltf_image.name), NULL);
 		} else {
 			String tex_string = STRING_LIT("texture_");
 			char	buf[32];
 			stbsp_snprintf(buf, 32, "%S%i", tex_string, i);
-			tex.name = createString(buf);
+			// TODO: Give this an allocator
+			tex.name = cstringToString(buf, NULL);
 		}
 
 		StringView	mime_type = tg3_to_String(gltf_image.mime_type);
 		// mime_type is at '/'
-		stringViewJumpToChar(&mime_type, '/');
+		strViewJumpToChar(&mime_type, '/');
 		// mime_type is after '/'
-		stringViewAdvance(&mime_type, 1);
+		strViewAdvance(&mime_type, 1);
 
-		if (stringIsEqual(mime_type, STRING_LIT("png")) || stringIsEqual(mime_type, STRING_LIT("jpeg"))) {
+		if (strEq(mime_type, STRING_LIT("png")) || strEq(mime_type, STRING_LIT("jpeg"))) {
 			loadFromPNG(ctx, gltf_model, gltf_image, &tex);
 		} else {
-			engine_error("Gltf loading", "Unrecognized mime type, please come implement: %S", mime_type);
+			engine_error(LOG_FILE, "Unrecognized mime type, please come implement: %S", mime_type);
 		}
 
 		model->textures[i] = tex;
@@ -605,13 +607,13 @@ static void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
 				// The index for the attributes
 				i32	pos_idx = -1, normal_idx = -1, uv_idx = -1, tangent_idx = -1;
 				for (u32 a = 0; a < primitive.attributes_count; a++) {
-					if (stringIsEqual(tg3_to_String(primitive.attributes[a].key), STRING_LIT("POSITION"))) {
+					if (strEq(tg3_to_String(primitive.attributes[a].key), STRING_LIT("POSITION"))) {
 						pos_idx = primitive.attributes[a].value;
-					} else if (stringIsEqual(tg3_to_String(primitive.attributes[a].key), STRING_LIT("NORMAL"))) {
+					} else if (strEq(tg3_to_String(primitive.attributes[a].key), STRING_LIT("NORMAL"))) {
 						normal_idx = primitive.attributes[a].value;
-					} else if (stringIsEqual(tg3_to_String(primitive.attributes[a].key), STRING_LIT("TEXCOORD_0"))) {
+					} else if (strEq(tg3_to_String(primitive.attributes[a].key), STRING_LIT("TEXCOORD_0"))) {
 						uv_idx = primitive.attributes[a].value;
-					} else if (stringIsEqual(tg3_to_String(primitive.attributes[a].key), STRING_LIT("TANGENT"))) {
+					} else if (strEq(tg3_to_String(primitive.attributes[a].key), STRING_LIT("TANGENT"))) {
 						tangent_idx = primitive.attributes[a].value;
 						printf("We got free tangents\n");
 					}
@@ -692,7 +694,7 @@ static void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
 							i0 = *((u16 *)mesh.indices + (i * 3));
 							i1 = *((u16 *)mesh.indices + (i * 3) + 1);
 							i2 = *((u16 *)mesh.indices + (i * 3) + 2);
-							engine_error(__FILE__, "Very wrong index type, u16 assumed");
+							engine_error(LOG_FILE, "Very wrong index type, u16 assumed");
 						break;
 					}
 
@@ -756,14 +758,14 @@ static void	gltfLoadAnimations(GLTFModel *model, tg3_model gltf_model)
 
 			AnimationSampler	sampler = {};
 
-			if (stringIsEqual(tg3_to_String(gltf_sampler.interpolation), STRING_LIT("CUBICSPLINE"))) {
+			if (strEq(tg3_to_String(gltf_sampler.interpolation), STRING_LIT("CUBICSPLINE"))) {
 				sampler.interpolation = CUBICSPLINE;
-			} else if (stringIsEqual(tg3_to_String(gltf_sampler.interpolation), STRING_LIT("STEP"))) {
+			} else if (strEq(tg3_to_String(gltf_sampler.interpolation), STRING_LIT("STEP"))) {
 				sampler.interpolation = STEP;
-			} else if (stringIsEqual(tg3_to_String(gltf_sampler.interpolation), STRING_LIT("LINEAR"))) {
+			} else if (strEq(tg3_to_String(gltf_sampler.interpolation), STRING_LIT("LINEAR"))) {
 				sampler.interpolation = LINEAR;
 			} else {
-				engine_error("Gltf loading", "Unrecognized interpolation type");
+				engine_error(LOG_FILE, "Unrecognized interpolation type");
 			}
 
 			sampler.input = gltf_sampler.input;
@@ -778,16 +780,16 @@ static void	gltfLoadAnimations(GLTFModel *model, tg3_model gltf_model)
 
 			AnimationChannel	channel = {};
 
-			if (stringIsEqual(tg3_to_String(gltf_target.path), STRING_LIT("TRANSLATION"))) {
+			if (strEq(tg3_to_String(gltf_target.path), STRING_LIT("TRANSLATION"))) {
 				channel.target.path = TRANSLATION;
-			} else if (stringIsEqual(tg3_to_String(gltf_target.path), STRING_LIT("ROTATION"))) {
+			} else if (strEq(tg3_to_String(gltf_target.path), STRING_LIT("ROTATION"))) {
 				channel.target.path = ROTATION;
-			} else if (stringIsEqual(tg3_to_String(gltf_target.path), STRING_LIT("SCALE"))) {
+			} else if (strEq(tg3_to_String(gltf_target.path), STRING_LIT("SCALE"))) {
 				channel.target.path = SCALE;
-			} else if (stringIsEqual(tg3_to_String(gltf_target.path), STRING_LIT("WEIGHTS"))) {
+			} else if (strEq(tg3_to_String(gltf_target.path), STRING_LIT("WEIGHTS"))) {
 				channel.target.path = WEIGHTS;
 			} else {
-				engine_error("Gltf loading", "Unrecognized channel path type");
+				engine_error(LOG_FILE, "Unrecognized channel path type");
 			}
 
 			channel.sampler = gltf_channel.sampler;
@@ -965,7 +967,7 @@ static void	gltfCreateMeshBuffers(Mesh *mesh, GraphicsContext *ctx)
 	void		*v_alloc;
 	VkBuffer	v_buf;
 	if (wrapperVMAcreateBuffer(ctx->vma_allocator, &v_buffer_info, &v_buf, &v_alloc, 1) != VK_SUCCESS) {
-		engine_error("Gltf loading", "Failed to allocate mesh buffer");
+		engine_error(LOG_FILE, "Failed to allocate mesh buffer");
 	}
 
 	u32	index_size;
@@ -980,7 +982,7 @@ static void	gltfCreateMeshBuffers(Mesh *mesh, GraphicsContext *ctx)
 			index_size = 4;
 			break;
 		default:
-			engine_error("Gltf loading", "Unrecognized index type, please check it out");
+			engine_error(LOG_FILE, "Unrecognized index type, please check it out");
 			index_size = 0;
 			break;
 	}
@@ -994,7 +996,7 @@ static void	gltfCreateMeshBuffers(Mesh *mesh, GraphicsContext *ctx)
 	void		*i_alloc;
 	VkBuffer	i_buf;
 	if (wrapperVMAcreateBuffer(ctx->vma_allocator, &i_buffer_info, &i_buf, &i_alloc, 1) != VK_SUCCESS) {
-		engine_error("Gltf loading", "Failed to allocate mesh buffer");
+		engine_error(LOG_FILE, "Failed to allocate mesh buffer");
 	}
 
 	// Copy data to gpu
@@ -1059,10 +1061,12 @@ void	gltfLoad(String filename, GLTFModel *model, GraphicsContext *ctx)
 	gltfLoadAnimations(model, gltf_model);
 	createDescriptorSetsForMaterials(ctx, model->materials, model->material_count);
 
-	engine_log("Gltf loading", "Successfully loaded texture %S", filename);
+	engine_log(LOG_FILE, "Successfully loaded texture %S", filename);
 }
 
 // TODO: This function
 void	gltf_destroy(GLTFModel model)
 {
 }
+
+

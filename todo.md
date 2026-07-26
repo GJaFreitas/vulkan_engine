@@ -8,3 +8,5 @@ outfits should be customizable with an unlock like a spell for doing it
 re-enactement should work in cutscenes
 
 Do the shader and render part of instance data
+
+Entities dont have to be updated every frame if they are no close to the player.

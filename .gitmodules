@@ -1,0 +1,3 @@
+[submodule "MyLib"]
+	path = MyLib
+	url = git@github.com:GJaFreitas/mylib.git

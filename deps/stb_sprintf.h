@@ -602,6 +602,9 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
          // copy the string in
          goto scopy;
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat"
+
       case 'S':
          S = va_arg(va, String);
          if (S.data == 0)
@@ -616,6 +619,8 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
          cs = 0;
          // copy the string in
          goto scopy;
+
+#pragma clang diagnostic pop
 
       case 'c': // char
          // get the character

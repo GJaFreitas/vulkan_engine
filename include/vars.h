@@ -1,6 +1,7 @@
 #pragma once
 
 #include "base_layer.h"
+#include "stb_sprintf.h"
 #include <sys/stat.h>
 
 // The -1 is because the String type doesnt account for the \0 while sizeof() does

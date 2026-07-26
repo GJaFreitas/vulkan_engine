@@ -35,22 +35,19 @@ enum assignFielddError {
 
 static void	print_field(ConfigField fields[], u32 field_size, String subdir)
 {
-	const u32	printable_buffer_size = 256;
-	char		printable_buffer[printable_buffer_size];
-
 	const char	*true_string = "true";
 	const char	*false_string = "false";
 
 	void	*section;
-	if (stringIsEqual(subdir, audio_string)) {
+	if (strEq(subdir, audio_string)) {
 		section = &g_settings.audio;
 		fprintf(stdout, "AUDIO SETTINGS ----------\n");
 	}
-	else if (stringIsEqual(subdir, dev_string)) {
+	else if (strEq(subdir, dev_string)) {
 		section = &g_settings.dev;
 		fprintf(stdout, "DEV SETTINGS ----------\n");
 	}
-	else if (stringIsEqual(subdir, display_string)) {
+	else if (strEq(subdir, display_string)) {
 		section = &g_settings.display;
 		fprintf(stdout, "DISPLAY SETTINGS ----------\n");
 	}
@@ -62,21 +59,20 @@ static void	print_field(ConfigField fields[], u32 field_size, String subdir)
 		switch (current_field.type) {
 			case CONFIG_BOOL:
 				if(*(bool *)value)
-					stbsp_snprintf(printable_buffer, printable_buffer_size, "%S.%S = %s", subdir, current_field.name, true_string);
+					print("%S.%S = %s\n", subdir, current_field.name, true_string);
 				else
-					stbsp_snprintf(printable_buffer, printable_buffer_size, "%S.%S = %s", subdir, current_field.name, false_string);
+					print("%S.%S = %s\n", subdir, current_field.name, false_string);
 			break;
 			case CONFIG_STR:
-				stbsp_snprintf(printable_buffer, printable_buffer_size, "%S.%S = %S", subdir, current_field.name, *(String *)value);
+				print("%S.%S = %S\n", subdir, current_field.name, *(String *)value);
 			break;
 			case CONFIG_INT:
-				stbsp_snprintf(printable_buffer, printable_buffer_size, "%S.%S = %i", subdir, current_field.name, *(int *)value);
+				print("%S.%S = %i\n", subdir, current_field.name, *(int *)value);
 			break;
 			case CONFIG_FLOAT:
-				stbsp_snprintf(printable_buffer, printable_buffer_size, "%S.%S = %.4f", subdir, current_field.name, *(float *)value);
+				print("%S.%S = %.4f\n", subdir, current_field.name, *(float *)value);
 			break;
 		}
-		printf("%s\n", printable_buffer);
 	}
 	fprintf(stdout, "\n");
 }
@@ -98,7 +94,7 @@ static enum assignFielddError 	modify_field(ConfigField field, String field_valu
 
 	switch (field.type) {
 		case CONFIG_BOOL: 
-			if (stringIsEqual(field_value, (String){(u8 *)"true", sizeofString("true")})) {
+			if (strEq(field_value, (String){(u8 *)"true", sizeofString("true")})) {
 				*(bool *)((u8 *)section + field.offset) = true;
 			} else {
 				*(bool *)((u8 *)section + field.offset) = false;
@@ -122,7 +118,7 @@ static enum assignFielddError 	modify_field(ConfigField field, String field_valu
 			if (field_value.data[0] != '\"') {
 				return STRING_QUOTE_START;
 			}
-			if (!stringViewPtrToChar(field_value, '\"')) {
+			if (!strViewPtrToChar(field_value, '\"')) {
 				return STRING_QUOTE_END;
 			}
 			// Skip the quote
@@ -131,9 +127,9 @@ static enum assignFielddError 	modify_field(ConfigField field, String field_valu
 			field_value.count -= 2;
 			// NOTE: I am leaking this memory wilingly because it only happens in development
 			// while i am hotloading variables. 25/06/26
-			*(String *)((u8 *)section + field.offset) = stringDup(field_value, NULL);
+			*(String *)((u8 *)section + field.offset) = strDup(field_value, NULL);
 		break ;
-		default: engine_log("variables", "How did we get here?");
+		default: engine_log(LOG_FILE, "How did we get here?");
 	}
 	return (SUCCESS);
 }
@@ -144,24 +140,24 @@ static enum assignFielddError	assignField(String subdir, String field_name, Stri
 	bool subdir_exists = false;
 
 	// MODIFY IF SETTINGS CHANGED: SUBDIRS
-	if (stringIsEqual(subdir, audio_string)) {
+	if (strEq(subdir, audio_string)) {
 		subdir_exists = true;
 		for (u16 i = 0; i < sizeofarray(audio_fields); i++) {
-			if (stringIsEqual(field_name, audio_fields[i].name)) {
+			if (strEq(field_name, audio_fields[i].name)) {
 				return modify_field(audio_fields[i], field_value, &g_settings.audio);
 			}
 		}
-	} else if (stringIsEqual(subdir, dev_string)) {
+	} else if (strEq(subdir, dev_string)) {
 		subdir_exists = true;
 		for (u16 i = 0; i < sizeofarray(dev_fields); i++) {
-			if (stringIsEqual(field_name, dev_fields[i].name)) {
+			if (strEq(field_name, dev_fields[i].name)) {
 				return modify_field(dev_fields[i], field_value, &g_settings.dev);
 			}
 		}
-	} else if (stringIsEqual(subdir, display_string)) {
+	} else if (strEq(subdir, display_string)) {
 		subdir_exists = true;
 		for (u16 i = 0; i < sizeofarray(display_fields); i++) {
-			if (stringIsEqual(field_name, display_fields[i].name)) {
+			if (strEq(field_name, display_fields[i].name)) {
 				return modify_field(display_fields[i], field_value, &g_settings.display);
 			}
 		}
@@ -185,7 +181,7 @@ void	check_var_modify()
 	if (last_mod != stats.st_mtim.tv_sec) {
 		last_mod = stats.st_mtim.tv_sec;
 		usleep(1000);
-		engine_log("variables", "Variables changed, hotloading");
+		engine_log(LOG_FILE, "Variables changed, hotloading");
 		print_variables();
 		init_vars();
 	}
@@ -194,7 +190,7 @@ void	check_var_modify()
 void	vars_callback(void *udata)
 {
 	usleep(1000);
-	engine_log(__FILE__, "Variables changed, hotloading");
+	engine_log(LOG_FILE, "Variables changed, hotloading");
 	init_vars();
 	print_variables();
 
@@ -207,7 +203,7 @@ void	init_vars()
 	String	file_data = readFile(STRING_LIT("data/All.variables"));
 	if (file_data.data == NULL) {
 		fprintf(stderr, "mmap error: %s\n", strerror(errno));
-		engine_error("variables", "Failed to read file data/All.variables\n");
+		engine_error(LOG_FILE, "Failed to read file data/All.variables\n");
 		return ;
 	}
 
@@ -226,15 +222,15 @@ void	init_vars()
 		// Remove the \n
 		line.count--;
 		// Advance spaces
-		stringViewSkipChar(&line, ' ');
+		strViewSkipChar(&line, ' ');
 
 		if (line.data[0] == ':') {
 
 			if (line.count < 2) {
-				engine_log("variables", "variables file parsing error at line %u! Lines starting with ':' must have a '/' and a name afterwards.", line_nr);
+				engine_log(LOG_FILE, "variables file parsing error at line %u! Lines starting with ':' must have a '/' and a name afterwards.", line_nr);
 			} else {
 				if (line.data[1] != '/') {
-					engine_log("variables", "variables file parsing error at line %u! Expected a '/' after ':'.", line_nr);
+					engine_log(LOG_FILE, "variables file parsing error at line %u! Expected a '/' after ':'.", line_nr);
 				} else {
 					subdir = line;
 					subdir.data += 2;
@@ -251,13 +247,13 @@ void	init_vars()
 			StringView	rhs = line;
 
 			// rhs is at the space
-			stringViewJumpToChar(&rhs, ' ');
+			strViewJumpToChar(&rhs, ' ');
 			if (rhs.data[0] != ' ') {
-				engine_log(__FILE_NAME__, "variables file parsing error at line %u! Expected a space after var name.", line_nr);
+				engine_log(LOG_FILE, "variables file parsing error at line %u! Expected a space after var name.", line_nr);
 			} else {
 				// rhs is after the space
 				// rhs is now the value
-				stringViewSkipChar(&rhs, ' ');
+				strViewSkipChar(&rhs, ' ');
 
 				// name is just the var name
 				StringView name = line;
@@ -267,24 +263,24 @@ void	init_vars()
 				enum assignFielddError error = assignField(subdir, name, rhs);
 				switch (error) {
 					case NO_FIELD_NAME:
-						engine_log("variables", "Setting name doesnt match any known settings! line number: %u", line_nr);
+						engine_log(LOG_FILE, "Setting name doesnt match any known settings! line number: %u", line_nr);
 					break;
 					case NO_SUBDIR:
-						engine_log("variables", "Subdir name doesnt match any known subdirs! line number: %u", line_nr);
+						engine_log(LOG_FILE, "Subdir name doesnt match any known subdirs! line number: %u", line_nr);
 					break;
 					case STRING_QUOTE_END:
-						engine_log("variables", "String must end with quote! line number: %u", line_nr);
+						engine_log(LOG_FILE, "String must end with quote! line number: %u", line_nr);
 					break;
 					case STRING_QUOTE_START:
-						engine_log("variables", "String must start with quote! line number: %u", line_nr);
+						engine_log(LOG_FILE, "String must start with quote! line number: %u", line_nr);
 					break;
 					case SUCCESS:
 						// MODIFY IF SETTINGS CHANGED: SUBDIRS
-						if (stringIsEqual(subdir, audio_string))
+						if (strEq(subdir, audio_string))
 							audio_fields_assigned++;
-						else if (stringIsEqual(subdir, dev_string))
+						else if (strEq(subdir, dev_string))
 							dev_fields_assigned++;
-						else if (stringIsEqual(subdir, display_string))
+						else if (strEq(subdir, display_string))
 							display_fields_assigned++;
 					break;
 
@@ -296,11 +292,11 @@ void	init_vars()
 	}
 
 	if (audio_fields_assigned != sizeofarray(audio_fields))
-		engine_log("variables", "Audio field registered but not in variables file!");
+		engine_log(LOG_FILE, "Audio field registered but not in variables file!");
 	if (dev_fields_assigned != sizeofarray(dev_fields))
-		engine_log("variables", "dev field registered but not in variables file!");
+		engine_log(LOG_FILE, "dev field registered but not in variables file!");
 	if (display_fields_assigned != sizeofarray(display_fields))
-		engine_log("variables", "display field registered but not in variables file!");
+		engine_log(LOG_FILE, "display field registered but not in variables file!");
 
 	munmap(file_data.data, file_data.count);
 }

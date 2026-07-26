@@ -1,6 +1,4 @@
 #include "base_layer.h"
-#define STB_SPRINTF_IMPLEMENTATION
-#include "stb_sprintf.h"
 #include <stdio.h>
 
 u64	queryTimer(void)
@@ -56,7 +54,7 @@ void	*arenaAllocationFunction(Allocator *allocator, u64 size, u64 alignment)
 	const u64	new_offset = aligned_offset + size;
 
 	if (new_offset >= a_size) {
-		engine_error("base_layer.c", "Arena size too small for allocation, size: %ld alignment: %ld arena size: %ld\n", size, alignment, a_size);
+		engine_error(LOG_FILE, "Arena size too small for allocation, size: %ld alignment: %ld arena size: %ld\n", size, alignment, a_size);
 		return NULL;
 	}
 
@@ -147,20 +145,6 @@ String	readFile(String filename)
 	return file;
 }
 
-void	printString(const char *fmt, StringView str)
-{
-	u32	i = 0;
-	while (fmt[i] != '%') { i++; }
-	write(STDIN_FILENO, fmt, i);
-	write(STDIN_FILENO, str.data, str.count);
-
-	// Pass the '%'
-	i++;
-	u32	j = i;
-	while (fmt[i] != 0) { i++; }
-	write(STDIN_FILENO, fmt + j, i - j);
-}
-
 // No allocations
 StringView	getNextLine(String str, u64 *offset)
 {
@@ -182,128 +166,4 @@ StringView	getNextLine(String str, u64 *offset)
 	*offset = i + (i < str.count);
 
 	return line;
-}
-
-void	stringViewSkipChar(StringView *s, const char c)
-{
-	u64	i;
-
-	i = 0;
-	while (i < s->count)
-	{
-		if (s->data[i] != c)
-			break ;
-		i++;
-	}
-
-	s->count -= i;
-	s->data += i;
-}
-
-u8	*stringViewPtrToChar(StringView s, const char c)
-{
-	u64	i;
-
-	i = 0;
-	while (i < s.count)
-	{
-		if (s.data[i] == c)
-			return &s.data[i];
-		i++;
-	}
-	return NULL;
-}
-
-void	stringViewJumpToChar(StringView *s, const char c)
-{
-	u64	i;
-
-	i = 0;
-	while (i < s->count)
-	{
-		if (s->data[i] == c)
-			break ;
-		i++;
-	}
-
-	s->count -= i;
-	s->data += i;
-}
-
-void	stringViewAdvance(StringView *s, u64 count)
-{
-	s->data += count;
-	s->count -= count;
-}
-
-bool	stringIsEqual(String s1, String s2)
-{
-	if (s1.count != s2.count)
-		return false;
-
-	for (u64 i = 0; i < s1.count; i++) {
-		if (s1.data[i] != s2.data[i])
-			return false;
-	}
-	return true;
-}
-
-char	*cstrdup(const char *str, u64 *size, Allocator *allocator)
-{
-	char	*new_str;
-
-	u64	str_size = strlen(str);
-	new_str = allocator->fp_allocation(allocator, str_size, 8);
-	memcpy(new_str, str, str_size);
-	*size = str_size;
-	return (new_str);
-}
-
-String	stringDup(StringView str, Allocator *allocator)
-{
-	String	new_str;
-
-	new_str.count = str.count;
-	if (allocator)
-		new_str.data = allocator->fp_allocation(allocator, new_str.count, DEFAULT_ALIGN);
-	else
-		new_str.data = standard_alloc(new_str.count, DEFAULT_ALIGN);
-	memcpy(new_str.data, str.data, str.count);
-	return (new_str);
-}
-
-String	createString(const char *cstr)
-{
-	String	s;
-
-	u64	len = strlen(cstr);
-	s.count = len;
-	// TODO: Change allocators
-	s.data = malloc(len);
-	memcpy(s.data, cstr, len);
-	return s;
-}
-
-String	stringCopy(const String str)
-{
-	String	s;
-
-	s.count = str.count;
-	// TODO: Change allocators
-	s.data = malloc(s.count);
-	memcpy(s.data, str.data, s.count);
-	return s;
-}
-
-char	*stringToCstr(String s, Allocator *allocator)
-{
-	char	*cstring;
-
-	if (allocator)
-		cstring = allocator->fp_allocation(allocator, s.count + 1, 16);
-	else
-		cstring = standard_alloc(s.count + 1, DEFAULT_ALIGN);
-	memcpy(cstring, s.data, s.count);
-	cstring[s.count] = 0;
-	return cstring;
 }

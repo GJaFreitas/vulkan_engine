@@ -27,7 +27,7 @@ static i64	getLastUpdate(String filename)
 	i32	fd = open(filename_cstring, O_RDONLY);
 
 	if (fd == -1) {
-		engine_warn(__FILE__, "Unable to open file: %S", filename);
+		engine_warn(LOG_FILE, "Unable to open file: %S", filename);
 		return (-1);
 	}
 
@@ -55,7 +55,7 @@ void	do_callbacks(void)
 
 void	register_callback(String filename, FP_HotloadCallback function, void *user_data)
 {
-	current_entry->filename = stringDup(filename, &callback_allocator);
+	current_entry->filename = strDup(filename, &callback_allocator);
 	current_entry->last_change = getLastUpdate(filename);
 	current_entry->needs_change = 0;
 	current_entry->function = function;

@@ -18,6 +18,10 @@ SRCS := $(shell find $(SRC_DIR) -type f -name '*.c')
 SRCS += $(shell find $(DEP_DIR) -type f -name '*.c')
 OBJS := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/c/%.o,$(SRCS))
 
+MYLIB_DIR := MyLib
+MYLIB_INC := $(MYLIB_DIR)/include
+MYLIB_LIB := $(MYLIB_DIR)/mylib.a
+
 SHADER_SRCS := $(shell find $(SHADER_DIR) -maxdepth 1 -type f -name '*.slang')
 SHADERS := $(patsubst $(SHADER_DIR)/%.slang,$(COMPILED_SHADER_DIR)/%.spv,$(SHADER_SRCS))
 SHADER_INC := -I$(SHADER_DIR)/include
@@ -26,12 +30,16 @@ SLANGC := slangc
 
 CXXFLAGS := -g
 CFLAGS := -Wall -Wextra -g
-CPPFLAGS := -I$(INC_DIR) -I$(DEP_DIR)
+CPPFLAGS := -I$(INC_DIR) -I$(DEP_DIR) -I$(MYLIB_INC)
 
-LDFLAGS :=
+LDFLAGS := -L$(MYLIB_DIR) -l:mylib.a
 LDLIBS := -lvolk -lvulkan -lSDL3 -lstdc++ -lshaderc_shared -lm
 
-all: $(OBJ_DIR) $(COMPILED_SHADER_DIR) $(TARGET) $(SHADERS)
+all: $(OBJ_DIR) $(COMPILED_SHADER_DIR) $(SHADERS) $(MYLIB_LIB) $(TARGET)
+
+$(MYLIB_LIB): FORCE
+	@$(MAKE) -C $(MYLIB_DIR) --no-print-directory
+FORCE:
 
 $(COMPILED_SHADER_DIR):
 	@mkdir -p shaders/compiled
@@ -39,8 +47,8 @@ $(COMPILED_SHADER_DIR):
 $(COMPILED_SHADER_DIR)/%.spv: $(SHADER_DIR)/%.slang
 	$(SLANGC) $< $(SHADER_INC) -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o $@
 
-$(TARGET): $(OBJS) $(CPP_OBJS)
-	@$(CC) $^ -o $@ $(LDFLAGS) $(LDLIBS)
+$(TARGET): $(OBJS) $(CPP_OBJS) $(MYLIB)
+	$(CC) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
 $(OBJ_DIR):
 	@mkdir -p $(OBJ_DIR)
@@ -53,6 +61,11 @@ $(OBJ_DIR)/c/%.o: $(SRC_DIR)/%.c
 $(OBJ_DIR)/cpp/%.o: $(CPP_DIR)/%.cpp
 	@$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
+re:
+	rm -rf $(OBJ_DIR)/c $(TARGET)
+	@mkdir -p $(OBJ_DIR)/c
+	make
+
 run: all
 	@./$(TARGET)
 
@@ -61,5 +74,6 @@ clean:
 
 compdb:
 	bear -- make clean all
+	cd MyLib && bear -- make clean all
 
-.PHONY: compdb all clean run
+.PHONY: compdb all clean run re

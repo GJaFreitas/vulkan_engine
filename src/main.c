@@ -75,7 +75,7 @@ int	loop(World world)
 		render(world.graphics_ctx, &world.player->camera);
 		updateCamera(&world.player->camera, world.graphics_ctx->window, world.dt_ms);
 	}
-	engine_debug(__FILE__, "Killing proccess");
+	engine_debug(LOG_FILE, "Killing proccess");
 	exit(0);
 	endGraphics(world.graphics_ctx);
 	return (0);

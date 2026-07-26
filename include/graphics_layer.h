@@ -16,7 +16,6 @@
 #define MAX_FRAMES_IN_FLIGHT	2
 
 #include "typedefs.h"
-#include "logs.h"
 #include "base_layer.h"
 
 #define TINYGLTF3_ENABLE_FS
@@ -171,10 +170,15 @@ typedef struct GLTFModel
 	UniformBufferObject	ubo;
 }	GLTFModel;
 
-typedef struct TextureCache
-{
-
-}	TextureCache;
+// typedef struct ModelCacheEntry
+// {
+//
+// }	ModelCacheEntry;
+//
+// typedef struct ModelCache
+// {
+// 	Allocator	*model_pool;
+// }	ModelCache;
 
 typedef struct MaterialProperties
 {
