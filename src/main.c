@@ -65,6 +65,9 @@ int	loop(World world)
 			} else if (event.key.key == SDLK_ESCAPE) {
 				running = false;
 				break ;
+			} else if (event.key.key == SDLK_M) {
+				world.graphics_ctx->model = *modelCacheAcquire(world.graphics_ctx, STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"));
+				break ;
 			}
 			else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
 				world.graphics_ctx->window_width = event.window.data1;
@@ -74,6 +77,7 @@ int	loop(World world)
 		}
 		render(world.graphics_ctx, &world.player->camera);
 		updateCamera(&world.player->camera, world.graphics_ctx->window, world.dt_ms);
+		modelCacheSweep();
 	}
 	engine_debug(LOG_FILE, "Killing proccess");
 	exit(0);
@@ -98,6 +102,7 @@ int	main(void)
 	set_log_severity(LOG_WARN);
 	init_vars();
 	start_hotload_callbacks();
+	initModelCache();
 
 	World	world = {};
 	GraphicsContext	gctx = {};

@@ -160,7 +160,10 @@ typedef struct Animation
 // TODO: See if i can cut down this struct a bit
 typedef struct GLTFModel
 {
-	tg3_error_stack	errors;
+	// Model owns its own memory
+	Allocator	arena;
+	String		path;
+
 	Texture		*textures;	u32	texture_count;
 	Material	*materials;	u32	material_count;
 	Node		*linear_nodes;	u32	node_count;
@@ -168,17 +171,23 @@ typedef struct GLTFModel
 	Animation	*animations;	u32	animation_count;
 
 	UniformBufferObject	ubo;
-}	GLTFModel;
+}	Model;
 
-// typedef struct ModelCacheEntry
-// {
-//
-// }	ModelCacheEntry;
-//
-// typedef struct ModelCache
-// {
-// 	Allocator	*model_pool;
-// }	ModelCache;
+typedef struct ModelCacheEntry
+{
+	Model	*model;
+	String		path;
+
+	// Unloading logic
+	u32		ref_count;
+	bool		pending_unload;
+	u32		frames_since_unload;
+}	ModelCacheEntry;
+
+typedef struct ModelCache
+{
+	Allocator	pool;
+}	ModelCache;
 
 typedef struct MaterialProperties
 {
@@ -307,7 +316,7 @@ typedef struct GraphicsContext
 	u64			next_signal_value;
 
 
-	GLTFModel		model;
+	Model		model;
 
 }	GraphicsContext;
 
@@ -350,7 +359,12 @@ void	endGraphics(GraphicsContext *ctx);
 void	render(GraphicsContext *ctx, Camera *world);
 
 
-void	gltfLoad(String filename, GLTFModel *model, GraphicsContext *ctx);
-void	gltf_destroy(GLTFModel model);
+void	modelLoad(String filename, GraphicsContext *ctx, Model *model);
+void	gltf_destroy(Model model);
 void	createDefaultTextures(GraphicsContext *ctx);
 void	createMaterialDescriptorSetLayout(GraphicsContext *ctx);
+
+void	initModelCache(void);
+Model	*modelCacheAcquire(GraphicsContext *ctx, String path);
+void	modelCacheRelease(Model *model);
+void	modelCacheSweep();

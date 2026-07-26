@@ -1058,7 +1058,6 @@ static void	initVulkan(GraphicsContext *ctx)
 	createDescriptorPoolSets(ctx);
 	createDefaultTextures(ctx);
 	createMaterialDescriptorSetLayout(ctx);
-	gltfLoad(STRING_LIT("data/models/DiffuseTransmissionTeacup.glb"), &ctx->model, ctx);
 	createPBRPipeline(ctx);
 	createGRIDPipeline(ctx);
 	ctx->frame_index = 0;

@@ -365,7 +365,7 @@ static void	loadFromPNG(GraphicsContext *ctx, tg3_model model, tg3_image image, 
 	stbi_image_free(pixels);
 }
 
-static void	gltfLoadTextures(GraphicsContext *ctx, GLTFModel *model, tg3_model gltf_model)
+static void	gltfLoadTextures(GraphicsContext *ctx, Model *model, tg3_model gltf_model)
 {
 
 	// TODO: This is bad memory allocation
@@ -406,7 +406,7 @@ static void	gltfLoadTextures(GraphicsContext *ctx, GLTFModel *model, tg3_model g
 
 }
 
-static void	gltfLoadMaterials(GLTFModel *model, tg3_model gltf_model)
+static void	gltfLoadMaterials(Model *model, tg3_model gltf_model)
 {
 	model->materials = malloc(gltf_model.materials_count * sizeof(Material));
 	model->material_count = gltf_model.materials_count;
@@ -509,7 +509,7 @@ static void computeWorldTransforms(Node *nodes, u32 node_count)
 
 /*	Temp code	*/
 
-static void	gltfBuildSceneGraph(GLTFModel *model, tg3_model gltf_model)
+static void	gltfBuildSceneGraph(Model *model, tg3_model gltf_model)
 {
 	// TODO: Bad allocation
 	model->linear_nodes = malloc(sizeof(Node) * gltf_model.nodes_count);
@@ -589,7 +589,7 @@ static inline void	calculate_tangent_triangle(Vertex v0, Vertex v1, Vertex v2, v
 	*bitangent[2] = inv_det * (-delta_uv2[0] * edge1[2] + delta_uv1[0] * edge2[2]);
 }
 
-static void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
+static void	gltfSetMeshData(Model *model, tg3_model gltf_model)
 {
 	for (u32 n = 0; n < gltf_model.nodes_count; n++) {
 		const tg3_node	gltf_node = gltf_model.nodes[n];
@@ -737,7 +737,7 @@ static void	gltfSetMeshData(GLTFModel *model, tg3_model gltf_model)
 	}
 }
 
-static void	gltfLoadAnimations(GLTFModel *model, tg3_model gltf_model)
+static void	gltfLoadAnimations(Model *model, tg3_model gltf_model)
 {
 	// TODO: Bad allocation
 	model->animation_count = gltf_model.animations_count;
@@ -1031,21 +1031,22 @@ void	createDefaultTextures(GraphicsContext *ctx)
 	uploadTexture(ctx, format, 1, 1, black, &ctx->default_emissive_texture);
 }
 
-void	gltfLoad(String filename, GLTFModel *model, GraphicsContext *ctx)
+void	modelLoad(String filename, GraphicsContext *ctx, Model *model)
 {
 	tg3_parse_options	opts;
+	tg3_error_stack		error_stack;
 	tg3_model		gltf_model;
 
 	tg3_parse_options_init(&opts);
-	tg3_error_stack_init(&model->errors);
+	tg3_error_stack_init(&error_stack);
 
 	opts.fs = callbacks;
 
-	tg3_error_code err = tg3_parse_file(&gltf_model, &model->errors, (char *)filename.data, filename.count, &opts);
+	tg3_error_code err = tg3_parse_file(&gltf_model, &error_stack, (char *)filename.data, filename.count, &opts);
 	if (err != TG3_OK) {
-		for (uint32_t i = 0; i < model->errors.count; i++) {
-			fprintf(stderr, "[%d] %s\n", (int)model->errors.entries[i].severity,
-	   model->errors.entries[i].message ? model->errors.entries[i].message : "(null)");
+		for (uint32_t i = 0; i < error_stack.count; i++) {
+			fprintf(stderr, "[%d] %s\n", (int)error_stack.entries[i].severity,
+	   error_stack.entries[i].message ? error_stack.entries[i].message : "(null)");
 		}
 	}
 
@@ -1064,9 +1065,100 @@ void	gltfLoad(String filename, GLTFModel *model, GraphicsContext *ctx)
 	engine_log(LOG_FILE, "Successfully loaded texture %S", filename);
 }
 
-// TODO: This function
-void	gltf_destroy(GLTFModel model)
+static ModelCache	model_cache;
+// NOTE: Parent to all model allocations
+static Allocator	model_allocator;
+
+ModelCacheEntry	*modelCacheFind(String path)
 {
+	ModelCacheEntry	*entries = (ModelCacheEntry *)model_cache.pool.pool.slots;
+
+	for (u32 i = 0; i < model_cache.pool.pool.capacity; i++) {
+		if (strEq(entries[i].path, path)) {
+			return (&entries[i]);
+		}
+	}
+
+	return NULL;
 }
 
+void	modelCacheInsert(String path, Model *model)
+{
+	ModelCacheEntry	*entry = model_cache.pool.fp_allocation(&model_cache.pool, sizeof(ModelCacheEntry), DEFAULT_ALIGN);
+	entry->path = strDup(path, &model->arena);
+	entry->ref_count = 1;
+	entry->model = model;
+}
 
+Model	*modelCacheAcquire(GraphicsContext *ctx, String path)
+{
+	ModelCacheEntry	*entry = modelCacheFind(path);
+
+	if (entry) {
+		entry->ref_count++;
+		return (entry->model);
+	}
+
+	Allocator	model_arena = newArenaAllocator(MB(500), &model_allocator, DEFAULT_ALIGN);
+	Model	*model = model_arena.fp_allocation(&model_arena, sizeof(Model), DEFAULT_ALIGN);
+	model->arena = model_arena;
+	modelLoad(path, ctx, model);
+	modelCacheInsert(path, model);
+	// Resize the allocation to fit exactly how much it needs
+	model_allocator.fp_reallocation(&model_allocator, model_arena.arena.mem, MB(500), model_arena.arena.offset, DEFAULT_ALIGN);
+	return model;
+}
+
+void	modelCacheRelease(Model *model)
+{
+	ModelCacheEntry	*entry = modelCacheFind(model->path);
+
+	if (!entry) {
+		engine_warn(LOG_FILE, "Invalid model passed to modelCacheRelease(), path: %S", model->path);
+		return ;
+	}
+
+	entry->ref_count--;
+}
+
+void	modelUnload(ModelCacheEntry *entry)
+{
+	// Free all memory used by model
+	model_allocator.fp_free(&model_allocator, &entry->model->arena);
+	// Make space for next entry
+	model_cache.pool.fp_free(&model_cache.pool, entry);
+}
+
+void	modelCacheSweep()
+{
+	// If at target 60 fps this means around 2 seconds
+	const u32	grace_frames = 120;
+	ModelCacheEntry	*entries = (ModelCacheEntry *)model_cache.pool.pool.slots;
+	for (u32 i = 0; i < model_cache.pool.pool.capacity; i++) {
+		ModelCacheEntry *entry = &entries[i];
+
+		if (!entry->model) continue;
+
+		if (entry->ref_count == 0) {
+			if (entry->pending_unload == false) {
+				entry->pending_unload = true;
+				entry->frames_since_unload = 0;
+			} else {
+				entry->frames_since_unload++;
+				if (entry->frames_since_unload >= grace_frames) {
+					modelUnload(entry);
+				}
+			}
+		} else {
+			// Was reacquired
+			entry->pending_unload = false;
+			entry->frames_since_unload = 0;
+		}
+	}
+}
+
+void	initModelCache(void)
+{
+	model_cache.pool = newPoolAllocator(512, sizeof(ModelCacheEntry), NULL, DEFAULT_ALIGN);
+	model_allocator = newHeapAllocator(GB(2), NULL, DEFAULT_ALIGN);
+}

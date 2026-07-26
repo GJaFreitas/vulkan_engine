@@ -47,7 +47,7 @@ $(COMPILED_SHADER_DIR):
 $(COMPILED_SHADER_DIR)/%.spv: $(SHADER_DIR)/%.slang
 	$(SLANGC) $< $(SHADER_INC) -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o $@
 
-$(TARGET): $(OBJS) $(CPP_OBJS) $(MYLIB)
+$(TARGET): $(OBJS) $(CPP_OBJS) $(MYLIB_LIB)
 	$(CC) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
 $(OBJ_DIR):
