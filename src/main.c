@@ -42,6 +42,23 @@ static void updateCamera(Camera *camera, SDL_Window *window, double dt)
 	glm_vec3_add(camera->position, move, camera->position);
 }
 
+const String	models[] = {
+	STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"),
+	STRING_LIT("data/models/DiffuseTransmissionTeacup.glb"),
+};
+
+void	createRandomEntity(World world)
+{
+	float	pos[3];
+	pos[0] = rand() % 4;
+	pos[1] = rand() % 4;
+	pos[2] = rand() % 4;
+	u32	model = rand() % sizeofarray(models);
+	float	dir[3] = { 1, 0, 0};
+	Entity	*e = loadEntity(world.graphics_ctx, models[model], pos, dir, &world.entity_allocator);
+	vectorAppend(world.entities, &e);
+	engine_debug(LOG_FILE, "Created new entity\n\tPos: %.2f,%.2f,%.2f\n\tModel handle: %p\n\tActive: %u", pos[0], pos[1], pos[2], e->model, e->active);
+}
 
 int	loop(World world)
 {
@@ -66,7 +83,7 @@ int	loop(World world)
 				running = false;
 				break ;
 			} else if (event.key.key == SDLK_M) {
-				world.graphics_ctx->model = *modelCacheAcquire(world.graphics_ctx, STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"));
+				createRandomEntity(world);
 				break ;
 			}
 			else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
@@ -75,9 +92,11 @@ int	loop(World world)
 				break ;
 			}
 		}
-		render(world.graphics_ctx, &world.player->camera);
+		EntityRenderInfo	entity_info = buildRenderInfo(world.entities, &world.frame_allocator);
+		render(world.graphics_ctx, &world.player->camera, entity_info);
 		updateCamera(&world.player->camera, world.graphics_ctx->window, world.dt_ms);
 		modelCacheSweep();
+		world.frame_allocator.fp_reset(&world.frame_allocator);
 	}
 	engine_debug(LOG_FILE, "Killing proccess");
 	exit(0);
@@ -111,6 +130,9 @@ int	main(void)
 	world.player = &p;
 	world.graphics_ctx = &gctx;
 	world.key_states = SDL_GetKeyboardState(NULL);
+	world.frame_allocator = newArenaAllocator(MB(1), NULL, DEFAULT_ALIGN);
+	world.entity_allocator = newHeapAllocator(MB(2), NULL, DEFAULT_ALIGN);
+	world.entities = vectorCreate(16, sizeof(Entity *), &world.entity_allocator);
 	updateGridProperties(&world);
 
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);

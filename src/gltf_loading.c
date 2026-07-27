@@ -1092,6 +1092,7 @@ void	modelCacheInsert(String path, Model *model)
 
 Model	*modelCacheAcquire(GraphicsContext *ctx, String path)
 {
+	// TODO: Fix this since its always returning something
 	ModelCacheEntry	*entry = modelCacheFind(path);
 
 	if (entry) {
@@ -1105,7 +1106,9 @@ Model	*modelCacheAcquire(GraphicsContext *ctx, String path)
 	modelLoad(path, ctx, model);
 	modelCacheInsert(path, model);
 	// Resize the allocation to fit exactly how much it needs
-	model_allocator.fp_reallocation(&model_allocator, model_arena.arena.mem, MB(500), model_arena.arena.offset, DEFAULT_ALIGN);
+	model_arena.arena.mem = model_allocator.fp_reallocation(&model_allocator, model_arena.arena.mem, MB(500), model_arena.arena.offset, DEFAULT_ALIGN);
+	const u64	allocation_size = heapGetRealAllocationSize(&model_allocator, model_arena.arena.mem);
+	model_arena.arena.size = allocation_size;
 	return model;
 }
 

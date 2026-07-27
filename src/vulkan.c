@@ -1122,7 +1122,84 @@ static void	updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 	memcpy(resource->uniform_buffer_mapped, &ubo, sizeof(UniformBufferObject));
 }
 
-void	render(GraphicsContext *ctx, Camera *camera)
+void	GRIDPass(GraphicsContext *ctx, FrameResources *resource, u32 frame_idx)
+{
+	const VkDescriptorSet	ubo_descriptor_set = ctx->ubo_descriptor_sets[frame_idx];
+
+	vkCmdBindPipeline(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.handle);
+	VkDescriptorSet	grid_descriptor_sets[] = { ubo_descriptor_set };
+
+	vkCmdPushConstants(resource->command_buffer, ctx->pipeline_grid.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GridProperties), &ctx->grid_properties);
+	vkCmdBindDescriptorSets(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.layout, 0, 1, grid_descriptor_sets, 0, NULL);
+	vkCmdDraw(resource->command_buffer, 3, 1, 0, 0);
+}
+
+void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources *resource, u8 frame_idx)
+{
+	const VkDescriptorSet	ubo_descriptor_set = ctx->ubo_descriptor_sets[frame_idx];
+	const VkDescriptorSet	instance_descriptor_set = ctx->instance_descriptor_sets[frame_idx];
+	InstanceData	*instance_data = (InstanceData *)resource->instance_buffer_mapped;
+
+	VkDeviceSize	offset = 0;
+
+	vkCmdBindPipeline(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.handle);
+
+	for (u32 e_idx = 0; e_idx < entity_info.count; e_idx++) {
+		if (!entity_info.enabled_arr[e_idx]) continue;
+
+		EntityRenderData	ent_info = entity_info.render_data_arr[e_idx];
+		Model			*model = ent_info.model;
+
+		for (u32 n = 0; n < model->node_count; n++) {
+			Node		*node = &model->linear_nodes[n];
+			const Mesh	*mesh = &node->mesh;
+
+			if (mesh->vertex_count == 0) continue;
+
+
+			// glm_mat4_mul(ent_info.instance_data.model_mat, node->world_transform, instance_data->model_mat);
+			glm_mat4_copy(node->world_transform, instance_data->model_mat);
+
+			VkDescriptorSet		pbr_descriptor_sets[] = { ubo_descriptor_set, instance_descriptor_set, VK_NULL_HANDLE };
+
+			MaterialProperties	push_constants_mat = {
+				.basecolor_texture_set = -1,
+				.physical_descriptor_texture_set = -1,
+				.normal_texture_set = -1,
+				.occlusion_texture_set = -1,
+				.emissive_texture_set = -1,
+			};
+			u32		pbr_descriptor_set_count = 2;
+			Material	*mat;
+			if (mesh->material_index >= 0) {
+				mat = &entity_info.render_data_arr[e_idx].model->materials[mesh->material_index];
+
+				pbr_descriptor_set_count += 1;
+				pbr_descriptor_sets[2] = mat->descriptor_set;
+
+				push_constants_mat.roughness_factor = mat->roughness_factor;
+				push_constants_mat.metallic_factor = mat->metallic_factor;
+				push_constants_mat.alpha_mask_cut_off = mat->alpha_cutoff;
+				push_constants_mat.basecolor_texture_set = 0;
+				push_constants_mat.physical_descriptor_texture_set = 1;
+				push_constants_mat.normal_texture_set = 2;
+				push_constants_mat.occlusion_texture_set = 3;
+				push_constants_mat.emissive_texture_set = 4;
+				push_constants_mat.alpha_mask = 0.0f;
+				glm_vec4_copy(mat->base_color_factor, push_constants_mat.base_color_factor);
+			} else {
+				mat = NULL;
+			}
+			vkCmdPushConstants(resource->command_buffer, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
+			vkCmdBindDescriptorSets(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.layout, 0, pbr_descriptor_set_count, pbr_descriptor_sets, 0, NULL);
+			vkCmdBindVertexBuffers(resource->command_buffer, 0, 1, &mesh->gpu_vertex_data, &offset);
+			vkCmdBindIndexBuffer(resource->command_buffer, mesh->gpu_index_data, 0, mesh->index_type);
+			vkCmdDrawIndexed(resource->command_buffer, mesh->index_count, 1, 0, 0, n);
+		}
+	}
+}
+
+void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info)
 {
 	if (ctx->swapchain_require_recreate)
 	{
@@ -1132,7 +1209,7 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		ctx->swapchain_require_recreate = false;
 	}
 
-	const u32	frame_res_index = ctx->frame_index++ % ctx->frames_in_flight_count;
+	const u8	frame_res_index = ctx->frame_index++ % ctx->frames_in_flight_count;
 	const u64	signal_value = ctx->next_signal_value++;
 	const u64	wait_value = signal_value - ctx->frames_in_flight_count;
 
@@ -1269,68 +1346,11 @@ void	render(GraphicsContext *ctx, Camera *camera)
 		};
 		vkCmdSetScissor(resource->command_buffer, 0, 1, &scissor);
 
-		const VkDescriptorSet	ubo_descriptor_set = ctx->ubo_descriptor_sets[frame_res_index];
-		const VkDescriptorSet	instance_descriptor_set = ctx->instance_descriptor_sets[frame_res_index];
-
 		// ---- GRID Pass ------------------ //
-		vkCmdBindPipeline(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.handle);
-		VkDescriptorSet	grid_descriptor_sets[] = { ubo_descriptor_set };
-
-		vkCmdPushConstants(resource->command_buffer, ctx->pipeline_grid.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GridProperties), &ctx->grid_properties);
-		vkCmdBindDescriptorSets(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.layout, 0, 1, grid_descriptor_sets, 0, NULL);
-		vkCmdDraw(resource->command_buffer, 3, 1, 0, 0);
+		GRIDPass(ctx, resource, frame_res_index);
 
 		// ---- PBR Pass --------------- //
-		vkCmdBindPipeline(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.handle);
-		VkDeviceSize	offset = 0;
-
-		InstanceData	*instance_data = (InstanceData *)resource->instance_buffer_mapped;
-
-		// »speed
-		for (u32 i = 0; i < ctx->model.node_count; i++) {
-			const Mesh	*mesh = &ctx->model.linear_nodes[i].mesh;
-			Node	*node = &ctx->model.linear_nodes[i];
-			if (mesh->vertex_count == 0)
-				continue ;
-
-			glm_mat4_copy(node->world_transform, instance_data->model_mat);
-
-			VkDescriptorSet		pbr_descriptor_sets[] = { ubo_descriptor_set, instance_descriptor_set, VK_NULL_HANDLE };
-
-			MaterialProperties	push_constants_mat = {
-				.basecolor_texture_set = -1,
-				.physical_descriptor_texture_set = -1,
-				.normal_texture_set = -1,
-				.occlusion_texture_set = -1,
-				.emissive_texture_set = -1,
-			};
-			u32		pbr_descriptor_set_count = 2;
-			Material	*mat;
-			if (mesh->material_index >= 0) {
-				mat = &ctx->model.materials[mesh->material_index];
-
-				pbr_descriptor_set_count += 1;
-				pbr_descriptor_sets[2] = mat->descriptor_set;
-
-				push_constants_mat.roughness_factor = mat->roughness_factor;
-				push_constants_mat.metallic_factor = mat->metallic_factor;
-				push_constants_mat.alpha_mask_cut_off = mat->alpha_cutoff;
-				push_constants_mat.basecolor_texture_set = 0;
-				push_constants_mat.physical_descriptor_texture_set = 1;
-				push_constants_mat.normal_texture_set = 2;
-				push_constants_mat.occlusion_texture_set = 3;
-				push_constants_mat.emissive_texture_set = 4;
-				push_constants_mat.alpha_mask = 0.0f;
-				glm_vec4_copy(mat->base_color_factor, push_constants_mat.base_color_factor);
-			} else {
-				mat = NULL;
-			}
-			vkCmdPushConstants(resource->command_buffer, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
-			vkCmdBindDescriptorSets(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.layout, 0, pbr_descriptor_set_count, pbr_descriptor_sets, 0, NULL);
-			vkCmdBindVertexBuffers(resource->command_buffer, 0, 1, &mesh->gpu_vertex_data, &offset);
-			vkCmdBindIndexBuffer(resource->command_buffer, mesh->gpu_index_data, 0, mesh->index_type);
-			vkCmdDrawIndexed(resource->command_buffer, mesh->index_count, 1, 0, 0, i);
-		}
+		PBRPass(ctx, entity_info, resource, frame_res_index);
 	}
 	vkCmdEndRendering(resource->command_buffer);
 

@@ -316,10 +316,20 @@ typedef struct GraphicsContext
 	u64			next_signal_value;
 
 
-	Model		model;
-
 }	GraphicsContext;
 
+typedef struct EntityRenderData
+{
+	Model		*model;
+	InstanceData	instance_data;
+}	EntityRenderData;
+
+typedef struct EntityRenderInfo
+{
+	EntityRenderData	*render_data_arr;
+	bool			*enabled_arr;
+	u32			count;
+}	EntityRenderInfo;
 
 enum CameraMovement {
 	FORWARD,
@@ -356,7 +366,7 @@ typedef struct Camera
 void	immediate_submit(GraphicsContext *ctx, void (*fn)(VkCommandBuffer cmd, void *data), void *data);
 void	startGraphics(GraphicsContext *ctx);
 void	endGraphics(GraphicsContext *ctx);
-void	render(GraphicsContext *ctx, Camera *world);
+void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info);
 
 
 void	modelLoad(String filename, GraphicsContext *ctx, Model *model);
