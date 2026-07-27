@@ -26,27 +26,64 @@ void modelMatFromPosDir(vec3 position, vec3 direction, mat4 dest)
 	dest[3][0] = position[0]; dest[3][1] = position[1]; dest[3][2] = position[2];
 }
 
-EntityRenderInfo	buildRenderInfo(Vector *entity_vector, Allocator *a)
+// - `__compar_fn_t __compar (aka int (*)(const void *, const void *))`
+static int	compare_func(const void *p1, const void * p2)
+{
+	const EntityRenderData	*data1 = p1;
+	const EntityRenderData	*data2 = p2;
+
+	if (data1->model_idx < data2->model_idx) return -1;
+	if (data1->model_idx > data2->model_idx) return 1;
+	return 0;
+}
+
+static i16	linearSearch(Model **models, Model *cur, i16 model_count)
+{
+	for (u16 i = 0; i < model_count; i++) {
+		if (models[i] == cur) return i;
+	}
+	return (-1);
+}
+
+EntityRenderInfo	buildRenderInfo(Vector *entity_vector, u32 model_count, Allocator *a)
 {
 	const u64	entity_count = entity_vector->used;
 
 	EntityRenderInfo	entity_info = {};
 
-	entity_info.render_data_arr = a->fp_allocation(a, sizeof(EntityRenderData) * entity_count, DEFAULT_ALIGN);
-	entity_info.enabled_arr = a->fp_allocation(a, sizeof(bool) * entity_count, DEFAULT_ALIGN);
+	entity_info.models = a->fp_allocation(a, sizeof(Model *) * model_count, DEFAULT_ALIGN);
+	entity_info.data = a->fp_allocation(a, sizeof(EntityRenderData) * entity_count, DEFAULT_ALIGN);
 
-	entity_info.count = entity_count;
+	i16	model_idx;
+	u16	cur_model_count = 0;
+	u32	render_idx = 0;
 
 	for (u64 i = 0; i < entity_count; i++) {
 		Entity	**ent_ptr = vectorGet(entity_vector, i);
 		Entity	*ent = *ent_ptr;
 
-		entity_info.enabled_arr[i] = ent->active;
 		if (!ent->active) continue;
+		// »speed
+		// Return -1 if the model isnt in use already
+		// If the model is already in use then we get its index
+		model_idx = linearSearch(entity_info.models, ent->model, cur_model_count);
 
-		entity_info.render_data_arr[i].model = ent->model;
-		modelMatFromPosDir(ent->pos, ent->direction, entity_info.render_data_arr[i].instance_data.model_mat);
+		if (model_idx == -1) {
+			// New model so add it to the array and increment the model_idx
+			model_idx = cur_model_count;
+			entity_info.models[model_idx] = ent->model;
+			cur_model_count++;
+		}
+
+		render_idx++;
+		entity_info.data[render_idx].model_idx = model_idx;
+		modelMatFromPosDir(ent->pos, ent->direction, entity_info.data[render_idx].instance_data.model_mat);
 	}
+
+	entity_info.model_count = cur_model_count;
+	entity_info.entity_count = render_idx;
+
+	qsort(entity_info.data, render_idx, sizeof(EntityRenderData), compare_func);
 
 	return entity_info;
 }

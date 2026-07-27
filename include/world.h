@@ -25,7 +25,7 @@ Entity	*loadEntity(GraphicsContext *ctx, String model_path, vec3 pos, vec3 dir, 
 
 
 
-EntityRenderInfo	buildRenderInfo(Vector *entities, Allocator *a);
+EntityRenderInfo	buildRenderInfo(Vector *entity_vector, u32 model_count, Allocator *a);
 
 typedef struct World
 {

@@ -92,7 +92,7 @@ int	loop(World world)
 				break ;
 			}
 		}
-		EntityRenderInfo	entity_info = buildRenderInfo(world.entities, &world.frame_allocator);
+		EntityRenderInfo	entity_info = buildRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
 		render(world.graphics_ctx, &world.player->camera, entity_info);
 		updateCamera(&world.player->camera, world.graphics_ctx->window, world.dt_ms);
 		modelCacheSweep();

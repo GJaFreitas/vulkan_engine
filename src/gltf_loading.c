@@ -1069,6 +1069,11 @@ static ModelCache	model_cache;
 // NOTE: Parent to all model allocations
 static Allocator	model_allocator;
 
+u32	getModelCountFromCache()
+{
+	return (model_cache.pool.pool.capacity - model_cache.pool.pool.free_count);
+}
+
 ModelCacheEntry	*modelCacheFind(String path)
 {
 	ModelCacheEntry	*entries = (ModelCacheEntry *)model_cache.pool.pool.slots;

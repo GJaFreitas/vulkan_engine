@@ -1136,29 +1136,37 @@ void	GRIDPass(GraphicsContext *ctx, FrameResources *resource, u32 frame_idx)
 
 void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources *resource, u8 frame_idx)
 {
+	const u32		total_entity_count = entity_info.entity_count;
 	const VkDescriptorSet	ubo_descriptor_set = ctx->ubo_descriptor_sets[frame_idx];
 	const VkDescriptorSet	instance_descriptor_set = ctx->instance_descriptor_sets[frame_idx];
-	InstanceData	*instance_data = (InstanceData *)resource->instance_buffer_mapped;
-
-	VkDeviceSize	offset = 0;
+	InstanceData		*instance_data_buf = (InstanceData *)resource->instance_buffer_mapped;
+	VkDeviceSize		offset = 0;
+	u32			instance_cursor = 0;
 
 	vkCmdBindPipeline(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.handle);
 
-	for (u32 e_idx = 0; e_idx < entity_info.count; e_idx++) {
-		if (!entity_info.enabled_arr[e_idx]) continue;
+	u32	e_idx = 0;
+	while (e_idx < total_entity_count) {
+		u16		model_idx = entity_info.data[e_idx].model_idx;
+		const Model	*model = entity_info.models[model_idx];
 
-		EntityRenderData	ent_info = entity_info.render_data_arr[e_idx];
-		Model			*model = ent_info.model;
+		// Find total number of entities using this model
+		u32	run_start = e_idx;
+		u32	run_end = e_idx + 1;
+		while (run_end < total_entity_count && model_idx == entity_info.data[run_end].model_idx) run_end++;
+		u32	run_count = run_end - run_start;
 
 		for (u32 n = 0; n < model->node_count; n++) {
 			Node		*node = &model->linear_nodes[n];
 			const Mesh	*mesh = &node->mesh;
-
 			if (mesh->vertex_count == 0) continue;
 
-
-			// glm_mat4_mul(ent_info.instance_data.model_mat, node->world_transform, instance_data->model_mat);
-			glm_mat4_copy(node->world_transform, instance_data->model_mat);
+			u32	first_instance = instance_cursor;
+			for (u32 r = 0; r < run_count; r++) {
+				EntityRenderData	*e_data = &entity_info.data[run_start + r];
+				glm_mat4_mul(e_data->instance_data.model_mat, node->world_transform, instance_data_buf[instance_cursor].model_mat);
+				instance_cursor++;
+			}
 
 			VkDescriptorSet		pbr_descriptor_sets[] = { ubo_descriptor_set, instance_descriptor_set, VK_NULL_HANDLE };
 
@@ -1170,9 +1178,8 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 				.emissive_texture_set = -1,
 			};
 			u32		pbr_descriptor_set_count = 2;
-			Material	*mat;
 			if (mesh->material_index >= 0) {
-				mat = &entity_info.render_data_arr[e_idx].model->materials[mesh->material_index];
+				Material	*mat = &model->materials[mesh->material_index];
 
 				pbr_descriptor_set_count += 1;
 				pbr_descriptor_sets[2] = mat->descriptor_set;
@@ -1187,15 +1194,16 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 				push_constants_mat.emissive_texture_set = 4;
 				push_constants_mat.alpha_mask = 0.0f;
 				glm_vec4_copy(mat->base_color_factor, push_constants_mat.base_color_factor);
-			} else {
-				mat = NULL;
 			}
 			vkCmdPushConstants(resource->command_buffer, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
 			vkCmdBindDescriptorSets(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.layout, 0, pbr_descriptor_set_count, pbr_descriptor_sets, 0, NULL);
 			vkCmdBindVertexBuffers(resource->command_buffer, 0, 1, &mesh->gpu_vertex_data, &offset);
 			vkCmdBindIndexBuffer(resource->command_buffer, mesh->gpu_index_data, 0, mesh->index_type);
-			vkCmdDrawIndexed(resource->command_buffer, mesh->index_count, 1, 0, 0, n);
+			vkCmdDrawIndexed(resource->command_buffer, mesh->index_count, run_count, 0, 0, first_instance);
+
 		}
+
+		e_idx = run_end;
 	}
 }
 

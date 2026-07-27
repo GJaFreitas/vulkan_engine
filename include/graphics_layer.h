@@ -320,15 +320,15 @@ typedef struct GraphicsContext
 
 typedef struct EntityRenderData
 {
-	Model		*model;
 	InstanceData	instance_data;
+	i16		model_idx;
 }	EntityRenderData;
 
 typedef struct EntityRenderInfo
 {
-	EntityRenderData	*render_data_arr;
-	bool			*enabled_arr;
-	u32			count;
+	Model			**models;	i16	model_count;
+	EntityRenderData	*data;		u32	entity_count;
+
 }	EntityRenderInfo;
 
 enum CameraMovement {
@@ -378,3 +378,4 @@ void	initModelCache(void);
 Model	*modelCacheAcquire(GraphicsContext *ctx, String path);
 void	modelCacheRelease(Model *model);
 void	modelCacheSweep();
+u32	getModelCountFromCache();
