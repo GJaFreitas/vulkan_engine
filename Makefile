@@ -28,12 +28,17 @@ SHADER_INC := -I$(SHADER_DIR)/include
 ENTRY_POINTS := -entry vertMain -entry fragMain
 SLANGC := slangc
 
+VKCPKG_ROOT := vcpkg_installed
+TRIPLET := x64-linux
+VKPKG_INC := $(VKCPKG_ROOT)/$(TRIPLET)/include
+VKPKG_LIB := $(VKCPKG_ROOT)/$(TRIPLET)/lib
+
 CXXFLAGS := -g
 CFLAGS := -Wall -Wextra -g
-CPPFLAGS := -I$(INC_DIR) -I$(DEP_DIR) -I$(MYLIB_INC)
+CPPFLAGS := -I$(INC_DIR) -I$(DEP_DIR) -I$(MYLIB_INC) -I$(VKPKG_INC)
 
-LDFLAGS := -L$(MYLIB_DIR) -l:mylib.a
-LDLIBS := -lvolk -lvulkan -lSDL3 -lstdc++ -lshaderc_shared -lm
+LDFLAGS := -L$(MYLIB_DIR) -l:mylib.a -L$(VKPKG_LIB) -Wl,-rpath,$(VKPKG_LIB)
+LDLIBS := -lvolk -lvulkan -lSDL3 -lstdc++ -lshaderc_shared -lharfbuzz -lfreetype -lm
 
 all: $(OBJ_DIR) $(COMPILED_SHADER_DIR) $(SHADERS) $(MYLIB_LIB) $(TARGET)
 

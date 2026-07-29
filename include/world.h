@@ -15,12 +15,14 @@ typedef struct Entity
 {
 	Model	*model;
 	bool	active;
-	
 	vec3	pos;
-	vec3	direction;
+	versor	rotation;
+	
+	float	spin;
 }	Entity;
 void	unloadEntity(Entity *e, Allocator *a);
-Entity	*loadEntity(GraphicsContext *ctx, String model_path, vec3 pos, vec3 dir, Allocator *a);
+Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a);
+void	updateEntities(Vector *entities, double dt);
 
 
 

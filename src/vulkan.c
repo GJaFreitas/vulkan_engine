@@ -1092,7 +1092,7 @@ static void	initSdl(GraphicsContext *ctx)
 
 static inline void	getProjectionMatrix(mat4 dst, Camera *c, float aspect_ratio)
 {
-	glm_perspective(glm_rad(c->zoom), aspect_ratio, 0.1f, 10.0f, dst);
+	glm_perspective(glm_rad(c->zoom), aspect_ratio, 0.1f, 100.0f, dst);
 }
 
 static inline void	getViewMatrix(mat4 dst, Camera *c)
@@ -1355,7 +1355,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info)
 		vkCmdSetScissor(resource->command_buffer, 0, 1, &scissor);
 
 		// ---- GRID Pass ------------------ //
-		GRIDPass(ctx, resource, frame_res_index);
+		// GRIDPass(ctx, resource, frame_res_index);
 
 		// ---- PBR Pass --------------- //
 		PBRPass(ctx, entity_info, resource, frame_res_index);

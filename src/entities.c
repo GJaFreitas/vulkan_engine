@@ -1,29 +1,30 @@
 #include "world.h"
 
-void modelMatFromPosDir(vec3 position, vec3 direction, mat4 dest)
+void	updateEntities(Vector *entities, double dt)
 {
-	vec3 forward, right, up;
-	vec3 world_up = {0.0f, 1.0f, 0.0f};
+	Entity	**entity_array = entities->elems;
+	const u32	entity_count = entities->used;
 
-	glm_vec3_normalize_to(direction, forward);
+	for (u32 i = 0; i < entity_count; i++) {
+		Entity	*entity = entity_array[i];
+		versor	delta;
+		vec3	axis = {1, 1, 1}; glm_vec3_normalize(axis);
+		float	angle = entity->spin * dt / 1000.0f;
 
-	// Handle the edge case where direction is parallel to world_up
-	// (cross product would be zero/undefined)
-	if (fabsf(glm_vec3_dot(forward, world_up)) > 0.999f) {
-		world_up[0] = 1.0f; world_up[1] = 0.0f; world_up[2] = 0.0f;
+		glm_quatv(delta, angle, axis);
+		glm_quat_mul(entity->rotation, delta, entity->rotation);
+		glm_quat_normalize(entity->rotation);
 	}
+}
 
-	glm_vec3_cross(world_up, forward, right);
-	glm_vec3_normalize(right);
-	glm_vec3_cross(forward, right, up);
-	glm_vec3_normalize(up);
+static void modelMatFromPosDir(vec3 position, versor rotation, mat4 dest)
+{
+	glm_quat_mat4(rotation, dest);
 
-	glm_mat4_identity(dest);
-	// Column-major basis vectors
-	dest[0][0] = right[0];   dest[0][1] = right[1];   dest[0][2] = right[2];
-	dest[1][0] = up[0];      dest[1][1] = up[1];      dest[1][2] = up[2];
-	dest[2][0] = forward[0]; dest[2][1] = forward[1]; dest[2][2] = forward[2];
-	dest[3][0] = position[0]; dest[3][1] = position[1]; dest[3][2] = position[2];
+	dest[3][0] = position[0];
+	dest[3][1] = position[1];
+	dest[3][2] = position[2];
+
 }
 
 // - `__compar_fn_t __compar (aka int (*)(const void *, const void *))`
@@ -77,7 +78,7 @@ EntityRenderInfo	buildRenderInfo(Vector *entity_vector, u32 model_count, Allocat
 
 		render_idx++;
 		entity_info.data[render_idx].model_idx = model_idx;
-		modelMatFromPosDir(ent->pos, ent->direction, entity_info.data[render_idx].instance_data.model_mat);
+		modelMatFromPosDir(ent->pos, ent->rotation, entity_info.data[render_idx].instance_data.model_mat);
 	}
 
 	entity_info.model_count = cur_model_count;
@@ -94,13 +95,11 @@ void	unloadEntity(Entity *e, Allocator *a)
 	a->fp_free(a, e);
 }
 
-Entity	*loadEntity(GraphicsContext *ctx, String model_path, vec3 pos, vec3 dir, Allocator *a)
+Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a)
 {
 	Entity	*e = a->fp_allocation(a, sizeof(Entity), DEFAULT_ALIGN);
 
 	e->model = modelCacheAcquire(ctx, model_path);
-	glm_vec3_copy(pos, e->pos);
-	glm_vec3_copy(dir, e->direction);
 	e->active = true;
 	return e;
 }
@@ -111,8 +110,7 @@ void	initPlayer(Player *p)
 
 
 	Camera	*camera = &p->camera;
-
-	glm_vec3_copy((vec3){0.0f, 0.4f, 0.0f},  camera->position);
+	glm_vec3_copy((vec3){-0.52f,-0.40f,5.19f},  camera->position);
 	glm_vec3_copy((vec3){0.0f, 0.0f, -1.0f}, camera->front);
 	glm_vec3_copy((vec3){0.0f, 1.0f, 0.0f},  camera->up);
 	glm_vec3_copy((vec3){1.0f, 0.0f, 0.0f},  camera->right);
@@ -122,5 +120,5 @@ void	initPlayer(Player *p)
 	camera->zoom = 45.0f;
 
 	camera->mouseSensitivity = 0.1f;
-	camera->movementSpeed = 0.7f;
+	camera->movementSpeed = 0.01f;
 }

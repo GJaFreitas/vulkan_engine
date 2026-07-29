@@ -466,26 +466,6 @@ static void	gltfLoadMaterials(Model *model, tg3_model gltf_model)
 }
 
 /*	Temp code	*/
-static void computeNodeTransform(Node* node) {
-	// Convert double to float if needed
-	vec3 translation = { node->translation[0], node->translation[1], node->translation[2] };
-	vec3 scale = { node->scale[0], node->scale[1], node->scale[2] };
-	vec4 rotation = { node->rotation[0], node->rotation[1], node->rotation[2], node->rotation[3] };
-
-	// Start with identity
-	glm_mat4_identity(node->local_transform);
-
-	// Apply translation
-	glm_translate(node->local_transform, translation);
-
-	// Apply rotation (quaternion to matrix)
-	mat4 rot_mat;
-	glm_quat_mat4(rotation, rot_mat);
-	glm_mul(node->local_transform, rot_mat, node->local_transform);
-
-	// Apply scale
-	glm_scale(node->local_transform, scale);
-}
 
 static void computeWorldTransformRecursive(Node *nodes, u32 index)
 {
@@ -497,14 +477,6 @@ static void computeWorldTransformRecursive(Node *nodes, u32 index)
 		computeWorldTransformRecursive(nodes, node->parent);
 		glm_mat4_mul(nodes[node->parent].world_transform, node->local_transform, node->world_transform);
 	}
-}
-
-static void computeWorldTransforms(Node *nodes, u32 node_count)
-{
-	for (u32 i = 0; i < node_count; i++)
-		computeNodeTransform(&nodes[i]);
-	for (u32 i = 0; i < node_count; i++)
-		computeWorldTransformRecursive(nodes, i);
 }
 
 /*	Temp code	*/
@@ -527,16 +499,45 @@ static void	gltfBuildSceneGraph(Model *model, tg3_model gltf_model)
 		if (gltf_node.children_count != 0)
 			node.children = malloc(sizeof(u32) * gltf_node.children_count);
 
-		node.rotation[0] = gltf_node.rotation[0];
-		node.rotation[1] = gltf_node.rotation[1];
-		node.rotation[2] = gltf_node.rotation[2];
-		node.rotation[3] = gltf_node.rotation[3];
-		node.scale[0] = gltf_node.scale[0];
-		node.scale[1] = gltf_node.scale[1];
-		node.scale[2] = gltf_node.scale[2];
-		node.translation[0] = gltf_node.translation[0];
-		node.translation[1] = gltf_node.translation[1];
-		node.translation[2] = gltf_node.translation[2];
+		vec3	translation;
+		vec3	scale;
+		vec4	rotation;
+		rotation[0] = gltf_node.rotation[0];
+		rotation[1] = gltf_node.rotation[1];
+		rotation[2] = gltf_node.rotation[2];
+		rotation[3] = gltf_node.rotation[3];
+		scale[0] = gltf_node.scale[0];
+		scale[1] = gltf_node.scale[1];
+		scale[2] = gltf_node.scale[2];
+		translation[0] = gltf_node.translation[0];
+		translation[1] = gltf_node.translation[1];
+		translation[2] = gltf_node.translation[2];
+
+		//  »speed
+		//  TODO: Benchmark
+		// // Start with identity
+		// glm_mat4_identity(node.local_transform);
+		//
+		// // Apply translation
+		// glm_translate(node.local_transform, translation);
+		//
+		// // Apply rotation (quaternion to matrix)
+		// mat4 rot_mat;
+		// glm_quat_mat4(rotation, rot_mat);
+		// glm_mul(node.local_transform, rot_mat, node.local_transform);
+		//
+		// // Apply scale
+		// glm_scale(node.local_transform, scale);
+
+		// -----------------
+		glm_quat_mat4(rotation, node.local_transform);
+
+		glm_vec4_scale(node.local_transform[0], scale[0], node.local_transform[0]);
+		glm_vec4_scale(node.local_transform[1], scale[1], node.local_transform[1]);
+		glm_vec4_scale(node.local_transform[2], scale[2], node.local_transform[2]);
+
+		glm_vec3_copy(translation, node.local_transform[3]);
+		node.local_transform[3][3] = 1.0f;
 
 		model->linear_nodes[i] = node;
 	}
@@ -552,8 +553,22 @@ static void	gltfBuildSceneGraph(Model *model, tg3_model gltf_model)
 		}
 	}
 
-	// TODO: Possible optimization? I mean 4 passes is a lot 01/07/26
-	computeWorldTransforms(model->linear_nodes, model->node_count);
+	for (u32 i = 0; i < model->node_count; i++) {
+		computeWorldTransformRecursive(model->linear_nodes, i);
+	}
+
+
+	for (u32 i = 0; i < model->node_count; i++) {
+		Node *n = &model->linear_nodes[i];
+		print("Node[%u] parent=%d\n", i, n->parent);
+		print("  local_transform:\n");
+		for (int r = 0; r < 4; r++)
+			print("    %.3f %.3f %.3f %.3f\n", n->local_transform[r][0], n->local_transform[r][1], n->local_transform[r][2], n->local_transform[r][3]);
+		print("  world_transform:\n");
+		for (int r = 0; r < 4; r++)
+			print("    %.3f %.3f %.3f %.3f\n", n->world_transform[r][0], n->world_transform[r][1], n->world_transform[r][2], n->world_transform[r][3]);
+	}
+
 }
 
 static inline void	calculate_tangent_triangle(Vertex v0, Vertex v1, Vertex v2, vec3 *tangent, vec3 *bitangent)

@@ -8,6 +8,10 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
+#include "harfbuzz/hb.h"
+#include "freetype2/ft2build.h"
+#include "harfbuzz/hb-ft.h"
+
 #include "vulkan_inner.h"
 #include <volk.h>
 

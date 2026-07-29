@@ -3,6 +3,34 @@
 #include "world.h"
 #include "vars.h"
 
+// static void getCameraPos(Camera *camera)
+// {
+// 	print("Pos: %.2f,%.2f,%.2f\n", camera->position[0], camera->position[1], camera->position[2]);
+// }
+
+static void	print_fps(double fps)
+{
+	print("Current FPS: %.2f\n", fps);
+}
+
+static inline void	getMsAndFps(double *ms, double *fps, double *fps_avg, u64 *last_time, u64 *frames) {
+	static u32	frame_start = 2000;
+	static u64	freq = 0;
+	const u64	now = SDL_GetPerformanceCounter();
+	if (!freq) freq = SDL_GetPerformanceFrequency();
+
+	const double	dt = (double)(now - *last_time) / (double)freq;
+	*ms = dt * 1000.0f;
+	*last_time = now;
+	if (frame_start) {
+		frame_start--;
+	} else {
+		*fps = 1.0f / dt;
+		*frames += 1;
+		*fps_avg += (*fps - *fps_avg) / *frames;
+	}
+}
+
 static void updateCamera(Camera *camera, SDL_Window *window, double dt)
 {
 	// Mouse look - only when right mouse button is held
@@ -43,35 +71,45 @@ static void updateCamera(Camera *camera, SDL_Window *window, double dt)
 }
 
 const String	models[] = {
-	STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"),
+	// STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"),
 	STRING_LIT("data/models/DiffuseTransmissionTeacup.glb"),
 };
 
+static void	initializeRandomVec(float *v, u32 count, float min, float max) {
+	for (u32 i = 0; i < count; i++) {
+		v[i] = randomFloat(min, max);
+	}
+}
+
 void	createRandomEntity(World world)
 {
-	float	pos[3];
-	pos[0] = rand() % 4;
-	pos[1] = rand() % 4;
-	pos[2] = rand() % 4;
 	u32	model = rand() % sizeofarray(models);
-	float	dir[3] = { 1, 0, 0};
-	Entity	*e = loadEntity(world.graphics_ctx, models[model], pos, dir, &world.entity_allocator);
+	Entity	*e = loadEntity(world.graphics_ctx, models[model], &world.entity_allocator);
 	vectorAppend(world.entities, &e);
-	engine_debug(LOG_FILE, "Created new entity\n\tPos: %.2f,%.2f,%.2f\n\tModel handle: %p\n\tActive: %u", pos[0], pos[1], pos[2], e->model, e->active);
+
+	e->spin = glm_rad(randomFloat(0, 90));
+	initializeRandomVec(e->rotation, 4, 0, 1);
+	glm_quat_normalize(e->rotation);
+	initializeRandomVec(e->pos, 3, -1, 1);
 }
 
 int	loop(World world)
 {
+	const u64	freq = SDL_GetPerformanceFrequency();
+	u64	frames = 0;
+	double	fps = 0;
+	double	fps_avg = 0;
+	u64	before;
+	u64	after;
 
 	startGraphics(world.graphics_ctx);
+	EntityRenderInfo	entity_info;
 
 	bool	running = true;
-	u64	last_time = SDL_GetTicks();
+	u64	last_time = SDL_GetPerformanceCounter();
 	while (running)
 	{
-		u64	now = SDL_GetTicks();
-		world.dt_ms = (double)(now - last_time) / 1000.0f;
-		last_time = now;
+		getMsAndFps(&world.dt_ms, &fps, &fps_avg, &last_time, &frames);
 		SDL_Event	event = {0};
 		do_callbacks();
 		while (SDL_PollEvent(&event))
@@ -85,6 +123,9 @@ int	loop(World world)
 			} else if (event.key.key == SDLK_M) {
 				createRandomEntity(world);
 				break ;
+			} else if (event.key.key == SDLK_C) {
+				print_fps(fps);
+				break ;
 			}
 			else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
 				world.graphics_ctx->window_width = event.window.data1;
@@ -92,10 +133,16 @@ int	loop(World world)
 				break ;
 			}
 		}
-		EntityRenderInfo	entity_info = buildRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
+		entity_info = buildRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
+
 		render(world.graphics_ctx, &world.player->camera, entity_info);
+
 		updateCamera(&world.player->camera, world.graphics_ctx->window, world.dt_ms);
+
+		updateEntities(world.entities, world.dt_ms);
+
 		modelCacheSweep();
+
 		world.frame_allocator.fp_reset(&world.frame_allocator);
 	}
 	engine_debug(LOG_FILE, "Killing proccess");
@@ -113,6 +160,52 @@ void	updateGridProperties(void *udata)
 	ctx->grid_properties.fade_distance = g_settings.dev.fade_distance;
 	ctx->grid_properties.line_width = g_settings.dev.line_width;
 	ctx->grid_properties.major_line_every = g_settings.dev.major_line_every;
+}
+
+#define FONT_PATH "/usr/share/fonts/Adwaita/AdwaitaMono-Bold.ttf"
+
+void	createSomeText()
+{
+	FT_Library	ft_lib;
+	FT_Face		ft_face;
+
+	FT_Init_FreeType(&ft_lib);
+	FT_New_Face(ft_lib, FONT_PATH, 0, &ft_face);
+	FT_Set_Char_Size(ft_face, 0, 16 * 64, 96, 96);
+
+	hb_font_t	*hb_font = hb_ft_font_create(ft_face, NULL);
+
+	hb_buffer_t	*buf = hb_buffer_create();
+	const char 	*text = "Hello world!";
+	hb_buffer_add_utf8(buf, text, -1, 0, -1);
+
+	hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
+	hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
+	hb_buffer_set_language(buf, hb_language_from_string("en", -1));
+
+	hb_shape(hb_font, buf, NULL, 0);
+
+	u32	glyph_count;
+	hb_glyph_info_t		*glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
+	hb_glyph_position_t	*glyph_pos = hb_buffer_get_glyph_positions(buf, &glyph_count);
+
+	double cursor_x = 0, cursor_y = 0;
+	for (u32 i = 0; i < glyph_count; i++) {
+		hb_codepoint_t	glyph_id = glyph_info[i].codepoint;
+
+		double	x_pos = cursor_x + glyph_pos[i].x_offset / 64.0f;
+		double	y_pos = cursor_y + glyph_pos[i].y_offset / 64.0f;
+
+		print("Glyph %u: id=%u  pos=(%.1f, %.1f)\n", i, glyph_id, x_pos, y_pos);
+
+		cursor_x += glyph_pos[i].x_advance;
+		cursor_y += glyph_pos[i].y_advance;
+	}
+
+	hb_buffer_destroy(buf);
+	hb_font_destroy(hb_font);
+	FT_Done_Face(ft_face);
+	FT_Done_FreeType(ft_lib);
 }
 
 int	main(void)
