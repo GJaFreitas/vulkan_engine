@@ -1,3 +1,7 @@
+vcpkg_installed/
+vcpkg/
+.vcpkg-root
+
 *.spv
 
 # Prerequisites
