@@ -1,3 +1,6 @@
 [submodule "MyLib"]
 	path = MyLib
 	url = git@github.com:GJaFreitas/mylib.git
+[submodule "vcpkg"]
+	path = vcpkg
+	url = https://github.com/microsoft/vcpkg.git
