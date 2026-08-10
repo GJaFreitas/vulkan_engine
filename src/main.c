@@ -95,12 +95,9 @@ void	createRandomEntity(World world)
 
 int	loop(World world)
 {
-	const u64	freq = SDL_GetPerformanceFrequency();
 	u64	frames = 0;
 	double	fps = 0;
 	double	fps_avg = 0;
-	u64	before;
-	u64	after;
 
 	startGraphics(world.graphics_ctx);
 	EntityRenderInfo	entity_info;
