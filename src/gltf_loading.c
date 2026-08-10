@@ -368,8 +368,7 @@ static void	loadFromPNG(GraphicsContext *ctx, tg3_model model, tg3_image image, 
 static void	gltfLoadTextures(GraphicsContext *ctx, Model *model, tg3_model gltf_model)
 {
 
-	// TODO: This is bad memory allocation
-	model->textures = calloc(gltf_model.textures_count, sizeof(Texture));
+	model->textures = model->arena.fp_allocation(&model->arena, gltf_model.textures_count * sizeof(Texture), DEFAULT_ALIGN);
 	model->texture_count = gltf_model.textures_count;
 	for (u32 i = 0; i < gltf_model.textures_count; i++) {
 		const tg3_texture	gltf_texture = gltf_model.textures[i];
@@ -408,7 +407,7 @@ static void	gltfLoadTextures(GraphicsContext *ctx, Model *model, tg3_model gltf_
 
 static void	gltfLoadMaterials(Model *model, tg3_model gltf_model)
 {
-	model->materials = malloc(gltf_model.materials_count * sizeof(Material));
+	model->materials = model->arena.fp_allocation(&model->arena, gltf_model.materials_count * sizeof(Material), DEFAULT_ALIGN);
 	model->material_count = gltf_model.materials_count;
 	for (u32 i = 0; i < gltf_model.materials_count; i++) {
 		const tg3_material	gltf_material = gltf_model.materials[i];
@@ -483,8 +482,7 @@ static void computeWorldTransformRecursive(Node *nodes, u32 index)
 
 static void	gltfBuildSceneGraph(Model *model, tg3_model gltf_model)
 {
-	// TODO: Bad allocation
-	model->linear_nodes = malloc(sizeof(Node) * gltf_model.nodes_count);
+	model->linear_nodes = model->arena.fp_allocation(&model->arena, sizeof(Node) * gltf_model.nodes_count, DEFAULT_ALIGN);
 	model->node_count = gltf_model.nodes_count;
 	for (u32 i = 0; i < gltf_model.nodes_count; i++) {
 		const tg3_node	gltf_node = gltf_model.nodes[i];
@@ -497,7 +495,7 @@ static void	gltfBuildSceneGraph(Model *model, tg3_model gltf_model)
 
 		node.children_count = gltf_node.children_count;
 		if (gltf_node.children_count != 0)
-			node.children = malloc(sizeof(u32) * gltf_node.children_count);
+			node.children = model->arena.fp_allocation(&model->arena, sizeof(u32) * gltf_node.children_count, DEFAULT_ALIGN);
 
 		vec3	translation;
 		vec3	scale;
@@ -647,8 +645,7 @@ static void	gltfSetMeshData(Model *model, tg3_model gltf_model)
 				float *uvs       = (float *)(gltf_model.buffers[uv_bv->buffer].data.data + uv_bv->byte_offset + uv_acc->byte_offset);
 
 				mesh.vertex_count = (u32)pos_acc->count;
-				// TODO: Bad allocation
-				mesh.vertices = malloc(sizeof(Vertex) * mesh.vertex_count);
+				mesh.vertices = model->arena.fp_allocation(&model->arena, sizeof(Vertex) * mesh.vertex_count, DEFAULT_ALIGN);
 				for (u32 i = 0; i < mesh.vertex_count; i++) {
 					mesh.vertices[i].pos[0]    = positions[i*3];
 					mesh.vertices[i].pos[1]    = positions[i*3+1];
@@ -678,8 +675,7 @@ static void	gltfSetMeshData(Model *model, tg3_model gltf_model)
 					mesh.index_type = VK_INDEX_TYPE_UINT32;
 					index_type_size = 4;
 				}
-				// TODO: Bad allocation
-				mesh.indices = malloc(index_type_size * mesh.index_count);
+				mesh.indices = model->arena.fp_allocation(&model->arena, index_type_size * mesh.index_count, DEFAULT_ALIGN);
 				memcpy(mesh.indices, idx_data, index_type_size * mesh.index_count);
 
 
@@ -754,9 +750,8 @@ static void	gltfSetMeshData(Model *model, tg3_model gltf_model)
 
 static void	gltfLoadAnimations(Model *model, tg3_model gltf_model)
 {
-	// TODO: Bad allocation
 	model->animation_count = gltf_model.animations_count;
-	model->animations = malloc(sizeof(Animation) * gltf_model.animations_count);
+	model->animations = model->arena.fp_allocation(&model->arena, sizeof(Animation) * gltf_model.animations_count, DEFAULT_ALIGN);
 	for (u32 a = 0; a < gltf_model.animations_count; a++) {
 		const tg3_animation	gltf_animation = gltf_model.animations[a];
 
@@ -764,9 +759,9 @@ static void	gltfLoadAnimations(Model *model, tg3_model gltf_model)
 
 		animation.name = tg3_to_String(gltf_animation.name);
 		animation.channels_count = gltf_animation.channels_count;
-		animation.channels = malloc(sizeof(AnimationChannel) * gltf_animation.channels_count);
+		animation.channels = model->arena.fp_allocation(&model->arena, sizeof(AnimationChannel) * gltf_animation.channels_count, DEFAULT_ALIGN);
 		animation.samplers_count = gltf_animation.samplers_count;
-		animation.samplers = malloc(sizeof(AnimationSampler) * gltf_animation.samplers_count);
+		animation.samplers = model->arena.fp_allocation(&model->arena, sizeof(AnimationSampler) * gltf_animation.samplers_count, DEFAULT_ALIGN);
 
 		for (u32 s = 0; s < gltf_animation.samplers_count; s++) {
 			const tg3_animation_sampler	gltf_sampler = gltf_animation.samplers[s];
