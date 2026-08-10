@@ -378,14 +378,12 @@ static void	gltfLoadTextures(GraphicsContext *ctx, Model *model, tg3_model gltf_
 		Texture	tex = {};
 
 		if (gltf_image.name.len) {
-			// TODO: Give this an allocator
-			tex.name = strDup(tg3_to_String(gltf_image.name), NULL);
+			tex.name = strDup(tg3_to_String(gltf_image.name), &model->arena);
 		} else {
 			String tex_string = STRING_LIT("texture_");
 			char	buf[32];
 			stbsp_snprintf(buf, 32, "%S%i", tex_string, i);
-			// TODO: Give this an allocator
-			tex.name = cstringToString(buf, NULL);
+			tex.name = cstringToString(buf, &model->arena);
 		}
 
 		StringView	mime_type = tg3_to_String(gltf_image.mime_type);
