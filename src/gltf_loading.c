@@ -1123,7 +1123,14 @@ Model	*modelCacheAcquire(GraphicsContext *ctx, String path)
 	Allocator	model_arena = newArenaAllocator(MB(500), &model_allocator, DEFAULT_ALIGN);
 	Model	*model = model_arena.fp_allocation(&model_arena, sizeof(Model), DEFAULT_ALIGN);
 	model->arena = model_arena;
+
+	const u64	freq = SDL_GetPerformanceFrequency();
+	u64 before = SDL_GetPerformanceCounter();
 	modelLoad(path, ctx, model);
+	u64 after = SDL_GetPerformanceCounter();
+
+	print("Time to load: %.8f\n", (float)(after - before) / freq);
+
 	modelCacheInsert(path, model);
 	// Resize the allocation to fit exactly how much it needs
 	model_arena.arena.mem = model_allocator.fp_reallocation(&model_allocator, model_arena.arena.mem, MB(500), model_arena.arena.offset, DEFAULT_ALIGN);
