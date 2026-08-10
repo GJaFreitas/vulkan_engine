@@ -38,7 +38,8 @@ CFLAGS := -Wall -Wextra -g
 CPPFLAGS := -I$(INC_DIR) -I$(DEP_DIR) -I$(MYLIB_INC) -I$(VKPKG_INC)
 
 LDFLAGS := -L$(MYLIB_DIR) -l:mylib.a -L$(VKPKG_LIB) -Wl,-rpath,$(VKPKG_LIB)
-LDLIBS := -lvolk -lvulkan -lSDL3 -lstdc++ -lshaderc_shared -lharfbuzz -lfreetype -lm
+LDLIBS := -lvolk -lvulkan -lSDL3 -lstdc++ -lshaderc_shared -lm \
+		-lharfbuzz -lfreetype  -lpng16 -lz -lbz2 -lbrotlidec -lbrotlicommon
 
 all: $(OBJ_DIR) $(COMPILED_SHADER_DIR) $(SHADERS) $(MYLIB_LIB) $(TARGET)
 

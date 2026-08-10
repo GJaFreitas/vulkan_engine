@@ -2,6 +2,7 @@
 #include "base_layer.h"
 #include "world.h"
 #include "vars.h"
+#include "fonts.h"
 
 // static void getCameraPos(Camera *camera)
 // {
@@ -95,14 +96,10 @@ void	createRandomEntity(World world)
 
 int	loop(World world)
 {
-	const u64	freq = SDL_GetPerformanceFrequency();
 	u64	frames = 0;
 	double	fps = 0;
 	double	fps_avg = 0;
-	u64	before;
-	u64	after;
 
-	startGraphics(world.graphics_ctx);
 	EntityRenderInfo	entity_info;
 
 	bool	running = true;
@@ -164,7 +161,7 @@ void	updateGridProperties(void *udata)
 
 #define FONT_PATH "/usr/share/fonts/Adwaita/AdwaitaMono-Bold.ttf"
 
-void	createSomeText()
+void	createSomeText(GraphicsContext *ctx)
 {
 	FT_Library	ft_lib;
 	FT_Face		ft_face;
@@ -174,6 +171,11 @@ void	createSomeText()
 	FT_Set_Char_Size(ft_face, 0, 16 * 64, 96, 96);
 
 	hb_font_t	*hb_font = hb_ft_font_create(ft_face, NULL);
+	Font		font;
+	font.face = ft_face;
+	font.hb_font = hb_font;
+	font.font_size = 12.0f;
+	createTextAtlas(ctx, &font, STRING_LIT("abcd"));
 
 	hb_buffer_t	*buf = hb_buffer_create();
 	const char 	*text = "Hello world!";
@@ -216,7 +218,7 @@ int	main(void)
 	start_hotload_callbacks();
 	initModelCache();
 
-	World	world = {};
+	World		world = {};
 	GraphicsContext	gctx = {};
 	Player		p = {};
 
@@ -228,8 +230,12 @@ int	main(void)
 	world.entities = vectorCreate(16, sizeof(Entity *), &world.entity_allocator);
 	updateGridProperties(&world);
 
+	startGraphics(world.graphics_ctx);
+
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);
 	initPlayer(world.player);
+
+	createSomeText(world.graphics_ctx);
 
 	loop(world);
 	printf("\n\n\n");
