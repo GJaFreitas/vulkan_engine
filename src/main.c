@@ -99,7 +99,6 @@ int	loop(World world)
 	double	fps = 0;
 	double	fps_avg = 0;
 
-	startGraphics(world.graphics_ctx);
 	EntityRenderInfo	entity_info;
 
 	bool	running = true;
@@ -181,6 +180,8 @@ int	main(void)
 
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);
 	initPlayer(world.player);
+
+	startGraphics(world.graphics_ctx);
 
 	loop(world);
 	printf("\n\n\n");
