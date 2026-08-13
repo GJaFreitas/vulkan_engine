@@ -4,6 +4,7 @@
 [X] create logging functionality;
 [X] Change all allocations in gltf loading to be arenas
 [ ] Make pipeline creation more modular pipelineCreate(PipelineCreationInfo info)?
+[ ] Create a keybind load and write function that keeps track of bound keys.
 
 outfits should be customizable with an unlock like a spell for doing it
 re-enactement should work in cutscenes

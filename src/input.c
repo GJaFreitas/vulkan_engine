@@ -1,0 +1,35 @@
+#include "world.h"
+
+InputState	g_input_state;
+SDL_Scancode	g_keybinds[ACTION_MAX_ENUM] = {
+	[ ACTION_MOVE_FORWARD ] = SDL_SCANCODE_W,
+	[ ACTION_MOVE_LEFT ] = SDL_SCANCODE_A,
+	[ ACTION_MOVE_RIGHT ] = SDL_SCANCODE_D,
+	[ ACTION_MOVE_BACKWARD ] = SDL_SCANCODE_S,
+	[ ACTION_JUMP ] = SDL_SCANCODE_SPACE,
+	[ ACTION_SHIFT ] = SDL_SCANCODE_LSHIFT,
+};
+
+void	inputBeginFrame(void)
+{
+	memcpy(g_input_state.current, g_input_state.last, NUM_KEYS);
+}
+
+void	inputEndFrame(void)
+{
+	g_input_state.mod = SDL_GetModState();
+}
+
+void	inputProccessEvent(const SDL_Event *e)
+{
+	switch (e->type)
+	{
+		case SDL_EVENT_KEY_DOWN:
+			g_input_state.current[e->key.scancode] = true;
+		break;
+		case SDL_EVENT_KEY_UP:
+			g_input_state.current[e->key.scancode] = false;
+		break;
+		default: break;
+	}
+}
