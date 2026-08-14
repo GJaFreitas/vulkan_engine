@@ -17,6 +17,132 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
 	return VK_FALSE;
 }
 
+void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, void *data_for_upload, ImageObject *gpu_image)
+{
+	const u32	data_size = img_h * img_w;
+	VkBuffer	staging_buffer;
+	void		*buf_allocation;
+
+	VkBufferCreateInfo	buf_info = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = data_size,
+		.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+	};
+
+	wrapperVMAcreateBuffer(ctx->vma_allocator, &buf_info, &staging_buffer, &buf_allocation, 1);
+
+	void	*mapped;
+	wrapperVMAmapMemory(ctx->vma_allocator, buf_allocation, &mapped);
+	memcpy(mapped, data_for_upload, data_size);
+	wrapperVMAunmapMemory(ctx->vma_allocator, buf_allocation);
+	// ------------
+
+	{
+		VkCommandBuffer	cmd;
+		beginSingleTimeCommand(ctx, &cmd);
+
+		VkImageMemoryBarrier2 undefined_transfer = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			.image = gpu_image->image,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			},
+			.srcAccessMask = 0,
+			.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+			.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT
+		};
+
+		VkDependencyInfo	dep_info = {
+			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			.imageMemoryBarrierCount = 1,
+			.pImageMemoryBarriers = &undefined_transfer
+		};
+
+		vkCmdPipelineBarrier2(cmd, &dep_info);
+
+		VkBufferImageCopy2	region = {
+			.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2,
+			.bufferOffset = 0,
+			.bufferRowLength = 0,
+			.bufferImageHeight = 0,
+			.imageExtent = {img_w, img_h, 1},
+			.imageOffset = {0, 0, 0},
+			.imageSubresource = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel = 0,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			}
+		};
+
+		VkCopyBufferToImageInfo2	copy_info = {
+			.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2,
+			.srcBuffer = staging_buffer,
+			.dstImage = gpu_image->image,
+			.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			.regionCount = 1,
+			.pRegions = &region
+		};
+		vkCmdCopyBufferToImage2(cmd, &copy_info);
+
+		VkImageMemoryBarrier2 transfer_shaderronly = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+			.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			.image = gpu_image->image,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			},
+			.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+			.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+			.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+		};
+
+		VkDependencyInfo	dep_info_2 = {
+			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			.imageMemoryBarrierCount = 1,
+			.pImageMemoryBarriers = &transfer_shaderronly
+		};
+		vkCmdPipelineBarrier2(cmd, &dep_info_2);
+
+		vkEndCommandBuffer(cmd);
+
+		VkCommandBufferSubmitInfo	cmd_submit_info = {
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+			.commandBuffer = cmd,
+		};
+		VkSubmitInfo2 submit_info = {
+			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+			.commandBufferInfoCount = 1,
+			.pCommandBufferInfos = &cmd_submit_info
+		};
+		// TODO: Make these uploads record everything first before submiting
+		vkQueueSubmit2(ctx->queue, 1, &submit_info, VK_NULL_HANDLE);
+		vkQueueWaitIdle(ctx->queue);
+		wrapperVMAdestroyBuffer(ctx->vma_allocator, staging_buffer, buf_allocation);
+
+		vkResetCommandPool(ctx->device, ctx->single_time_pool, 0);
+	}
+
+}
+
 void	beginSingleTimeCommand(GraphicsContext *ctx, VkCommandBuffer *cmd_buffer)
 {
 	VkCommandBufferAllocateInfo	alloc_info = {

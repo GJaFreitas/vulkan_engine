@@ -6,127 +6,9 @@
 
 void	uploadAtlasToGpu(GraphicsContext *ctx, TextAtlas *atlas, u8 *atlas_data)
 {
-	VkDeviceSize	image_size = atlas->width * atlas->height;
+	stagingBufferUpload(ctx, atlas->width, atlas->height, atlas_data, &atlas->gpu_image);
 
 	// Staging buffer
-	VkBuffer	staging_buffer;
-	void		*buf_allocation;
-
-	VkBufferCreateInfo	buf_info = {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = image_size,
-		.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-	};
-
-	wrapperVMAcreateBuffer(ctx->vma_allocator, &buf_info, &staging_buffer, &buf_allocation, 1);
-
-	void	*mapped;
-	wrapperVMAmapMemory(ctx->vma_allocator, buf_allocation, &mapped);
-	memcpy(mapped, atlas_data, image_size);
-	wrapperVMAunmapMemory(ctx->vma_allocator, buf_allocation);
-	// ------------
-
-	{
-		VkCommandBuffer	cmd;
-		beginSingleTimeCommand(ctx, &cmd);
-
-		VkImageMemoryBarrier2 undefined_transfer = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-			.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.image = atlas->gpu_image.image,
-			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			},
-			.srcAccessMask = 0,
-			.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-			.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-			.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT
-		};
-
-		VkDependencyInfo	dep_info = {
-			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			.imageMemoryBarrierCount = 1,
-			.pImageMemoryBarriers = &undefined_transfer
-		};
-
-		vkCmdPipelineBarrier2(cmd, &dep_info);
-
-		VkBufferImageCopy2	region = {
-			.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2,
-			.bufferOffset = 0,
-			.bufferRowLength = 0,
-			.bufferImageHeight = 0,
-			.imageExtent = {atlas->width, atlas->height, 1},
-			.imageOffset = {0, 0, 0},
-			.imageSubresource = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.mipLevel = 0,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			}
-		};
-
-		VkCopyBufferToImageInfo2	copy_info = {
-			.sType = VK_STRUCTURE_TYPE_COPY_BUFFER_TO_IMAGE_INFO_2,
-			.srcBuffer = staging_buffer,
-			.dstImage = atlas->gpu_image.image,
-			.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			.regionCount = 1,
-			.pRegions = &region
-		};
-		vkCmdCopyBufferToImage2(cmd, &copy_info);
-
-		VkImageMemoryBarrier2 transfer_shaderronly = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.image = atlas->gpu_image.image,
-			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			},
-			.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-			.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-			.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-			.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-		};
-
-		VkDependencyInfo	dep_info_2 = {
-			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			.imageMemoryBarrierCount = 1,
-			.pImageMemoryBarriers = &transfer_shaderronly
-		};
-		vkCmdPipelineBarrier2(cmd, &dep_info_2);
-
-		vkEndCommandBuffer(cmd);
-
-		VkCommandBufferSubmitInfo	cmd_submit_info = {
-			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-			.commandBuffer = cmd,
-		};
-		VkSubmitInfo2 submit_info = {
-			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-			.commandBufferInfoCount = 1,
-			.pCommandBufferInfos = &cmd_submit_info
-		};
-		// TODO: Make these uploads record everything first before submiting
-		vkQueueSubmit2(ctx->queue, 1, &submit_info, VK_NULL_HANDLE);
-		vkQueueWaitIdle(ctx->queue);
-		wrapperVMAdestroyBuffer(ctx->vma_allocator, staging_buffer, buf_allocation);
-
 		VkImageViewCreateInfo	image_view_info = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 			.viewType = VK_IMAGE_VIEW_TYPE_2D,
@@ -166,9 +48,6 @@ void	uploadAtlasToGpu(GraphicsContext *ctx, TextAtlas *atlas, u8 *atlas_data)
 			.anisotropyEnable = VK_FALSE
 		};
 		vkCreateSampler(ctx->device, &sampler_info, NULL, &atlas->sampler);
-
-		vkResetCommandPool(ctx->device, ctx->single_time_pool, 0);
-	}
 }
 
 static void	renderGlyphToAtlas(Font *font, u32 codepoint, u8 *atlas_data, GlyphInfo *atlas_glyph)
