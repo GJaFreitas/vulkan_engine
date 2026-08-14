@@ -154,8 +154,8 @@ static void	uploadTexture(GraphicsContext *ctx, VkFormat format, i32 width, i32 
 		engine_log(LOG_FILE, "Failed to create image: %S", tex->name);
 	}
 
-	tex->gpu_image = vk_image;
-	tex->gpu_image_alloc = image_allocation;
+	tex->gpu_image.image = vk_image;
+	tex->gpu_image.allocation = image_allocation;
 
 	// Creating a staging buffer for upload
 	// rgba format means 4 bytes per pixel
@@ -324,7 +324,7 @@ static void	uploadTexture(GraphicsContext *ctx, VkFormat format, i32 width, i32 
 			.layerCount = 1
 		},
 	};
-	if (vkCreateImageView(ctx->device, &image_view_info, NULL, &tex->image_view) != VK_SUCCESS) {
+	if (vkCreateImageView(ctx->device, &image_view_info, NULL, &tex->gpu_image.view) != VK_SUCCESS) {
 		engine_error(LOG_FILE, "Failed to create image view");
 	}
 
@@ -899,7 +899,7 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 			used = ctx->default_base_color_texture;
 		}
 		img_infos[0].sampler = used.sampler;
-		img_infos[0].imageView = used.image_view;
+		img_infos[0].imageView = used.gpu_image.view;
 		img_infos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 		all_sets[0].pImageInfo = &img_infos[0];
@@ -911,7 +911,7 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 			used = ctx->default_metallic_texture;
 		}
 		img_infos[1].sampler = used.sampler;
-		img_infos[1].imageView = used.image_view;
+		img_infos[1].imageView = used.gpu_image.view;
 		img_infos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 		all_sets[1].pImageInfo = &img_infos[1];
@@ -923,7 +923,7 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 			used = ctx->default_normal_texture;
 		}
 		img_infos[2].sampler = used.sampler;
-		img_infos[2].imageView = used.image_view;
+		img_infos[2].imageView = used.gpu_image.view;
 		img_infos[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 		all_sets[2].pImageInfo = &img_infos[2];
@@ -935,7 +935,7 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 			used = ctx->default_occlusion_texture;
 		}
 		img_infos[3].sampler = used.sampler;
-		img_infos[3].imageView = used.image_view;
+		img_infos[3].imageView = used.gpu_image.view;
 		img_infos[3].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 		all_sets[3].pImageInfo = &img_infos[3];
@@ -946,7 +946,7 @@ void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials,
 			used = ctx->default_emissive_texture;
 		}
 		img_infos[4].sampler = used.sampler;
-		img_infos[4].imageView = used.image_view;
+		img_infos[4].imageView = used.gpu_image.view;
 		img_infos[4].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
 		all_sets[4].pImageInfo = &img_infos[4];

@@ -16,6 +16,24 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
 	return VK_FALSE;
 }
 
+void	beginSingleTimeCommand(GraphicsContext *ctx, VkCommandBuffer *cmd_buffer)
+{
+	VkCommandBufferAllocateInfo	alloc_info = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		.commandPool = ctx->single_time_pool,
+		.commandBufferCount = 1,
+		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+	};
+
+	vkAllocateCommandBuffers(ctx->device, &alloc_info, cmd_buffer);
+
+	VkCommandBufferBeginInfo	cmd_begin_info = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+	};
+	vkBeginCommandBuffer(*cmd_buffer, &cmd_begin_info);
+}
+
 static void	createInstance(GraphicsContext *ctx)
 {
 	if (volkInitialize() != VK_SUCCESS) {
@@ -345,14 +363,14 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
 	};
 
-	if (wrapperVMAcreateImage(ctx->vma_allocator, &depth_info, &ctx->swapchain_depth_image, &ctx->swapchain_depth_image_allocation) != VK_SUCCESS) {
+	if (wrapperVMAcreateImage(ctx->vma_allocator, &depth_info, &ctx->swapchain_depth_image.image, &ctx->swapchain_depth_image.allocation) != VK_SUCCESS) {
 		engine_error(LOG_FILE, "Failed to allocate depth buffer\n");
 		exit(1);
 	}
 
 	VkImageViewCreateInfo depth_view_info = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-		.image = ctx->swapchain_depth_image,
+		.image = ctx->swapchain_depth_image.image,
 		.viewType = VK_IMAGE_VIEW_TYPE_2D,
 		.format = ctx->swapchain_depth_format,
 		.subresourceRange = {
@@ -362,7 +380,7 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 		}
 	};
 
-	if (vkCreateImageView(ctx->device, &depth_view_info, NULL, &ctx->swapchain_depth_image_view) != VK_SUCCESS) {
+	if (vkCreateImageView(ctx->device, &depth_view_info, NULL, &ctx->swapchain_depth_image.view) != VK_SUCCESS) {
 		engine_error(LOG_FILE, "Failed to create depth image view\n");
 		exit(1);
 	}
@@ -613,6 +631,168 @@ static void	createPBRPipeline(GraphicsContext *ctx)
 	engine_log(LOG_FILE, "Successfully created graphics pipeline");
 }
 
+static void	createTEXTPipeline(GraphicsContext *ctx)
+{
+	VkPushConstantRange	push_constant_ranges[] = {
+		// Screen size
+		{
+			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+			.offset = 0,
+			.size = sizeof(vec2),
+		},
+	};
+
+	VkDescriptorSetLayout	layouts[] = {
+		ctx->atlas_descriptor_layout,
+	};
+
+	VkPipelineLayoutCreateInfo	layout_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		.setLayoutCount = sizeofarray(layouts),
+		.pSetLayouts = layouts,
+		.pushConstantRangeCount = sizeofarray(push_constant_ranges),
+		.pPushConstantRanges = push_constant_ranges,
+	};
+
+	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &ctx->pipeline_text.layout) != VK_SUCCESS) {
+		engine_error(LOG_FILE, "Failed to create pipeline layout\n");
+		exit(1);
+	}
+
+	createShaders(ctx, STRING_LIT("text"), &ctx->pipeline_text);
+	VkPipelineShaderStageCreateInfo	shader_stages[] = {
+		{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_VERTEX_BIT,
+			.module = ctx->pipeline_text.vertex_shader,
+			.pName = "vertMain"
+		},
+		{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+			.module = ctx->pipeline_text.frag_shader,
+			.pName = "fragMain"
+		}
+	};
+
+	VkVertexInputBindingDescription	bind_desc = {
+		.binding = 0,
+		.stride = sizeof(GlyphInstance),
+		.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+	};
+
+	VkVertexInputAttributeDescription	attribute_desc[] = {
+		{0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphInstance, pos)},
+		{1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphInstance, size)},
+		{2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphInstance, uv_offset)},
+		{3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphInstance, uv_size)},
+		{4, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(GlyphInstance, color)},
+	};
+
+	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		.pVertexBindingDescriptions = &bind_desc,
+		.vertexBindingDescriptionCount = 1,
+		.pVertexAttributeDescriptions = attribute_desc,
+		.vertexAttributeDescriptionCount = sizeofarray(attribute_desc),
+	};
+
+	VkPipelineInputAssemblyStateCreateInfo	imput_assembly_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+	};
+
+	// For now no depth testing need since this a ui only pipeline
+	VkPipelineDepthStencilStateCreateInfo	depth_stencil_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		.depthTestEnable = VK_FALSE,
+		.depthWriteEnable = VK_FALSE,
+		.depthCompareOp = VK_COMPARE_OP_LESS,
+		.stencilTestEnable = VK_FALSE
+	};
+
+	VkPipelineViewportStateCreateInfo	viewport_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+		.viewportCount = 1,
+		.pViewports = NULL,
+		.scissorCount = 1,
+		.pScissors = NULL
+	};
+
+	VkPipelineRasterizationStateCreateInfo	rasterization_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		.polygonMode = VK_POLYGON_MODE_FILL,
+		.cullMode = VK_CULL_MODE_NONE,
+		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+		.lineWidth = 1.0f
+	};
+
+	VkPipelineMultisampleStateCreateInfo	multisample_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
+	};
+
+	VkPipelineColorBlendAttachmentState color_blend_attach = {
+		.blendEnable = VK_TRUE,
+		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+		.colorBlendOp = VK_BLEND_OP_ADD,
+		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+		.alphaBlendOp = VK_BLEND_OP_ADD,
+		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+		VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+	};
+
+	VkPipelineColorBlendStateCreateInfo	blend_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		.attachmentCount = 1,
+		.pAttachments = &color_blend_attach
+	};
+
+	VkDynamicState	dynamic_states[] = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR
+	};
+
+	VkPipelineDynamicStateCreateInfo	dynamic_state_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+		.dynamicStateCount = sizeofarray(dynamic_states),
+		.pDynamicStates = dynamic_states
+	};
+
+	VkPipelineRenderingCreateInfo	render_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+		.colorAttachmentCount = 1,
+		.pColorAttachmentFormats = &ctx->swapchain_format.format,
+		.depthAttachmentFormat = ctx->swapchain_depth_format
+	};
+
+	VkGraphicsPipelineCreateInfo	pipeline_info = {
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext = &render_info,
+		.stageCount = sizeofarray(shader_stages),
+		.pStages = shader_stages,
+		.pVertexInputState = &vertex_input_info,
+		.pInputAssemblyState = &imput_assembly_info,
+		.pViewportState = &viewport_info,
+		.pRasterizationState = &rasterization_info,
+		.pMultisampleState = &multisample_info,
+		.pDepthStencilState = &depth_stencil_info,
+		.pColorBlendState = &blend_info,
+		.pDynamicState = &dynamic_state_info,
+		.layout = ctx->pipeline_text.layout,
+		.renderPass = VK_NULL_HANDLE
+	};
+
+	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_text.handle) != VK_SUCCESS) {
+		engine_error(LOG_FILE, "Failed to create text pipeline\n");
+		exit(1);
+	}
+
+	engine_log(LOG_FILE, "Successfully created text pipeline");
+}
+
 static void	createGRIDPipeline(GraphicsContext *ctx)
 {
 	VkPushConstantRange	push_constant_ranges[] = {
@@ -786,6 +966,17 @@ static void	createSyncResources(GraphicsContext *ctx)
 		exit(1);
 	}
 
+	// Single time commands
+	VkCommandPoolCreateInfo pool_info = {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		.queueFamilyIndex = ctx->queue_family_index,
+	};
+
+	if (vkCreateCommandPool(ctx->device, &pool_info, NULL, &ctx->single_time_pool) != VK_SUCCESS) {
+		engine_error(LOG_FILE, "Failed to create single time command pool");
+		exit(1);
+	}
+
 	for(u32 i = 0; i < ctx->frames_in_flight_count; i++) {
 		FrameResources	*resource = &ctx->frame_resources[i];
 
@@ -878,9 +1069,9 @@ static void	destroySwapchain(GraphicsContext *ctx)
 	free(ctx->swapchain_image_views);
 	vkDestroySwapchainKHR(ctx->device, ctx->swapchain, NULL);
 
-	vkDestroyImageView(ctx->device, ctx->swapchain_depth_image_view, NULL);
-	wrapperVMAdestroyImage(ctx->vma_allocator, ctx->swapchain_depth_image, ctx->swapchain_depth_image_allocation);
-	ctx->swapchain_depth_image_view = NULL;
+	vkDestroyImageView(ctx->device, ctx->swapchain_depth_image.view, NULL);
+	wrapperVMAdestroyImage(ctx->vma_allocator, ctx->swapchain_depth_image.image, ctx->swapchain_depth_image.allocation);
+	ctx->swapchain_depth_image.view = NULL;
 }
 
 static void	destroySyncResources(GraphicsContext *ctx)
@@ -912,6 +1103,12 @@ static void	createDescriptorSetLayouts(GraphicsContext *ctx)
 		.descriptorCount = 1,
 		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
 	};
+	VkDescriptorSetLayoutBinding	altas_layout_binding = {
+		.binding = 0,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorCount = 1,
+		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+	};
 
 	VkDescriptorSetLayoutCreateInfo	ubo_create_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
@@ -925,10 +1122,19 @@ static void	createDescriptorSetLayouts(GraphicsContext *ctx)
 		.pBindings = &instance_layout_binding,
 	};
 
+	VkDescriptorSetLayoutCreateInfo	altas_create_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.bindingCount = 1,
+		.pBindings = &altas_layout_binding,
+	};
+
 	if (vkCreateDescriptorSetLayout(ctx->device, &ubo_create_info, NULL, &ctx->ubo_descriptor_layout) != VK_SUCCESS) {
 		engine_error(LOG_FILE, "Failed to create ubo layout");
 	}
 	if (vkCreateDescriptorSetLayout(ctx->device, &instance_create_info, NULL, &ctx->instance_descriptor_layout) != VK_SUCCESS) {
+		engine_error(LOG_FILE, "Failed to create ubo layout");
+	}
+	if (vkCreateDescriptorSetLayout(ctx->device, &altas_create_info, NULL, &ctx->atlas_descriptor_layout) != VK_SUCCESS) {
 		engine_error(LOG_FILE, "Failed to create ubo layout");
 	}
 }
@@ -1060,6 +1266,7 @@ static void	initVulkan(GraphicsContext *ctx)
 	createMaterialDescriptorSetLayout(ctx);
 	createPBRPipeline(ctx);
 	createGRIDPipeline(ctx);
+	createTEXTPipeline(ctx);
 	ctx->frame_index = 0;
 	ctx->next_signal_value = ctx->frames_in_flight_count + 1;
 }
@@ -1288,7 +1495,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info)
 		.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 		.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		.newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-		.image = ctx->swapchain_depth_image,
+		.image = ctx->swapchain_depth_image.image,
 		.subresourceRange = {
 			.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 			.baseMipLevel = 0,
@@ -1317,7 +1524,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info)
 	};
 	VkRenderingAttachmentInfo	depth_attach_info = {
 		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-		.imageView = ctx->swapchain_depth_image_view,
+		.imageView = ctx->swapchain_depth_image.view,
 		.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
 		.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
 		.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -1458,9 +1665,6 @@ void	startGraphics(GraphicsContext *ctx)
 
 	initSdl(ctx);
 	initVulkan(ctx);
-
-
-
 }
 
 void	endGraphics(GraphicsContext *ctx)

@@ -2,6 +2,7 @@
 #include "base_layer.h"
 #include "world.h"
 #include "vars.h"
+#include "fonts.h"
 
 // static void getCameraPos(Camera *camera)
 // {
@@ -158,6 +159,57 @@ void	updateGridProperties(void *udata)
 	ctx->grid_properties.major_line_every = g_settings.dev.major_line_every;
 }
 
+#define FONT_PATH "/usr/share/fonts/Adwaita/AdwaitaMono-Bold.ttf"
+
+void	createSomeText(GraphicsContext *ctx)
+{
+	FT_Library	ft_lib;
+	FT_Face		ft_face;
+
+	FT_Init_FreeType(&ft_lib);
+	FT_New_Face(ft_lib, FONT_PATH, 0, &ft_face);
+	FT_Set_Char_Size(ft_face, 0, 16 * 64, 96, 96);
+
+	hb_font_t	*hb_font = hb_ft_font_create(ft_face, NULL);
+	Font		font;
+	font.face = ft_face;
+	font.hb_font = hb_font;
+	font.font_size = 12.0f;
+	createTextAtlas(ctx, &font, STRING_LIT("abcd"));
+
+	hb_buffer_t	*buf = hb_buffer_create();
+	const char 	*text = "Hello world!";
+	hb_buffer_add_utf8(buf, text, -1, 0, -1);
+
+	hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
+	hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
+	hb_buffer_set_language(buf, hb_language_from_string("en", -1));
+
+	hb_shape(hb_font, buf, NULL, 0);
+
+	u32	glyph_count;
+	hb_glyph_info_t		*glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
+	hb_glyph_position_t	*glyph_pos = hb_buffer_get_glyph_positions(buf, &glyph_count);
+
+	double cursor_x = 0, cursor_y = 0;
+	for (u32 i = 0; i < glyph_count; i++) {
+		hb_codepoint_t	glyph_id = glyph_info[i].codepoint;
+
+		double	x_pos = cursor_x + glyph_pos[i].x_offset / 64.0f;
+		double	y_pos = cursor_y + glyph_pos[i].y_offset / 64.0f;
+
+		print("Glyph %u: id=%u  pos=(%.1f, %.1f)\n", i, glyph_id, x_pos, y_pos);
+
+		cursor_x += glyph_pos[i].x_advance;
+		cursor_y += glyph_pos[i].y_advance;
+	}
+
+	hb_buffer_destroy(buf);
+	hb_font_destroy(hb_font);
+	FT_Done_Face(ft_face);
+	FT_Done_FreeType(ft_lib);
+}
+
 int	main(void)
 {
 	start_logs();
@@ -166,7 +218,7 @@ int	main(void)
 	start_hotload_callbacks();
 	initModelCache();
 
-	World	world = {};
+	World		world = {};
 	GraphicsContext	gctx = {};
 	Player		p = {};
 
@@ -178,10 +230,13 @@ int	main(void)
 	world.entities = vectorCreate(16, sizeof(Entity *), &world.entity_allocator);
 	updateGridProperties(&world);
 
+	startGraphics(world.graphics_ctx);
+
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);
 	initPlayer(world.player);
 
 	startGraphics(world.graphics_ctx);
+	createSomeText(world.graphics_ctx);
 
 	loop(world);
 	printf("\n\n\n");
