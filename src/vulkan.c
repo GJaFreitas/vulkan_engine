@@ -1,5 +1,6 @@
 #include "vulkan_inner.h"
 #include "graphics_layer.h"
+#include "fonts.h"
 
 VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
 	VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,

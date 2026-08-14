@@ -8,10 +8,6 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
-#include "harfbuzz/hb.h"
-#include "freetype2/ft2build.h"
-#include "harfbuzz/hb-ft.h"
-
 #include "vulkan_inner.h"
 #include <volk.h>
 
@@ -337,7 +333,6 @@ typedef struct GraphicsContext
 
 	u32			frame_index;
 	u64			next_signal_value;
-
 
 }	GraphicsContext;
 

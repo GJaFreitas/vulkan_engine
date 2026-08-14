@@ -1,5 +1,9 @@
 #pragma once
 
+#include "harfbuzz/hb.h"
+#include "freetype2/ft2build.h"
+#include "harfbuzz/hb-ft.h"
+
 #include "base_layer.h"
 #include "graphics_layer.h"
 

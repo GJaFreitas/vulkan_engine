@@ -15,7 +15,7 @@
       "-o",
       "obj/c/hotload_callbacks.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/text_stuff",
     "output": "obj/c/hotload_callbacks.o"
   },
   {
@@ -34,7 +34,7 @@
       "-o",
       "obj/c/main.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/text_stuff",
     "output": "obj/c/main.o"
   },
   {
@@ -53,7 +53,7 @@
       "-o",
       "obj/c/vulkan.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/text_stuff",
     "output": "obj/c/vulkan.o"
   },
   {
@@ -72,7 +72,7 @@
       "-o",
       "obj/c/entities.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/text_stuff",
     "output": "obj/c/entities.o"
   },
   {
@@ -91,8 +91,27 @@
       "-o",
       "obj/c/base_layer.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/text_stuff",
     "output": "obj/c/base_layer.o"
+  },
+  {
+    "file": "src/fonts.c",
+    "arguments": [
+      "/bin/gcc",
+      "-Iinclude",
+      "-Ideps",
+      "-IMyLib/include",
+      "-Ivcpkg_installed/x64-linux/include",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/fonts.c",
+      "-o",
+      "obj/c/fonts.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/text_stuff",
+    "output": "obj/c/fonts.o"
   },
   {
     "file": "src/variables.c",
@@ -110,7 +129,7 @@
       "-o",
       "obj/c/variables.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/text_stuff",
     "output": "obj/c/variables.o"
   },
   {
@@ -129,7 +148,7 @@
       "-o",
       "obj/c/gltf_loading.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/text_stuff",
     "output": "obj/c/gltf_loading.o"
   },
   {
@@ -146,7 +165,7 @@
       "-o",
       "obj/cpp/vma.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/text_stuff",
     "output": "obj/cpp/vma.o"
   },
   {
@@ -157,7 +176,7 @@
       "-o",
       "engine.out"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/text_stuff",
     "output": "engine.out"
   }
 ]

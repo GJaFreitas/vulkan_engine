@@ -10,7 +10,7 @@ struct VSInput
 {
 	float2	pos		: POSITION;
 	float2	size		: SIZE;
-	float2	uv_offset	:UVOFFSET;
+	float2	uv_offset	: UVOFFSET;
 	float2	uv_size		: UVSIZE;
 	float4	color		: COLOR;
 }
