@@ -164,6 +164,8 @@ void	updateGridProperties(void *udata)
 void	createSomeText(GraphicsContext *ctx, World *world)
 {
 	FT_Library	ft_lib;
+
+	// This is just a handle
 	FT_Face		ft_face;
 
 	FT_Init_FreeType(&ft_lib);
@@ -171,10 +173,10 @@ void	createSomeText(GraphicsContext *ctx, World *world)
 	FT_Set_Char_Size(ft_face, 0, 16 * 64, 96, 96);
 
 	hb_font_t	*hb_font = hb_ft_font_create(ft_face, NULL);
-	world->font.face = ft_face;
-	world->font.hb_font = hb_font;
+	world->font.face = ft_face;		// This is a handle so this assignment is fine
+	world->font.hb_font = hb_font;		// Same here since its a pointer
 	world->font.font_size = 12.0f;
-	createTextAtlas(ctx, &world->font, STRING_LIT("abcd"));
+	createTextAtlas(ctx, &world->font, STRING_LIT("abcdefghijklmnopqrstuvwyz"));
 
 	hb_buffer_t	*buf = hb_buffer_create();
 	const char 	*text = "Hello world!";
