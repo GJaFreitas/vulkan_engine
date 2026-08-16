@@ -48,7 +48,7 @@ typedef struct Font
 	FT_Face			face;
 	hb_font_t		*hb_font;
 	TextAtlas		atlas;
-	float			font_size;
+	float			base_font_size;
 	Allocator		*allocator;
 
 	// Per frame stuff
@@ -59,6 +59,6 @@ typedef struct Font
 }	Font;
 
 void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset, Allocator *allocator);
-void	textDraw(String text, Font *font, vec2 pos, vec4 color);
+void	textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color);
 void	textInstanceBuild(TextAtlas *atlas, Font font, const String text, f32 x, f32 y, vec4 color, GlyphRenderInstance *out, u32 *out_count, Allocator *allocator);
 TextRenderInfo	buildTextInfo(Font *font);

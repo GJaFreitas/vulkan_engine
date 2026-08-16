@@ -131,7 +131,7 @@ int	loop(World world)
 				break ;
 			}
 		}
-		textDraw(STRING_LIT("Hello world!"), &world.font, (vec2){100, 100}, (vec4){255, 255, 255, 255});
+		textDraw(STRING_LIT("Hello world!"), &world.font, 64, (vec2){100, 100}, (vec4){255, 255, 255, 255});
 
 		// u8 *raw = (u8 *)world.font.render_instances;
 		// for (u32 i = 0; i < 192; i += 16) {
@@ -180,13 +180,13 @@ void	createSomeText(GraphicsContext *ctx, World *world)
 
 	FT_Init_FreeType(&ft_lib);
 	FT_New_Face(ft_lib, FONT_PATH, 0, &ft_face);
-	const u32	font_size = 16;
+	const u32	font_size = 48;
 	FT_Set_Char_Size(ft_face, 0, font_size * 64, 96, 96);
 
 	hb_font_t	*hb_font = hb_ft_font_create(ft_face, NULL);
 	world->font.face = ft_face;		// This is a handle so this assignment is fine
 	world->font.hb_font = hb_font;		// Same here since its a pointer
-	world->font.font_size = 12.0f;
+	world->font.base_font_size = font_size;
 	createTextAtlas(ctx, &world->font, STRING_LIT("1234567890ABCDEFGHIJKLMNOPQRSTUVWYZabcdefghijklmnopqrstuvwyz!."), &world->frame_allocator);
 }
 

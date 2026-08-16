@@ -42,8 +42,10 @@ VSOutput vertMain(VSInput input, uint vertex_id: SV_VertexID)
 }
 
 [shader("fragment")]
-float4	fragMain(VSOutput input)
+float4 fragMain(VSOutput input) : SV_Target
 {
-	float alpha = atlas.Sample(input.uv).r;
+	float distance = atlas.Sample(input.uv).r;
+	float smoothing = fwidth(distance) * 0.75;
+	float alpha = smoothstep(0.5 - smoothing, 0.5 + smoothing, distance);
 	return float4(input.color.rgb, input.color.a * alpha);
 }

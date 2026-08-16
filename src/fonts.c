@@ -26,11 +26,12 @@ void	textInstanceBufferUpload(BufferObject *buffer, const GlyphInfo *instances, 
 }
 
 // This function doesnt actually draw any text, it queues the text to be drawn by the TEXT pipeline
-void	textDraw(String text, Font *font, vec2 pos, vec4 color)
+void	textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
 {
 	static hb_buffer_t	*buf = NULL;
 
 	const TextAtlas	*atlas = &font->atlas;
+	const f32	font_scale = font_size / font->base_font_size;
 
 	// On first run create hb buf
 	if (!buf) { buf = hb_buffer_create(); }
@@ -54,17 +55,18 @@ void	textDraw(String text, Font *font, vec2 pos, vec4 color)
 		const u32	glyph_index = glyph_info[i].codepoint;
 		const GlyphInfo	*g = atlasFindGlyph(atlas, glyph_index);
 
-		float	x_offset = glyph_pos[i].x_offset / 64.0f;
-		float	y_offset = glyph_pos[i].y_offset / 64.0f;
+		float	x_offset = (glyph_pos[i].x_offset / 64.0f) * font_scale;
+		float	y_offset = (glyph_pos[i].y_offset / 64.0f) * font_scale;
 
 		if (g && g->size[0] > 0 && g->size[1] > 0) {
 			if (font->glyph_count >= MAX_GLYPH_INSTANCES) { engine_error(LOG_FILE, "Glyph count exceeds max glyphs"); break; }
 			GlyphRenderInstance	*inst = &font->render_instances[font->glyph_count++];
 
-			inst->pos[0] = cursor_x + x_offset + g->bearing[0];
-			inst->pos[1] = cursor_y - y_offset - g->bearing[1];
-			inst->size[0] = g->size[0];
-			inst->size[1] = g->size[1];
+			inst->pos[0] = roundf(cursor_x + x_offset + g->bearing[0] * font_scale);
+			inst->pos[1] = roundf(cursor_y - y_offset - g->bearing[1] * font_scale);
+
+			inst->size[0] = g->size[0] * font_scale;
+			inst->size[1] = g->size[1] * font_scale;
 
 			inst->uv_offset[0] = g->uv_min[0];
 			inst->uv_offset[1] = g->uv_min[1];
@@ -76,8 +78,8 @@ void	textDraw(String text, Font *font, vec2 pos, vec4 color)
 		// else: glyph wasn't in the prebaked charset (or has no ink, e.g. space) —
 		// skipped, but the cursor still advances below.
 
-		cursor_x += glyph_pos[i].x_advance / 64.0f;
-		cursor_y += glyph_pos[i].y_advance / 64.0f;
+		cursor_x = roundf(cursor_x + glyph_pos[i].x_advance / 64.0f * font_scale);
+		cursor_y = roundf(cursor_y + glyph_pos[i].y_advance / 64.0f * font_scale);
 	}
 
 	hb_buffer_reset(buf);
@@ -113,11 +115,11 @@ void	uploadAtlasToGpu(GraphicsContext *ctx, TextAtlas *atlas, u8 *atlas_data)
 	VkSamplerCreateInfo	sampler_info = {
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
 		// How to sample when texture is magnified or minified
-		.magFilter = VK_FILTER_NEAREST,
-		.minFilter = VK_FILTER_NEAREST,
+		.magFilter = VK_FILTER_LINEAR,
+		.minFilter = VK_FILTER_LINEAR,
 		.minLod = 0,
-		.maxLod = 1,
-		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+		.maxLod = 0,
+		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
 		// What happens when axes go outside 0 - 1 range
 		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
 		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
@@ -151,7 +153,9 @@ static void	renderGlyphToAtlas(Font *font, u32 glyph_index, u8 *atlas_data, Glyp
 	FT_Face		face = font->face;
 	TextAtlas	*atlas = &font->atlas;
 
-	FT_Load_Glyph(face, glyph_index, FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT);
+	// TODO: Test FT_LOAD_FORCE_AUTOHINT against FT_LOAD_DEFAULT
+	FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT | FT_LOAD_NO_AUTOHINT | FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING);
+	FT_Render_Glyph(face->glyph, FT_RENDER_MODE_SDF);
 
 	const FT_GlyphSlot	slot = face->glyph;
 	const FT_Bitmap	*bitmap = &slot->bitmap;
@@ -159,9 +163,10 @@ static void	renderGlyphToAtlas(Font *font, u32 glyph_index, u8 *atlas_data, Glyp
 	const u32	glyph_width = bitmap->width;
 	const u32	glyph_height = bitmap->rows;
 
-	if (atlas->next_x + glyph_width + 1 >= atlas->width) {
-		atlas->next_x = 1;
-		atlas->next_y += atlas->row_height + 1;
+	const u32	padding = 1;
+	if (atlas->next_x + glyph_width + padding >= atlas->width) {
+		atlas->next_x = padding;
+		atlas->next_y += atlas->row_height + padding;
 		atlas->row_height = 0;
 	}
 
@@ -189,10 +194,7 @@ static void	renderGlyphToAtlas(Font *font, u32 glyph_index, u8 *atlas_data, Glyp
 	glm_vec2((vec2){slot->bitmap_left, slot->bitmap_top}, atlas_glyph->bearing);
 	atlas_glyph->advance = slot->advance.x >> 6;	// Convert to pixels
 
-	atlas->next_x += glyph_width + 1;
-
-	printf("glyph pitch=%d width=%u rows=%u pixel_mode=%d\n",
-	bitmap->pitch, bitmap->width, bitmap->rows, slot->bitmap.pixel_mode);
+	atlas->next_x += glyph_width + padding;
 }
 
 void debugDumpAtlasPGM(const char *path, u8 *atlas_data, u32 width, u32 height)
@@ -254,7 +256,7 @@ void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset, Allocator
 	uploadAtlasToGpu(ctx, atlas, atlas_data);
 	font->allocator = frame_allocator;
 	// TODO: Bad allocation
-	font->render_instances = calloc(sizeof(GlyphRenderInstance), MAX_GLYPH_INSTANCES);
+	font->render_instances = calloc(MAX_GLYPH_INSTANCES, sizeof(GlyphRenderInstance));
 }
 
 TextRenderInfo	buildTextInfo(Font *font)
