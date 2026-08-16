@@ -1070,6 +1070,8 @@ void	modelLoad(String filename, GraphicsContext *ctx, Model *model)
 	gltfLoadAnimations(model, gltf_model);
 	createDescriptorSetsForMaterials(ctx, model->materials, model->material_count);
 
+	// TODO: Destroy tg3 object
+
 	engine_log(LOG_FILE, "Successfully loaded texture %S", filename);
 }
 
