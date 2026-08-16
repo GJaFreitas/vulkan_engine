@@ -133,13 +133,6 @@ int	loop(World world)
 		}
 		textDraw(STRING_LIT("Hello world!"), &world.font, 64, (vec2){100, 100}, (vec4){255, 255, 255, 255});
 
-		// u8 *raw = (u8 *)world.font.render_instances;
-		// for (u32 i = 0; i < 192; i += 16) {
-		// 	printf("%04u: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n", i,
-		//  raw[i+0],raw[i+1],raw[i+2],raw[i+3],raw[i+4],raw[i+5],raw[i+6],raw[i+7],
-		//  raw[i+8],raw[i+9],raw[i+10],raw[i+11],raw[i+12],raw[i+13],raw[i+14],raw[i+15]);
-		// }
-
 		entity_info = buildRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
 		text_info = buildTextInfo(&world.font);
 		render(world.graphics_ctx, &world.player->camera, entity_info, text_info);

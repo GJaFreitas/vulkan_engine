@@ -15,16 +15,6 @@ GlyphInfo	*atlasFindGlyph(const TextAtlas *atlas, u32 glyph_index)
 	return NULL;
 }
 
-// Called after textInstanceBuild() 
-void	textInstanceBufferUpload(BufferObject *buffer, const GlyphInfo *instances, u32 count)
-{
-	const VkDeviceSize	needed = count * sizeof(GlyphInfo);
-	if (needed > buffer->capacity) {
-		engine_debug(LOG_FILE, "textInstanceBufferUpload called and needed size exceeds buffer capacity, count: %u", count);
-	}
-	memcpy(buffer->mapped, instances, needed);
-}
-
 // This function doesnt actually draw any text, it queues the text to be drawn by the TEXT pipeline
 void	textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
 {
@@ -75,6 +65,7 @@ void	textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
 
 			glm_vec4_copy(color, inst->color);
 		}
+		// TODO:
 		// else: glyph wasn't in the prebaked charset (or has no ink, e.g. space) —
 		// skipped, but the cursor still advances below.
 
@@ -153,7 +144,6 @@ static void	renderGlyphToAtlas(Font *font, u32 glyph_index, u8 *atlas_data, Glyp
 	FT_Face		face = font->face;
 	TextAtlas	*atlas = &font->atlas;
 
-	// TODO: Test FT_LOAD_FORCE_AUTOHINT against FT_LOAD_DEFAULT
 	FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT | FT_LOAD_NO_AUTOHINT | FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING);
 	FT_Render_Glyph(face->glyph, FT_RENDER_MODE_SDF);
 
