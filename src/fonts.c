@@ -3,51 +3,54 @@
 
 #define ATLAS_SIZE	2048
 
+// GlyphInfo	atlasGetGlyphInfo(TextAtlas *atlas, FT_Face face, u32 codepoint)
+// {
+// 	FT_Load_Char(face, codepoint, FT_LOAD_DEFAULT | FT_LOAD_RENDER);
+// }
 
 void	uploadAtlasToGpu(GraphicsContext *ctx, TextAtlas *atlas, u8 *atlas_data)
 {
 	stagingBufferUpload(ctx, atlas->width, atlas->height, atlas_data, &atlas->gpu_image);
 
-	// Staging buffer
-		VkImageViewCreateInfo	image_view_info = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.viewType = VK_IMAGE_VIEW_TYPE_2D,
-			.image = atlas->gpu_image.image,
-			.format = VK_FORMAT_R8_UNORM,
-			.components = {
-				VK_COMPONENT_SWIZZLE_IDENTITY,
-				VK_COMPONENT_SWIZZLE_IDENTITY,
-				VK_COMPONENT_SWIZZLE_IDENTITY,
-				VK_COMPONENT_SWIZZLE_IDENTITY,
-			},
-			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			},
-		};
-		if (vkCreateImageView(ctx->device, &image_view_info, NULL, &atlas->gpu_image.view) != VK_SUCCESS) {
-			engine_error(LOG_FILE, "Failed to create image view");
-		}
+	VkImageViewCreateInfo	image_view_info = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		.viewType = VK_IMAGE_VIEW_TYPE_2D,
+		.image = atlas->gpu_image.image,
+		.format = VK_FORMAT_R8_UNORM,
+		.components = {
+			VK_COMPONENT_SWIZZLE_IDENTITY,
+			VK_COMPONENT_SWIZZLE_IDENTITY,
+			VK_COMPONENT_SWIZZLE_IDENTITY,
+			VK_COMPONENT_SWIZZLE_IDENTITY,
+		},
+		.subresourceRange = {
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.baseMipLevel = 0,
+			.levelCount = 1,
+			.baseArrayLayer = 0,
+			.layerCount = 1
+		},
+	};
+	if (vkCreateImageView(ctx->device, &image_view_info, NULL, &atlas->gpu_image.view) != VK_SUCCESS) {
+		engine_error(LOG_FILE, "Failed to create image view");
+	}
 
-		VkSamplerCreateInfo	sampler_info = {
-			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-			// How to sample when texture is magnified or minified
-			.magFilter = VK_FILTER_LINEAR,
-			.minFilter = VK_FILTER_LINEAR,
-			.minLod = 0,
-			.maxLod = 1,
-			.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-			// What happens when axes go outside 0 - 1 range
-			.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-			.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-			.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-			// Need to check feature for this
-			.anisotropyEnable = VK_FALSE
-		};
-		vkCreateSampler(ctx->device, &sampler_info, NULL, &atlas->sampler);
+	VkSamplerCreateInfo	sampler_info = {
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		// How to sample when texture is magnified or minified
+		.magFilter = VK_FILTER_LINEAR,
+		.minFilter = VK_FILTER_LINEAR,
+		.minLod = 0,
+		.maxLod = 1,
+		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+		// What happens when axes go outside 0 - 1 range
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		// Need to check feature for this
+		.anisotropyEnable = VK_FALSE
+	};
+	vkCreateSampler(ctx->device, &sampler_info, NULL, &atlas->sampler);
 }
 
 static void	renderGlyphToAtlas(Font *font, u32 codepoint, u8 *atlas_data, GlyphInfo *atlas_glyph)
