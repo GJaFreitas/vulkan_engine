@@ -3,10 +3,17 @@
 
 #define ATLAS_SIZE	2048
 
-// GlyphInfo	atlasGetGlyphInfo(TextAtlas *atlas, FT_Face face, u32 codepoint)
-// {
-// 	FT_Load_Char(face, codepoint, FT_LOAD_DEFAULT | FT_LOAD_RENDER);
-// }
+GlyphInfo	*atlasFindGlyph(TextAtlas *atlas, u32 glyph_index)
+{
+	// TODO: Test this to see if hashing is more efficent
+	// »speed
+	for (u32 i = 0; i < atlas->glyph_count; i++) {
+		if (atlas->glyphs[i].index == glyph_index) {
+			return (&atlas->glyphs[i]);
+		}
+	}
+	return NULL;
+}
 
 void	uploadAtlasToGpu(GraphicsContext *ctx, TextAtlas *atlas, u8 *atlas_data)
 {
@@ -82,6 +89,8 @@ static void	renderGlyphToAtlas(Font *font, u32 glyph_index, u8 *atlas_data, Glyp
 	for (u32 row = 0; row < glyph_height; row++) {
 		for (u32 col = 0; col < glyph_width; col++) {
 			u32 atlas_idx = (y + row) * atlas->width + (x + col);
+			// WARN: If there is a problem with rendering chars it might
+			// be because the pitch is negative, check here first
 			u32 bitmap_idx = row * bitmap->pitch + col;
 			atlas_data[atlas_idx] = bitmap->buffer[bitmap_idx];
 		}

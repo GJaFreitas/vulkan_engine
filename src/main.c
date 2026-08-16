@@ -176,7 +176,7 @@ void	createSomeText(GraphicsContext *ctx, World *world)
 	world->font.face = ft_face;		// This is a handle so this assignment is fine
 	world->font.hb_font = hb_font;		// Same here since its a pointer
 	world->font.font_size = 12.0f;
-	createTextAtlas(ctx, &world->font, STRING_LIT("1234567890ABCDEFGHIJKLMNOPQRSTUVWYZabcdefghijklmnopqrstuvwyz"));
+	createTextAtlas(ctx, &world->font, STRING_LIT("1234567890ABCDEFGHIJKLMNOPQRSTUVWYZabcdefghijklmnopqrstuvwyz!"));
 
 	hb_buffer_t	*buf = hb_buffer_create();
 	const char 	*text = "Hello world!";
