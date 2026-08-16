@@ -232,23 +232,18 @@ typedef struct GlyphInstance
 	vec4	color;		// RGBA, lets you tint text per-glyph/run
 }	GlyphInstance;
 
-typedef struct FrameResources
+typedef struct BufferObject
 {
-	VkCommandPool	command_pool;
-	VkCommandBuffer	command_buffer;
-	VkSemaphore	image_acquired_semaphore;
+	VkBuffer	handle;
+	VkDeviceSize	capacity;
+	void		*allocation;
 
-	VkBuffer	uniform_buffer;
-	void		*uniform_buffer_mapped;
-	void		*uniform_buffer_allocation;
+	// Optional
+	void		*mapped;
+}	BufferObject;
 
-	VkBuffer	instance_buffer;
-	void		*instance_buffer_mapped;
-	void		*instance_buffer_allocation;
-
-}	FrameResources;
-
-typedef struct PipelineObject {
+typedef struct PipelineObject
+{
 
 	VkPipeline		handle;
 	VkPipelineLayout	layout;
@@ -257,6 +252,21 @@ typedef struct PipelineObject {
 	VkShaderModule		frag_shader;
 
 }	PipelineObject;
+
+typedef struct FrameResources
+{
+	VkCommandPool	cmd_pool;
+	VkCommandBuffer	cmd_buf;
+	VkSemaphore	image_acquired_semaphore;
+
+	BufferObject	uniform_buffer;
+
+	BufferObject	instance_buffer;
+
+	BufferObject	text_instance;
+	u32		glyph_count;
+
+}	FrameResources;
 
 typedef struct GraphicsContext
 {
@@ -302,6 +312,7 @@ typedef struct GraphicsContext
 	VkDescriptorPool	descriptor_pool;
 	VkDescriptorSet		ubo_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
 	VkDescriptorSet		instance_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
+	VkDescriptorSet		atlas_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
 	// ------------------------
 
 	// PBR Pipeline ------------

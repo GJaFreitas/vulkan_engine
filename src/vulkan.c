@@ -17,6 +17,12 @@ VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
 	return VK_FALSE;
 }
 
+static inline void	createMappedBuffer(void *allocator, VkBufferCreateInfo *buf_info, BufferObject *buf)
+{
+	wrapperVMAcreateBuffer(allocator, buf_info, &buf->handle, &buf->allocation, 1);
+	wrapperVMAmapMemory(allocator, buf->allocation, &buf->mapped);
+}
+
 void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, void *data_for_upload, ImageObject *gpu_image)
 {
 	const u32	data_size = img_h * img_w;
@@ -1072,9 +1078,10 @@ static void	createGRIDPipeline(GraphicsContext *ctx)
 	engine_log(LOG_FILE, "Successfully created graphics pipeline");
 }
 
-static void	createSyncResources(GraphicsContext *ctx)
+static void	createFrameResources(GraphicsContext *ctx)
 {
 	ctx->frames_in_flight_count = MAX_FRAMES_IN_FLIGHT;
+	// TODO: Change allocation?
 	ctx->frame_resources = calloc(ctx->frames_in_flight_count, sizeof(FrameResources));
 
 	VkSemaphoreTypeCreateInfo	semaphore_type_info = {
@@ -1121,19 +1128,19 @@ static void	createSyncResources(GraphicsContext *ctx)
 			.queueFamilyIndex = ctx->queue_family_index,
 		};
 
-		if (vkCreateCommandPool(ctx->device, &pool_info, NULL, &resource->command_pool) != VK_SUCCESS) {
+		if (vkCreateCommandPool(ctx->device, &pool_info, NULL, &resource->cmd_pool) != VK_SUCCESS) {
 			engine_error(LOG_FILE, "Failed to create command pool nr: %u", i);
 			exit(1);
 		}
 
 		VkCommandBufferAllocateInfo buffer_alloc_info = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-			.commandPool = resource->command_pool,
+			.commandPool = resource->cmd_pool,
 			.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
 			.commandBufferCount = 1
 		};
 
-		if (vkAllocateCommandBuffers(ctx->device, &buffer_alloc_info, &resource->command_buffer) != VK_SUCCESS) {
+		if (vkAllocateCommandBuffers(ctx->device, &buffer_alloc_info, &resource->cmd_buf) != VK_SUCCESS) {
 			engine_error(LOG_FILE, "Failed to create command buffer nr: %u", i);
 			exit(1);
 		}
@@ -1145,39 +1152,28 @@ static void	createSyncResources(GraphicsContext *ctx)
 			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		};
 
-		if (wrapperVMAcreateBuffer(ctx->vma_allocator, &instance_buffer_info, &resource->instance_buffer, &resource->instance_buffer_allocation, 1) != VK_SUCCESS) {
-			engine_error(LOG_FILE, "Failed to create instance buffer nr: %u", i);
-			exit(1);
-		}
-		wrapperVMAmapMemory(ctx->vma_allocator, resource->instance_buffer_allocation, &resource->instance_buffer_mapped);
+		createMappedBuffer(ctx->vma_allocator, &instance_buffer_info, &resource->instance_buffer);
 
-		VkBufferCreateInfo	buf_info = {
+		VkBufferCreateInfo	text_buffer_info = {
+			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+			.size = sizeof(GlyphRenderInstance) * MAX_GLYPH_INSTANCES,
+			.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		};
+
+		createMappedBuffer(ctx->vma_allocator, &text_buffer_info, &resource->text_instance);
+
+		VkBufferCreateInfo	ubo_info = {
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
 			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 			.size = sizeof(UniformBufferObject),
 		};
 
-		wrapperVMAcreateBuffer(ctx->vma_allocator, &buf_info, &resource->uniform_buffer, &resource->uniform_buffer_allocation, 1);
-		wrapperVMAmapMemory(ctx->vma_allocator, resource->uniform_buffer_allocation, &resource->uniform_buffer_mapped);
-
-		UniformBufferObject	ubo = {};
-
-		// TODO: REMOVE YOURSELF NOW
-		glm_vec4_copy((vec4){-10.0f,  10.0f, 10.0f, 1.0f}, ubo.light_positions[0]);
-		glm_vec4_copy((vec4){ 10.0f,  10.0f, 10.0f, 1.0f}, ubo.light_positions[1]);
-		glm_vec4_copy((vec4){-10.0f, -10.0f, 10.0f, 1.0f}, ubo.light_positions[2]);
-		glm_vec4_copy((vec4){ 10.0f, -10.0f, 10.0f, 1.0f}, ubo.light_positions[3]);
-
-		glm_vec4_copy((vec4){300.0f, 300.0f, 300.0f, 1.0f}, ubo.light_colors[0]);
-		glm_vec4_copy((vec4){300.0f, 300.0f,   0.0f, 1.0f}, ubo.light_colors[1]);
-		glm_vec4_copy((vec4){  0.0f,   0.0f, 300.0f, 1.0f}, ubo.light_colors[2]);
-		glm_vec4_copy((vec4){300.0f,   0.0f,   0.0f, 1.0f}, ubo.light_colors[3]);
-
-		memcpy(resource->uniform_buffer_mapped, &ubo, sizeof(UniformBufferObject));
+		createMappedBuffer(ctx->vma_allocator, &ubo_info, &resource->uniform_buffer);
 	}
 
-	engine_log(LOG_FILE, "Successfully created sync resources");
+	engine_log(LOG_FILE, "Successfully created frame resources");
 }
 
 static void	destroyShaders(GraphicsContext *ctx)
@@ -1207,11 +1203,11 @@ static void	destroySyncResources(GraphicsContext *ctx)
 		FrameResources	*resource = &ctx->frame_resources[i];
 
 		vkDestroySemaphore(ctx->device, resource->image_acquired_semaphore, NULL);
-		vkDestroyCommandPool(ctx->device, resource->command_pool, NULL);
-		wrapperVMAunmapMemory(ctx->vma_allocator, resource->instance_buffer_allocation);
-		wrapperVMAunmapMemory(ctx->vma_allocator, resource->uniform_buffer_allocation);
-		wrapperVMAdestroyBuffer(ctx->vma_allocator, resource->instance_buffer, resource->instance_buffer_allocation);
-		wrapperVMAdestroyBuffer(ctx->vma_allocator, resource->uniform_buffer, resource->uniform_buffer_allocation);
+		vkDestroyCommandPool(ctx->device, resource->cmd_pool, NULL);
+		wrapperVMAunmapMemory(ctx->vma_allocator, resource->instance_buffer.allocation);
+		wrapperVMAunmapMemory(ctx->vma_allocator, resource->uniform_buffer.allocation);
+		wrapperVMAdestroyBuffer(ctx->vma_allocator, resource->instance_buffer.handle, resource->instance_buffer.allocation);
+		wrapperVMAdestroyBuffer(ctx->vma_allocator, resource->uniform_buffer.handle, resource->uniform_buffer.allocation);
 	}
 	vkDestroySemaphore(ctx->device, ctx->timeline_semaphore, NULL);
 }
@@ -1334,7 +1330,7 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 		FrameResources	*resource = &ctx->frame_resources[i];
 
 		VkDescriptorBufferInfo	instance_buf_info = {
-			.buffer = resource->instance_buffer,
+			.buffer = resource->instance_buffer.handle,
 			.offset = 0,
 			.range = sizeof(InstanceData) * MAX_INSTANCES,
 		};
@@ -1351,7 +1347,7 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 
 
 		VkDescriptorBufferInfo	ubo_buf_info = {
-			.buffer = resource->uniform_buffer,
+			.buffer = resource->uniform_buffer.handle,
 			.offset = 0,
 			.range = sizeof(UniformBufferObject),
 		};
@@ -1387,7 +1383,7 @@ static void	initVulkan(GraphicsContext *ctx)
 	}
 	createSwapchain(ctx, ctx->window_width, ctx->window_height);
 	createDescriptorSetLayouts(ctx);
-	createSyncResources(ctx);
+	createFrameResources(ctx);
 	createDescriptorPoolSets(ctx);
 	createDefaultTextures(ctx);
 	createMaterialDescriptorSetLayout(ctx);
@@ -1453,19 +1449,36 @@ static void	updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 	ubo.gamma = 2.2f;
 
 
-	memcpy(resource->uniform_buffer_mapped, &ubo, sizeof(UniformBufferObject));
+	memcpy(resource->uniform_buffer.mapped, &ubo, sizeof(UniformBufferObject));
+}
+
+void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, u32 frame_idx)
+{
+	const VkDescriptorSet	atlas_descriptor_set = ctx->atlas_descriptor_sets[frame_idx];
+
+	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_text.handle);
+
+	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, 1, &atlas_descriptor_set, 0, NULL);
+
+	const vec2	push_constants = {screen_w, screen_h};
+	vkCmdPushConstants(cmd, pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_constants), push_constants);
+
+	VkDeviceSize	offset = 0;
+	vkCmdBindVertexBuffers(cmd, 0, 1, &text_instance_buffer.handle, &offset);
+
+	vkCmdDraw(cmd, 4, glyph_count, 0, 0);
 }
 
 void	GRIDPass(GraphicsContext *ctx, FrameResources *resource, u32 frame_idx)
 {
 	const VkDescriptorSet	ubo_descriptor_set = ctx->ubo_descriptor_sets[frame_idx];
 
-	vkCmdBindPipeline(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.handle);
+	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.handle);
 	VkDescriptorSet	grid_descriptor_sets[] = { ubo_descriptor_set };
 
-	vkCmdPushConstants(resource->command_buffer, ctx->pipeline_grid.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GridProperties), &ctx->grid_properties);
-	vkCmdBindDescriptorSets(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.layout, 0, 1, grid_descriptor_sets, 0, NULL);
-	vkCmdDraw(resource->command_buffer, 3, 1, 0, 0);
+	vkCmdPushConstants(resource->cmd_buf, ctx->pipeline_grid.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GridProperties), &ctx->grid_properties);
+	vkCmdBindDescriptorSets(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.layout, 0, 1, grid_descriptor_sets, 0, NULL);
+	vkCmdDraw(resource->cmd_buf, 3, 1, 0, 0);
 }
 
 void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources *resource, u8 frame_idx)
@@ -1473,11 +1486,11 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 	const u32		total_entity_count = entity_info.entity_count;
 	const VkDescriptorSet	ubo_descriptor_set = ctx->ubo_descriptor_sets[frame_idx];
 	const VkDescriptorSet	instance_descriptor_set = ctx->instance_descriptor_sets[frame_idx];
-	InstanceData		*instance_data_buf = (InstanceData *)resource->instance_buffer_mapped;
+	InstanceData		*instance_data_buf = (InstanceData *)resource->instance_buffer.mapped;
 	VkDeviceSize		offset = 0;
 	u32			instance_cursor = 0;
 
-	vkCmdBindPipeline(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.handle);
+	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.handle);
 
 	u32	e_idx = 0;
 	while (e_idx < total_entity_count) {
@@ -1529,11 +1542,11 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 				push_constants_mat.alpha_mask = 0.0f;
 				glm_vec4_copy(mat->base_color_factor, push_constants_mat.base_color_factor);
 			}
-			vkCmdPushConstants(resource->command_buffer, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
-			vkCmdBindDescriptorSets(resource->command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.layout, 0, pbr_descriptor_set_count, pbr_descriptor_sets, 0, NULL);
-			vkCmdBindVertexBuffers(resource->command_buffer, 0, 1, &mesh->gpu_vertex_data, &offset);
-			vkCmdBindIndexBuffer(resource->command_buffer, mesh->gpu_index_data, 0, mesh->index_type);
-			vkCmdDrawIndexed(resource->command_buffer, mesh->index_count, run_count, 0, 0, first_instance);
+			vkCmdPushConstants(resource->cmd_buf, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
+			vkCmdBindDescriptorSets(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.layout, 0, pbr_descriptor_set_count, pbr_descriptor_sets, 0, NULL);
+			vkCmdBindVertexBuffers(resource->cmd_buf, 0, 1, &mesh->gpu_vertex_data, &offset);
+			vkCmdBindIndexBuffer(resource->cmd_buf, mesh->gpu_index_data, 0, mesh->index_type);
+			vkCmdDrawIndexed(resource->cmd_buf, mesh->index_count, run_count, 0, 0, first_instance);
 
 		}
 
@@ -1567,7 +1580,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info)
 	};
 	vkWaitSemaphores(ctx->device, &wait_info, UINT64_MAX);
 
-	vkResetCommandPool(ctx->device, resource->command_pool, 0);
+	vkResetCommandPool(ctx->device, resource->cmd_pool, 0);
 
 	VkSemaphore	image_acquire_semaphore = resource->image_acquired_semaphore;
 
@@ -1593,7 +1606,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info)
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
 	};
-	vkBeginCommandBuffer(resource->command_buffer, &cmd_begin_info);
+	vkBeginCommandBuffer(resource->cmd_buf, &cmd_begin_info);
 
 	VkImageMemoryBarrier2	layout_barriers[2] = {0};
 	layout_barriers[0] = (VkImageMemoryBarrier2){
@@ -1637,7 +1650,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info)
 		.imageMemoryBarrierCount = sizeofarray(layout_barriers),
 		.pImageMemoryBarriers = layout_barriers
 	};
-	vkCmdPipelineBarrier2(resource->command_buffer, &dep_info);
+	vkCmdPipelineBarrier2(resource->cmd_buf, &dep_info);
 
 	VkRenderingAttachmentInfo	color_attach_info = {
 		.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -1671,7 +1684,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info)
 	};
 
 
-	vkCmdBeginRendering(resource->command_buffer, &render_info);
+	vkCmdBeginRendering(resource->cmd_buf, &render_info);
 	{
 		VkViewport	viewport = {
 			.x = 0, .y = 0,
@@ -1680,13 +1693,13 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info)
 			.minDepth = 0.0f,
 			.maxDepth = 1.0f,
 		};
-		vkCmdSetViewport(resource->command_buffer, 0, 1, &viewport);
+		vkCmdSetViewport(resource->cmd_buf, 0, 1, &viewport);
 
 		VkRect2D	scissor = {
 			.offset = {0, 0},
 			.extent = { .width = ctx->swapchain_width, .height = ctx->swapchain_height, }
 		};
-		vkCmdSetScissor(resource->command_buffer, 0, 1, &scissor);
+		vkCmdSetScissor(resource->cmd_buf, 0, 1, &scissor);
 
 		// ---- GRID Pass ------------------ //
 		// GRIDPass(ctx, resource, frame_res_index);
@@ -1694,7 +1707,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info)
 		// ---- PBR Pass --------------- //
 		PBRPass(ctx, entity_info, resource, frame_res_index);
 	}
-	vkCmdEndRendering(resource->command_buffer);
+	vkCmdEndRendering(resource->cmd_buf);
 
 	VkImageMemoryBarrier2	present_layout_barrier = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -1718,9 +1731,9 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info)
 		.imageMemoryBarrierCount = 1,
 		.pImageMemoryBarriers = &present_layout_barrier
 	};
-	vkCmdPipelineBarrier2(resource->command_buffer, &present_dep_info);
+	vkCmdPipelineBarrier2(resource->cmd_buf, &present_dep_info);
 
-	vkEndCommandBuffer(resource->command_buffer);
+	vkEndCommandBuffer(resource->cmd_buf);
 
 	VkSemaphoreSubmitInfo	image_acquired_wait_info = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
@@ -1743,7 +1756,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info)
 
 	VkCommandBufferSubmitInfo	cmd_submit_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-		.commandBuffer = resource->command_buffer,
+		.commandBuffer = resource->cmd_buf,
 	};
 
 	VkSubmitInfo2	submit_info = {
