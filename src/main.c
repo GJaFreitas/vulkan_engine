@@ -101,6 +101,7 @@ int	loop(World world)
 	double	fps_avg = 0;
 
 	EntityRenderInfo	entity_info;
+	TextRenderInfo		text_info;
 
 	bool	running = true;
 	u64	last_time = SDL_GetPerformanceCounter();
@@ -130,9 +131,11 @@ int	loop(World world)
 				break ;
 			}
 		}
-		entity_info = buildRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
+		textDraw(STRING_LIT("Hello world!"), &world.font, 64, (vec2){100, 100}, (vec4){255, 255, 255, 255});
 
-		render(world.graphics_ctx, &world.player->camera, entity_info);
+		entity_info = buildRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
+		text_info = buildTextInfo(&world.font);
+		render(world.graphics_ctx, &world.player->camera, entity_info, text_info);
 
 		updateCamera(&world.player->camera, world.graphics_ctx->window, world.dt_ms);
 
@@ -159,7 +162,7 @@ void	updateGridProperties(void *udata)
 	ctx->grid_properties.major_line_every = g_settings.dev.major_line_every;
 }
 
-#define FONT_PATH "/usr/share/fonts/Adwaita/AdwaitaMono-Bold.ttf"
+#define FONT_PATH "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Bold.ttf"
 
 void	createSomeText(GraphicsContext *ctx, World *world)
 {
@@ -170,28 +173,14 @@ void	createSomeText(GraphicsContext *ctx, World *world)
 
 	FT_Init_FreeType(&ft_lib);
 	FT_New_Face(ft_lib, FONT_PATH, 0, &ft_face);
-	FT_Set_Char_Size(ft_face, 0, 16 * 64, 96, 96);
+	const u32	font_size = 48;
+	FT_Set_Char_Size(ft_face, 0, font_size * 64, 96, 96);
 
 	hb_font_t	*hb_font = hb_ft_font_create(ft_face, NULL);
 	world->font.face = ft_face;		// This is a handle so this assignment is fine
 	world->font.hb_font = hb_font;		// Same here since its a pointer
-	world->font.font_size = 12.0f;
-	createTextAtlas(ctx, &world->font, STRING_LIT("1234567890ABCDEFGHIJKLMNOPQRSTUVWYZabcdefghijklmnopqrstuvwyz"));
-
-	hb_buffer_t	*buf = hb_buffer_create();
-	const char 	*text = "Hello world!";
-	hb_buffer_add_utf8(buf, text, -1, 0, -1);
-
-	hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
-	hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
-	hb_buffer_set_language(buf, hb_language_from_string("en", -1));
-
-	hb_shape(hb_font, buf, NULL, 0);
-
-	hb_buffer_destroy(buf);
-	hb_font_destroy(hb_font);
-	FT_Done_Face(ft_face);
-	FT_Done_FreeType(ft_lib);
+	world->font.base_font_size = font_size;
+	createTextAtlas(ctx, &world->font, STRING_LIT("1234567890ABCDEFGHIJKLMNOPQRSTUVWYZabcdefghijklmnopqrstuvwyz!."), &world->frame_allocator);
 }
 
 int	main(void)
@@ -209,17 +198,16 @@ int	main(void)
 	world.player = &p;
 	world.graphics_ctx = &gctx;
 	world.key_states = SDL_GetKeyboardState(NULL);
-	world.frame_allocator = newArenaAllocator(MB(1), NULL, DEFAULT_ALIGN);
+	world.frame_allocator = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
 	world.entity_allocator = newHeapAllocator(MB(2), NULL, DEFAULT_ALIGN);
 	world.entities = vectorCreate(16, sizeof(Entity *), &world.entity_allocator);
 	updateGridProperties(&world);
 
 	startGraphics(world.graphics_ctx);
 
+
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);
 	initPlayer(world.player);
-
-	startGraphics(world.graphics_ctx);
 	createSomeText(world.graphics_ctx, &world);
 
 	loop(world);
