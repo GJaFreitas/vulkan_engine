@@ -37,16 +37,21 @@ typedef struct UniformBufferObject
 	float	scale_ibl_ambient;		// Scale factor for ambient light
 }	UniformBufferObject;
 
+typedef struct ImageObject
+{
+	VkImageView	view;
+	VkImage		image;
+	void		*allocation;
+}	ImageObject;
+
 typedef struct Texture
 {
 	// TODO: Not a good identifier outside of debug, find another way
 	String	name;
 
-	VkImageView	image_view;
 	VkSampler	sampler;
+	ImageObject	gpu_image;
 
-	VkImage		gpu_image;
-	void		*gpu_image_alloc;
 }	Texture;
 
 typedef struct Material
@@ -218,6 +223,15 @@ typedef struct InstanceData
 	mat4	model_mat;
 }	InstanceData;
 
+typedef struct GlyphInstance
+{
+	vec2	pos;		// top-left, in pixels, screen space (origin top-left)
+	vec2	size;		// width/height in pixels
+	vec2	uv_offset;	// top-left UV in the atlas [0,1]
+	vec2	uv_size;	// UV width/height in the atlas
+	vec4	color;		// RGBA, lets you tint text per-glyph/run
+}	GlyphInstance;
+
 typedef struct FrameResources
 {
 	VkCommandPool	command_pool;
@@ -272,17 +286,18 @@ typedef struct GraphicsContext
 	VkImage			*swapchain_images;
 	VkImageView		*swapchain_image_views;
 	VkFormat		swapchain_depth_format;
-	VkImage			swapchain_depth_image;
-	VkImageView		swapchain_depth_image_view;
-	void			*swapchain_depth_image_allocation;
+	ImageObject		swapchain_depth_image;
 	VkSemaphore		*render_complete_sequence_semaphores;
 	u32			swapchain_width;
 	u32			swapchain_height;
 	bool			swapchain_require_recreate;
 
+	VkCommandPool		single_time_pool;
+
 	// Shared between pipelines
 	VkDescriptorSetLayout	ubo_descriptor_layout;
 	VkDescriptorSetLayout	instance_descriptor_layout;
+	VkDescriptorSetLayout	atlas_descriptor_layout;
 
 	VkDescriptorPool	descriptor_pool;
 	VkDescriptorSet		ubo_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
@@ -307,6 +322,10 @@ typedef struct GraphicsContext
 	PipelineObject		pipeline_grid;
 	GridProperties		grid_properties;
 	// --------------------------
+	
+	// Text Pipeline ------------
+	PipelineObject		pipeline_text;
+	// --------------------------
 
 	u32			frames_in_flight_count;
 	VkSemaphore		timeline_semaphore;
@@ -314,7 +333,6 @@ typedef struct GraphicsContext
 
 	u32			frame_index;
 	u64			next_signal_value;
-
 
 }	GraphicsContext;
 
@@ -367,6 +385,8 @@ void	immediate_submit(GraphicsContext *ctx, void (*fn)(VkCommandBuffer cmd, void
 void	startGraphics(GraphicsContext *ctx);
 void	endGraphics(GraphicsContext *ctx);
 void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info);
+void	beginSingleTimeCommand(GraphicsContext *ctx, VkCommandBuffer *cmd_buffer);
+void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, void *data_for_upload, ImageObject *gpu_image);
 
 
 void	modelLoad(String filename, GraphicsContext *ctx, Model *model);

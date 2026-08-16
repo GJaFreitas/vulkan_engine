@@ -2,6 +2,7 @@
 
 #include "base_layer.h"
 #include "graphics_layer.h"
+#include "fonts.h"
 
 typedef struct Player
 {
@@ -24,9 +25,6 @@ void	unloadEntity(Entity *e, Allocator *a);
 Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a);
 void	updateEntities(Vector *entities, double dt);
 
-
-
-
 EntityRenderInfo	buildRenderInfo(Vector *entity_vector, u32 model_count, Allocator *a);
 
 typedef struct World
@@ -46,5 +44,7 @@ typedef struct World
 	const bool		*key_states;
 
 	double		dt_ms;
+
+	Font		font;
 
 }	World;
