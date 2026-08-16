@@ -33,7 +33,6 @@ VSOutput vertMain(VSInput input, uint vertex_id: SV_VertexID)
 	float2	pixel_pos = input.pos + corner * input.size;
 
 	float2	ndc = (pixel_pos / pc.screen_size) * 2.0 - 1.0;
-	ndc.y *= -1.0;
 
 	output.sv_position = float4(ndc, 0.0, 1.0);
 	output.uv = input.uv_offset + corner * input.uv_size;

@@ -53,6 +53,7 @@ void	textDraw(String text, Font *font, vec2 pos, vec4 color)
 		// was baked (by glyph index via FT_Get_Char_Index + FT_Load_Glyph).
 		const u32	glyph_index = glyph_info[i].codepoint;
 		const GlyphInfo	*g = atlasFindGlyph(atlas, glyph_index);
+
 		float	x_offset = glyph_pos[i].x_offset / 64.0f;
 		float	y_offset = glyph_pos[i].y_offset / 64.0f;
 
@@ -112,8 +113,8 @@ void	uploadAtlasToGpu(GraphicsContext *ctx, TextAtlas *atlas, u8 *atlas_data)
 	VkSamplerCreateInfo	sampler_info = {
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
 		// How to sample when texture is magnified or minified
-		.magFilter = VK_FILTER_LINEAR,
-		.minFilter = VK_FILTER_LINEAR,
+		.magFilter = VK_FILTER_NEAREST,
+		.minFilter = VK_FILTER_NEAREST,
 		.minLod = 0,
 		.maxLod = 1,
 		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
@@ -189,6 +190,18 @@ static void	renderGlyphToAtlas(Font *font, u32 glyph_index, u8 *atlas_data, Glyp
 	atlas_glyph->advance = slot->advance.x >> 6;	// Convert to pixels
 
 	atlas->next_x += glyph_width + 1;
+
+	printf("glyph pitch=%d width=%u rows=%u pixel_mode=%d\n",
+	bitmap->pitch, bitmap->width, bitmap->rows, slot->bitmap.pixel_mode);
+}
+
+void debugDumpAtlasPGM(const char *path, u8 *atlas_data, u32 width, u32 height)
+{
+	FILE *f = fopen(path, "wb");
+	if (!f) return;
+	fprintf(f, "P5\n%u %u\n255\n", width, height);
+	fwrite(atlas_data, 1, width * height, f);
+	fclose(f);
 }
 
 void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset, Allocator *frame_allocator)
@@ -223,11 +236,12 @@ void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset, Allocator
 	const u32	glyph_count = charset.count;
 
 	// TODO: Bad allocation
-	atlas->glyphs = malloc(glyph_count * sizeof(GlyphInstance));
+	atlas->glyphs = malloc(glyph_count * sizeof(GlyphInfo));
 	atlas->glyph_count = glyph_count;
 
 	// Staging buffer
 	u8	*atlas_data = frame_allocator->fp_allocation(frame_allocator, atlas->width * atlas->height, DEFAULT_ALIGN);
+	// memset(atlas_data, 0, atlas->width * atlas->height);
 
 	for (u32 i = 0; i < glyph_count; i++) {
 		const u32	codepoint = charset.data[i];
@@ -235,10 +249,12 @@ void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset, Allocator
 		renderGlyphToAtlas(font, glyph_index, atlas_data, &atlas->glyphs[i]);
 	}
 
+	debugDumpAtlasPGM("/tmp/atlas_debug.pgm", atlas_data, atlas->width, atlas->height);
+
 	uploadAtlasToGpu(ctx, atlas, atlas_data);
 	font->allocator = frame_allocator;
 	// TODO: Bad allocation
-	font->render_instances = malloc(sizeof(GlyphRenderInstance) * MAX_GLYPH_INSTANCES);
+	font->render_instances = calloc(sizeof(GlyphRenderInstance), MAX_GLYPH_INSTANCES);
 }
 
 TextRenderInfo	buildTextInfo(Font *font)

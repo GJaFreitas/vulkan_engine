@@ -810,16 +810,16 @@ static void	createTEXTPipeline(GraphicsContext *ctx)
 
 	VkVertexInputBindingDescription	bind_desc = {
 		.binding = 0,
-		.stride = sizeof(GlyphInstance),
-		.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+		.stride = sizeof(GlyphRenderInstance),
+		.inputRate = VK_VERTEX_INPUT_RATE_INSTANCE,
 	};
 
 	VkVertexInputAttributeDescription	attribute_desc[] = {
-		{0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphInstance, pos)},
-		{1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphInstance, size)},
-		{2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphInstance, uv_offset)},
-		{3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphInstance, uv_size)},
-		{4, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(GlyphInstance, color)},
+		{0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphRenderInstance, pos)},
+		{1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphRenderInstance, size)},
+		{2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphRenderInstance, uv_offset)},
+		{3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphRenderInstance, uv_size)},
+		{4, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(GlyphRenderInstance, color)},
 	};
 
 	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
