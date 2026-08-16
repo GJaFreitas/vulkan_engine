@@ -263,8 +263,7 @@ typedef struct FrameResources
 
 	BufferObject	instance_buffer;
 
-	BufferObject	text_instance;
-	u32		glyph_count;
+	BufferObject	text_instance_buffer;
 
 }	FrameResources;
 
@@ -312,7 +311,7 @@ typedef struct GraphicsContext
 	VkDescriptorPool	descriptor_pool;
 	VkDescriptorSet		ubo_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
 	VkDescriptorSet		instance_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
-	VkDescriptorSet		atlas_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
+	VkDescriptorSet		atlas_descriptor_set;
 	// ------------------------
 
 	// PBR Pipeline ------------
@@ -360,6 +359,13 @@ typedef struct EntityRenderInfo
 
 }	EntityRenderInfo;
 
+typedef struct TextRenderInfo
+{
+	u64	upload_size;
+	u32	glyph_count;
+	void	*render_instances;
+}	TextRenderInfo;
+
 enum CameraMovement {
 	FORWARD,
 	BACKWARD,
@@ -395,7 +401,7 @@ typedef struct Camera
 void	immediate_submit(GraphicsContext *ctx, void (*fn)(VkCommandBuffer cmd, void *data), void *data);
 void	startGraphics(GraphicsContext *ctx);
 void	endGraphics(GraphicsContext *ctx);
-void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info);
+void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, TextRenderInfo text_info);
 void	beginSingleTimeCommand(GraphicsContext *ctx, VkCommandBuffer *cmd_buffer);
 void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, void *data_for_upload, ImageObject *gpu_image);
 

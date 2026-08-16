@@ -1161,7 +1161,7 @@ static void	createFrameResources(GraphicsContext *ctx)
 			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		};
 
-		createMappedBuffer(ctx->vma_allocator, &text_buffer_info, &resource->text_instance);
+		createMappedBuffer(ctx->vma_allocator, &text_buffer_info, &resource->text_instance_buffer);
 
 		VkBufferCreateInfo	ubo_info = {
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -1265,18 +1265,27 @@ static void	createDescriptorSetLayouts(GraphicsContext *ctx)
 static void	createDescriptorPoolSets(GraphicsContext *ctx)
 {
 	const	u32	material_descriptor_count = 1000;
+	const	u32	atlas_count = 1;
 	VkDescriptorPoolSize	pool_sizes[] = {
+		// ubo
 		{
 			.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			.descriptorCount = MAX_FRAMES_IN_FLIGHT,
 		},
+		// instances
 		{
 			.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
 			.descriptorCount = MAX_FRAMES_IN_FLIGHT,
 		},
+		// materials
 		{
 			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.descriptorCount = material_descriptor_count,
+		},
+		// text atlas
+		{
+			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.descriptorCount = atlas_count,
 		},
 	};
 
@@ -1316,12 +1325,22 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 		.descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
 		.pSetLayouts = instance_layouts,
 	};
+	VkDescriptorSetAllocateInfo	atlas_alloc_info = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.descriptorPool = ctx->descriptor_pool,
+		.descriptorSetCount = atlas_count,
+		.pSetLayouts = &ctx->atlas_descriptor_layout,
+	};
 
 	if (vkAllocateDescriptorSets(ctx->device, &ubo_alloc_info, ctx->ubo_descriptor_sets) != VK_SUCCESS) {
 		engine_error(LOG_FILE, "Failed to allocate descriptor sets");
 		exit(1);
 	}
 	if (vkAllocateDescriptorSets(ctx->device, &instance_alloc_info, ctx->instance_descriptor_sets) != VK_SUCCESS) {
+		engine_error(LOG_FILE, "Failed to allocate descriptor sets");
+		exit(1);
+	}
+	if (vkAllocateDescriptorSets(ctx->device, &atlas_alloc_info, &ctx->atlas_descriptor_set) != VK_SUCCESS) {
 		engine_error(LOG_FILE, "Failed to allocate descriptor sets");
 		exit(1);
 	}
@@ -1452,21 +1471,25 @@ static void	updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 	memcpy(resource->uniform_buffer.mapped, &ubo, sizeof(UniformBufferObject));
 }
 
-void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, u32 frame_idx)
+void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, u32 frame_idx, TextRenderInfo info)
 {
-	const VkDescriptorSet	atlas_descriptor_set = ctx->atlas_descriptor_sets[frame_idx];
+	const VkCommandBuffer	cmd = resource->cmd_buf;
+	const PipelineObject	pipeline = ctx->pipeline_text;
+	const VkDescriptorSet	atlas_descriptor_set = ctx->atlas_descriptor_set;
 
-	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_text.handle);
+	memcpy(resource->text_instance_buffer.mapped, info.render_instances, info.upload_size);
+
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_text.handle);
 
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, 1, &atlas_descriptor_set, 0, NULL);
 
-	const vec2	push_constants = {screen_w, screen_h};
+	const vec2	push_constants = {ctx->window_width, ctx->window_height};
 	vkCmdPushConstants(cmd, pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_constants), push_constants);
 
 	VkDeviceSize	offset = 0;
-	vkCmdBindVertexBuffers(cmd, 0, 1, &text_instance_buffer.handle, &offset);
+	vkCmdBindVertexBuffers(cmd, 0, 1, &resource->text_instance_buffer.handle, &offset);
 
-	vkCmdDraw(cmd, 4, glyph_count, 0, 0);
+	vkCmdDraw(cmd, 4, info.glyph_count, 0, 0);
 }
 
 void	GRIDPass(GraphicsContext *ctx, FrameResources *resource, u32 frame_idx)
@@ -1554,7 +1577,7 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 	}
 }
 
-void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info)
+void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, TextRenderInfo text_info)
 {
 	if (ctx->swapchain_require_recreate)
 	{
@@ -1706,6 +1729,9 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info)
 
 		// ---- PBR Pass --------------- //
 		PBRPass(ctx, entity_info, resource, frame_res_index);
+
+		// ---- TEXT Pass --------------- //
+		TEXTPass(ctx, resource, frame_res_index, text_info);
 	}
 	vkCmdEndRendering(resource->cmd_buf);
 

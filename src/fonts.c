@@ -3,7 +3,7 @@
 
 #define ATLAS_SIZE	2048
 
-GlyphInfo	*atlasFindGlyph(TextAtlas *atlas, u32 glyph_index)
+GlyphInfo	*atlasFindGlyph(const TextAtlas *atlas, u32 glyph_index)
 {
 	// TODO: Test this to see if hashing is more efficent
 	// »speed
@@ -13,6 +13,73 @@ GlyphInfo	*atlasFindGlyph(TextAtlas *atlas, u32 glyph_index)
 		}
 	}
 	return NULL;
+}
+
+// Called after textInstanceBuild() 
+void	textInstanceBufferUpload(BufferObject *buffer, const GlyphInfo *instances, u32 count)
+{
+	const VkDeviceSize	needed = count * sizeof(GlyphInfo);
+	if (needed > buffer->capacity) {
+		engine_debug(LOG_FILE, "textInstanceBufferUpload called and needed size exceeds buffer capacity, count: %u", count);
+	}
+	memcpy(buffer->mapped, instances, needed);
+}
+
+// This function doesnt actually draw any text, it queues the text to be drawn by the TEXT pipeline
+void	textDraw(String text, Font *font, vec2 pos, vec4 color)
+{
+	static hb_buffer_t	*buf = NULL;
+
+	const TextAtlas	*atlas = &font->atlas;
+
+	// On first run create hb buf
+	if (!buf) { buf = hb_buffer_create(); }
+
+	hb_buffer_add_utf8(buf, (const char *)text.data, text.count, 0, -1);
+	hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
+	hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
+	hb_buffer_set_language(buf, hb_language_from_string("en", -1));
+	hb_shape(font->hb_font, buf, NULL, 0);
+
+	u32			glyph_count;
+	hb_glyph_info_t		*glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
+	hb_glyph_position_t	*glyph_pos = hb_buffer_get_glyph_positions(buf, &glyph_count);
+
+	f32	cursor_x = pos[0]; f32	cursor_y = pos[1];
+
+	for (u32 i = 0; i < glyph_count; i++) {
+		// NOTE: despite the field name, `codepoint` here is a glyph INDEX
+		// post-shaping, not a Unicode codepoint. Must match how the atlas
+		// was baked (by glyph index via FT_Get_Char_Index + FT_Load_Glyph).
+		const u32	glyph_index = glyph_info[i].codepoint;
+		const GlyphInfo	*g = atlasFindGlyph(atlas, glyph_index);
+		float	x_offset = glyph_pos[i].x_offset / 64.0f;
+		float	y_offset = glyph_pos[i].y_offset / 64.0f;
+
+		if (g && g->size[0] > 0 && g->size[1] > 0) {
+			if (font->glyph_count >= MAX_GLYPH_INSTANCES) { engine_error(LOG_FILE, "Glyph count exceeds max glyphs"); break; }
+			GlyphRenderInstance	*inst = &font->render_instances[font->glyph_count++];
+
+			inst->pos[0] = cursor_x + x_offset + g->bearing[0];
+			inst->pos[1] = cursor_y - y_offset - g->bearing[1];
+			inst->size[0] = g->size[0];
+			inst->size[1] = g->size[1];
+
+			inst->uv_offset[0] = g->uv_min[0];
+			inst->uv_offset[1] = g->uv_min[1];
+			inst->uv_size[0] = g->uv_max[0] - g->uv_min[0];
+			inst->uv_size[1] = g->uv_max[1] - g->uv_min[1];
+
+			glm_vec4_copy(color, inst->color);
+		}
+		// else: glyph wasn't in the prebaked charset (or has no ink, e.g. space) —
+		// skipped, but the cursor still advances below.
+
+		cursor_x += glyph_pos[i].x_advance / 64.0f;
+		cursor_y += glyph_pos[i].y_advance / 64.0f;
+	}
+
+	hb_buffer_reset(buf);
 }
 
 void	uploadAtlasToGpu(GraphicsContext *ctx, TextAtlas *atlas, u8 *atlas_data)
@@ -58,6 +125,24 @@ void	uploadAtlasToGpu(GraphicsContext *ctx, TextAtlas *atlas, u8 *atlas_data)
 		.anisotropyEnable = VK_FALSE
 	};
 	vkCreateSampler(ctx->device, &sampler_info, NULL, &atlas->sampler);
+
+	VkDescriptorImageInfo	atlas_image_info = {
+		.sampler = atlas->sampler,
+		.imageView = atlas->gpu_image.view,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+	};
+
+	VkWriteDescriptorSet	atlas_descriptor_write = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = ctx->atlas_descriptor_set,
+		.dstBinding = 0,
+		.dstArrayElement = 0,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.pImageInfo = &atlas_image_info,
+	};
+	vkUpdateDescriptorSets(ctx->device, 1, &atlas_descriptor_write, 0, NULL);
+
 }
 
 static void	renderGlyphToAtlas(Font *font, u32 glyph_index, u8 *atlas_data, GlyphInfo *atlas_glyph)
@@ -106,7 +191,7 @@ static void	renderGlyphToAtlas(Font *font, u32 glyph_index, u8 *atlas_data, Glyp
 	atlas->next_x += glyph_width + 1;
 }
 
-void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset)
+void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset, Allocator *frame_allocator)
 {
 	TextAtlas	*atlas = &font->atlas;
 
@@ -135,32 +220,6 @@ void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset)
 		exit(1);
 	}
 
-	VkImageViewCreateInfo view_info = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-		.image = atlas->gpu_image.image,
-		.viewType = VK_IMAGE_VIEW_TYPE_2D,
-		.format = VK_FORMAT_R8_UNORM,
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.baseMipLevel = 0,
-			.levelCount = 1,
-			.baseArrayLayer = 0,
-			.layerCount = 1
-		}
-	};
-	vkCreateImageView(ctx->device, &view_info, NULL, &atlas->gpu_image.view);
-
-	VkSamplerCreateInfo sampler_info = {
-		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		.magFilter = VK_FILTER_LINEAR,
-		.minFilter = VK_FILTER_LINEAR,
-		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		.anisotropyEnable = VK_FALSE
-	};
-	vkCreateSampler(ctx->device, &sampler_info, NULL, &atlas->sampler);
-
 	const u32	glyph_count = charset.count;
 
 	// TODO: Bad allocation
@@ -168,8 +227,7 @@ void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset)
 	atlas->glyph_count = glyph_count;
 
 	// Staging buffer
-	// TODO: Bad allocation
-	u8	*atlas_data = malloc(atlas->width * atlas->height);
+	u8	*atlas_data = frame_allocator->fp_allocation(frame_allocator, atlas->width * atlas->height, DEFAULT_ALIGN);
 
 	for (u32 i = 0; i < glyph_count; i++) {
 		const u32	codepoint = charset.data[i];
@@ -178,5 +236,18 @@ void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset)
 	}
 
 	uploadAtlasToGpu(ctx, atlas, atlas_data);
-	free(atlas_data);
+	font->allocator = frame_allocator;
+	// TODO: Bad allocation
+	font->render_instances = malloc(sizeof(GlyphRenderInstance) * MAX_GLYPH_INSTANCES);
+}
+
+TextRenderInfo	buildTextInfo(Font *font)
+{
+	TextRenderInfo	info = {};
+
+	info.glyph_count = font->glyph_count;
+	info.render_instances = font->render_instances;
+	info.upload_size = font->glyph_count * sizeof(GlyphRenderInstance);
+	font->glyph_count = 0;
+	return info;
 }
