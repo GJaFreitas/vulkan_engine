@@ -8,7 +8,7 @@
 #include "graphics_layer.h"
 
 typedef struct GlyphInfo {
-	uint32_t	codepoint;
+	u32		index;
 	vec2		uv_min;
 	vec2		uv_max;
 	vec2		size;		// Glyph size in pixels

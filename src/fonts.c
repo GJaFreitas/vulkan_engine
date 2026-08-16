@@ -53,12 +53,13 @@ void	uploadAtlasToGpu(GraphicsContext *ctx, TextAtlas *atlas, u8 *atlas_data)
 	vkCreateSampler(ctx->device, &sampler_info, NULL, &atlas->sampler);
 }
 
-static void	renderGlyphToAtlas(Font *font, u32 codepoint, u8 *atlas_data, GlyphInfo *atlas_glyph)
+static void	renderGlyphToAtlas(Font *font, u32 glyph_index, u8 *atlas_data, GlyphInfo *atlas_glyph)
 {
 	FT_Face		face = font->face;
 	TextAtlas	*atlas = &font->atlas;
 
-	FT_Load_Char(face, codepoint, FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT);
+	FT_Load_Glyph(face, glyph_index, FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT);
+
 	const FT_GlyphSlot	slot = face->glyph;
 	const FT_Bitmap	*bitmap = &slot->bitmap;
 
@@ -86,7 +87,7 @@ static void	renderGlyphToAtlas(Font *font, u32 codepoint, u8 *atlas_data, GlyphI
 		}
 	}
 
-	atlas_glyph->codepoint = codepoint;
+	atlas_glyph->index = glyph_index;
 	glm_vec2((vec2){(float)x / atlas->width, (float)y / atlas->height}, atlas_glyph->uv_min);
 	glm_vec2((vec2){((float)x + glyph_width) / atlas->width, ((float)y + glyph_height) / atlas->height}, atlas_glyph->uv_max);
 	glm_vec2((vec2){glyph_width, glyph_height}, atlas_glyph->size);
@@ -162,8 +163,9 @@ void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset)
 	u8	*atlas_data = malloc(atlas->width * atlas->height);
 
 	for (u32 i = 0; i < glyph_count; i++) {
-		u32	codepoint = charset.data[i];
-		renderGlyphToAtlas(font, codepoint, atlas_data, &atlas->glyphs[i]);
+		const u32	codepoint = charset.data[i];
+		const u32	glyph_index = FT_Get_Char_Index(font->face, codepoint);
+		renderGlyphToAtlas(font, glyph_index, atlas_data, &atlas->glyphs[i]);
 	}
 
 	uploadAtlasToGpu(ctx, atlas, atlas_data);
