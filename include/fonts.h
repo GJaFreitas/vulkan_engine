@@ -60,5 +60,5 @@ typedef struct Font
 }	Font;
 
 void	textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color);
-TextRenderInfo	buildTextInfo(Font *font);
+TextRenderInfo	buildTextRenderInfo(Font *font);
 void	initFont(GraphicsContext *ctx, Font *font, const char *font_path, Allocator *allocator);

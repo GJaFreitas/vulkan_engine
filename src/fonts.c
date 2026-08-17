@@ -261,7 +261,7 @@ void	initFont(GraphicsContext *ctx, Font *font, const char *font_path, Allocator
 	createTextAtlas(ctx, font, STRING_LIT(CHARSET_STRING), allocator);
 }
 
-TextRenderInfo	buildTextInfo(Font *font)
+TextRenderInfo	buildTextRenderInfo(Font *font)
 {
 	TextRenderInfo	info = {};
 

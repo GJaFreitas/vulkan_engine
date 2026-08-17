@@ -25,7 +25,7 @@ void	unloadEntity(Entity *e, Allocator *a);
 Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a);
 void	updateEntities(Vector *entities, double dt);
 
-EntityRenderInfo	buildRenderInfo(Vector *entity_vector, u32 model_count, Allocator *a);
+EntityRenderInfo	buildEntityRenderInfo(Vector *entity_vector, u32 model_count, Allocator *a);
 
 typedef struct World
 {

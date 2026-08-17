@@ -46,7 +46,7 @@ static i16	linearSearch(Model **models, Model *cur, i16 model_count)
 	return (-1);
 }
 
-EntityRenderInfo	buildRenderInfo(Vector *entity_vector, u32 model_count, Allocator *a)
+EntityRenderInfo	buildEntityRenderInfo(Vector *entity_vector, u32 model_count, Allocator *a)
 {
 	const u64	entity_count = entity_vector->used;
 

@@ -133,8 +133,8 @@ int	loop(World world)
 		}
 		textDraw(STRING_LIT("Hello world!"), &world.font, 32, (vec2){100, 100}, (vec4){255, 255, 255, 255});
 
-		entity_info = buildRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
-		text_info = buildTextInfo(&world.font);
+		entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
+		text_info = buildTextRenderInfo(&world.font);
 		render(world.graphics_ctx, &world.player->camera, entity_info, text_info);
 
 		updateCamera(&world.player->camera, world.graphics_ctx->window, world.dt_ms);

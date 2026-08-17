@@ -216,22 +216,6 @@ typedef struct GridProperties
 	float fade_distance;	// distance at which grid fully fades out
 }	GridProperties;
 
-// TODO: Test test test, how many instances are needed? Am i gonna use particles like this later? (2026-07-23)
-#define	MAX_INSTANCES	4096
-typedef struct InstanceData
-{
-	mat4	model_mat;
-}	InstanceData;
-
-typedef struct GlyphInstance
-{
-	vec2	pos;		// top-left, in pixels, screen space (origin top-left)
-	vec2	size;		// width/height in pixels
-	vec2	uv_offset;	// top-left UV in the atlas [0,1]
-	vec2	uv_size;	// UV width/height in the atlas
-	vec4	color;		// RGBA, lets you tint text per-glyph/run
-}	GlyphInstance;
-
 typedef struct BufferObject
 {
 	VkBuffer	handle;
@@ -346,9 +330,25 @@ typedef struct GraphicsContext
 
 }	GraphicsContext;
 
+// TODO: Test test test, how many instances are needed? Am i gonna use particles like this later? (2026-07-23)
+#define	MAX_INSTANCES	4096
+typedef struct EntityInstanceData
+{
+	mat4	model_mat;
+}	EntityInstanceData;
+
+typedef struct GlyphInstance
+{
+	vec2	pos;		// top-left, in pixels, screen space (origin top-left)
+	vec2	size;		// width/height in pixels
+	vec2	uv_offset;	// top-left UV in the atlas [0,1]
+	vec2	uv_size;	// UV width/height in the atlas
+	vec4	color;		// RGBA, lets you tint text per-glyph/run
+}	GlyphInstance;
+
 typedef struct EntityRenderData
 {
-	InstanceData	instance_data;
+	EntityInstanceData	instance_data;
 	i16		model_idx;
 }	EntityRenderData;
 
