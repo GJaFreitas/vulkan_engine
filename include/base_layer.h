@@ -15,6 +15,8 @@
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #include <cglm/cglm.h>
 
+#include "typedefs.h"
+
 #include "all.h"
 
 String	readFile(String filename);

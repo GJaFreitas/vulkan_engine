@@ -104,6 +104,30 @@ Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a)
 	return e;
 }
 
+
+
+void	updatePlayer(Player *p, double dt, SDL_Window *window)
+{
+	Camera	*camera = &p->camera;
+	vec3 move = {0};
+
+	if (key_held(g_keybinds[ACTION_MOVE_FORWARD])) {
+		glm_vec3_muladds(camera->front, p->movSpeed * dt, move);
+	} else if (key_held(g_keybinds[ACTION_MOVE_LEFT])) {
+		glm_vec3_muladds(camera->right, -p->movSpeed * dt, move);
+	} else if (key_held(g_keybinds[ACTION_MOVE_RIGHT])) {
+		glm_vec3_muladds(camera->right, p->movSpeed * dt, move);
+	} else if (key_held(g_keybinds[ACTION_MOVE_BACKWARD])) {
+		glm_vec3_muladds(camera->front, -p->movSpeed * dt, move);
+	} else if (key_held(g_keybinds[ACTION_JUMP])) {
+		glm_vec3_muladds(camera->worldUp, p->movSpeed * dt, move);
+	} else if (key_held(g_keybinds[ACTION_SHIFT])) {
+		glm_vec3_muladds(camera->worldUp, -p->movSpeed * dt, move);
+	}
+
+	glm_vec3_add(camera->position, move, camera->position);
+}
+
 void	initPlayer(Player *p)
 {
 	p->movSpeed = 0.1f;

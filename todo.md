@@ -11,6 +11,7 @@
 [X] Change all allocations in gltf loading to be arenas
 
 [ ] Make pipeline creation more modular pipelineCreate(PipelineCreationInfo info)?
+[ ] Create a keybind load and write function that keeps track of bound keys.
 
 [ ] UI pipeline
 

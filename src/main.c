@@ -56,23 +56,10 @@ static void updateCamera(Camera *camera, SDL_Window *window, double dt)
 	} else {
 		SDL_SetWindowRelativeMouseMode(window, false);
 	}
-
-	// WASD movement
-	const bool *keys = SDL_GetKeyboardState(NULL);
-	vec3 move = {0};
-
-	if (keys[SDL_SCANCODE_W]) glm_vec3_muladds(camera->front, camera->movementSpeed * dt, move);
-	if (keys[SDL_SCANCODE_S]) glm_vec3_muladds(camera->front, -camera->movementSpeed * dt, move);
-	if (keys[SDL_SCANCODE_A]) glm_vec3_muladds(camera->right, -camera->movementSpeed * dt, move);
-	if (keys[SDL_SCANCODE_D]) glm_vec3_muladds(camera->right, camera->movementSpeed * dt, move);
-	if (keys[SDL_SCANCODE_SPACE])    glm_vec3_muladds(camera->worldUp, camera->movementSpeed * dt, move);
-	if (keys[SDL_SCANCODE_LSHIFT])   glm_vec3_muladds(camera->worldUp, -camera->movementSpeed * dt, move);
-
-	glm_vec3_add(camera->position, move, camera->position);
 }
 
 const String	models[] = {
-	// STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"),
+	STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"),
 	STRING_LIT("data/models/DiffuseTransmissionTeacup.glb"),
 };
 
@@ -94,6 +81,35 @@ void	createRandomEntity(World world)
 	initializeRandomVec(e->pos, 3, -1, 1);
 }
 
+static inline void	beginFrame(World world, bool *running) {
+	SDL_Event	event = {0};
+	inputBeginFrame();
+	do_callbacks();
+	while (SDL_PollEvent(&event))
+	{
+		if (event.type == SDL_EVENT_QUIT) {
+			*running = false;
+			break ;
+		} else if (event.key.key == SDLK_ESCAPE) {
+			*running = false;
+			break ;
+		} else if (event.key.key == SDLK_M) {
+			createRandomEntity(world);
+			break ;
+		} else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+			world.graphics_ctx->window_width = event.window.data1;
+			world.graphics_ctx->window_height = event.window.data2;
+			break ;
+		}
+		inputProccessEvent(&event);
+	}
+}
+
+static inline void	endFrame(World world) {
+	modelCacheSweep();
+	inputEndFrame();
+}
+
 int	loop(World world)
 {
 	u64	frames = 0;
@@ -108,42 +124,19 @@ int	loop(World world)
 	while (running)
 	{
 		getMsAndFps(&world.dt_ms, &fps, &fps_avg, &last_time, &frames);
-		SDL_Event	event = {0};
-		do_callbacks();
-		while (SDL_PollEvent(&event))
-		{
-			if (event.type == SDL_EVENT_QUIT) {
-				running = false;
-				break ;
-			} else if (event.key.key == SDLK_ESCAPE) {
-				running = false;
-				break ;
-			} else if (event.key.key == SDLK_M) {
-				createRandomEntity(world);
-				break ;
-			} else if (event.key.key == SDLK_C) {
-				print_fps(fps);
-				break ;
-			}
-			else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
-				world.graphics_ctx->window_width = event.window.data1;
-				world.graphics_ctx->window_height = event.window.data2;
-				break ;
-			}
-		}
-		textDraw(STRING_LIT("Hello world!"), &world.font, 32, (vec2){100, 100}, (vec4){255, 255, 255, 255});
+		beginFrame(world, &running);
 
 		entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
 		text_info = buildTextRenderInfo(&world.font);
 		render(world.graphics_ctx, &world.player->camera, entity_info, text_info);
 
+		updatePlayer(world.player, world.dt_ms, world.graphics_ctx->window);
 		updateCamera(&world.player->camera, world.graphics_ctx->window, world.dt_ms);
-
 		updateEntities(world.entities, world.dt_ms);
 
-		modelCacheSweep();
-
+		endFrame(world);
 		world.frame_allocator.fp_reset(&world.frame_allocator);
+
 	}
 	engine_debug(LOG_FILE, "Killing proccess");
 	exit(0);

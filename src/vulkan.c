@@ -1147,7 +1147,7 @@ static void	createFrameResources(GraphicsContext *ctx)
 
 		VkBufferCreateInfo	instance_buffer_info = {
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.size = sizeof(InstanceData) * MAX_INSTANCES,
+			.size = sizeof(EntityInstanceData) * MAX_INSTANCES,
 			.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		};
@@ -1351,7 +1351,7 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 		VkDescriptorBufferInfo	instance_buf_info = {
 			.buffer = resource->instance_buffer.handle,
 			.offset = 0,
-			.range = sizeof(InstanceData) * MAX_INSTANCES,
+			.range = sizeof(EntityInstanceData) * MAX_INSTANCES,
 		};
 
 		VkWriteDescriptorSet	instance_descriptor_write = {
@@ -1509,7 +1509,7 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 	const u32		total_entity_count = entity_info.entity_count;
 	const VkDescriptorSet	ubo_descriptor_set = ctx->ubo_descriptor_sets[frame_idx];
 	const VkDescriptorSet	instance_descriptor_set = ctx->instance_descriptor_sets[frame_idx];
-	InstanceData		*instance_data_buf = (InstanceData *)resource->instance_buffer.mapped;
+	EntityInstanceData		*instance_data_buf = (EntityInstanceData *)resource->instance_buffer.mapped;
 	VkDeviceSize		offset = 0;
 	u32			instance_cursor = 0;
 
