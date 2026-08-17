@@ -153,7 +153,7 @@ static void	renderGlyphToAtlas(Font *font, u32 glyph_index, u8 *atlas_data, Glyp
 	const u32	glyph_width = bitmap->width;
 	const u32	glyph_height = bitmap->rows;
 
-	const u32	padding = 1;
+	const u32	padding = 2;
 	if (atlas->next_x + glyph_width + padding >= atlas->width) {
 		atlas->next_x = padding;
 		atlas->next_y += atlas->row_height + padding;
@@ -224,7 +224,6 @@ void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset, Allocator
 
 	// Staging buffer
 	u8	*atlas_data = frame_allocator->fp_allocation(frame_allocator, atlas->width * atlas->height, DEFAULT_ALIGN);
-	// memset(atlas_data, 0, atlas->width * atlas->height);
 
 	for (u32 i = 0; i < glyph_count; i++) {
 		const u32	codepoint = charset.data[i];

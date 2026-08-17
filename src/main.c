@@ -126,6 +126,7 @@ int	loop(World world)
 		getMsAndFps(&world.dt_ms, &fps, &fps_avg, &last_time, &frames);
 		beginFrame(world, &running);
 
+		textDraw(STRING_LIT("Yippe!"), &world.font, 16, (vec2){50, 50}, (vec4){255, 255, 255, 255});
 		entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
 		text_info = buildTextRenderInfo(&world.font);
 		render(world.graphics_ctx, &world.player->camera, entity_info, text_info);
