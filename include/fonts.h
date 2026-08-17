@@ -2,6 +2,7 @@
 
 #include "harfbuzz/hb.h"
 #include "freetype2/ft2build.h"
+#include "freetype2/freetype/ftmodapi.h"
 #include "harfbuzz/hb-ft.h"
 
 #include "base_layer.h"
@@ -58,6 +59,6 @@ typedef struct Font
 	u32			glyph_count;
 }	Font;
 
-void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset, Allocator *allocator);
 void	textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color);
 TextRenderInfo	buildTextInfo(Font *font);
+void	initFont(GraphicsContext *ctx, Font *font, const char *font_path, Allocator *allocator);

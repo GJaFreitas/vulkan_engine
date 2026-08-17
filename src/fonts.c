@@ -187,15 +187,6 @@ static void	renderGlyphToAtlas(Font *font, u32 glyph_index, u8 *atlas_data, Glyp
 	atlas->next_x += glyph_width + padding;
 }
 
-void debugDumpAtlasPGM(const char *path, u8 *atlas_data, u32 width, u32 height)
-{
-	FILE *f = fopen(path, "wb");
-	if (!f) return;
-	fprintf(f, "P5\n%u %u\n255\n", width, height);
-	fwrite(atlas_data, 1, width * height, f);
-	fclose(f);
-}
-
 void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset, Allocator *frame_allocator)
 {
 	TextAtlas	*atlas = &font->atlas;
@@ -241,12 +232,33 @@ void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset, Allocator
 		renderGlyphToAtlas(font, glyph_index, atlas_data, &atlas->glyphs[i]);
 	}
 
-	debugDumpAtlasPGM("/tmp/atlas_debug.pgm", atlas_data, atlas->width, atlas->height);
-
 	uploadAtlasToGpu(ctx, atlas, atlas_data);
 	font->allocator = frame_allocator;
 	// TODO: Bad allocation
 	font->render_instances = calloc(MAX_GLYPH_INSTANCES, sizeof(GlyphRenderInstance));
+}
+
+#define CHARSET_STRING "1234567890ABCDEFGHIJKLMNOPQRSTUVWYZabcdefghijklmnopqrstuvwyz!."
+
+void	initFont(GraphicsContext *ctx, Font *font, const char *font_path, Allocator *allocator)
+{
+	FT_Library	ft_lib;
+
+	// This is just a handle
+	FT_Face		ft_face;
+
+	FT_Init_FreeType(&ft_lib);
+	const u32	spread = 16;
+	FT_Property_Set(ft_lib, "sdf", "spread", &spread);
+	FT_New_Face(ft_lib, font_path, 0, &ft_face);
+	const u32	font_size = 32;
+	FT_Set_Char_Size(ft_face, 0, font_size * 64, 96, 96);
+
+	hb_font_t	*hb_font = hb_ft_font_create(ft_face, NULL);
+	font->face = ft_face;		// This is a handle so this assignment is fine
+	font->hb_font = hb_font;		// Same here since its a pointer
+	font->base_font_size = font_size;
+	createTextAtlas(ctx, font, STRING_LIT(CHARSET_STRING), allocator);
 }
 
 TextRenderInfo	buildTextInfo(Font *font)
