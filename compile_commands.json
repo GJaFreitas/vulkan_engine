@@ -15,7 +15,7 @@
       "-o",
       "obj/c/input.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/msdf_implementation",
     "output": "obj/c/input.o"
   },
   {
@@ -34,7 +34,7 @@
       "-o",
       "obj/c/hotload_callbacks.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/msdf_implementation",
     "output": "obj/c/hotload_callbacks.o"
   },
   {
@@ -53,7 +53,7 @@
       "-o",
       "obj/c/main.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/msdf_implementation",
     "output": "obj/c/main.o"
   },
   {
@@ -72,7 +72,7 @@
       "-o",
       "obj/c/vulkan.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/msdf_implementation",
     "output": "obj/c/vulkan.o"
   },
   {
@@ -91,7 +91,7 @@
       "-o",
       "obj/c/entities.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/msdf_implementation",
     "output": "obj/c/entities.o"
   },
   {
@@ -110,7 +110,7 @@
       "-o",
       "obj/c/base_layer.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/msdf_implementation",
     "output": "obj/c/base_layer.o"
   },
   {
@@ -129,7 +129,7 @@
       "-o",
       "obj/c/fonts.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/msdf_implementation",
     "output": "obj/c/fonts.o"
   },
   {
@@ -148,7 +148,7 @@
       "-o",
       "obj/c/variables.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/msdf_implementation",
     "output": "obj/c/variables.o"
   },
   {
@@ -167,7 +167,7 @@
       "-o",
       "obj/c/gltf_loading.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/msdf_implementation",
     "output": "obj/c/gltf_loading.o"
   },
   {
@@ -184,7 +184,7 @@
       "-o",
       "obj/cpp/vma.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/msdf_implementation",
     "output": "obj/cpp/vma.o"
   },
   {
@@ -195,7 +195,7 @@
       "-o",
       "engine.out"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/msdf_implementation",
     "output": "engine.out"
   }
 ]
