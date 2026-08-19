@@ -403,7 +403,7 @@ void	startGraphics(GraphicsContext *ctx);
 void	endGraphics(GraphicsContext *ctx);
 void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, TextRenderInfo text_info);
 void	beginSingleTimeCommand(GraphicsContext *ctx, VkCommandBuffer *cmd_buffer);
-void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, void *data_for_upload, ImageObject *gpu_image);
+void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, u32 data_size, void *data_for_upload, ImageObject *gpu_image);
 
 
 void	modelLoad(String filename, GraphicsContext *ctx, Model *model);

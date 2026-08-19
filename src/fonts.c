@@ -1,9 +1,10 @@
 #include "base_layer.h"
 #include "fonts.h"
+#include "base_layer.h"
+#include "str.h"
 
-#define ATLAS_SIZE	2048
 
-GlyphInfo	*atlasFindGlyph(const TextAtlas *atlas, u32 glyph_index)
+static GlyphInfo	*atlasFindGlyph(const TextAtlas *atlas, u32 glyph_index)
 {
 	// TODO: Test this to see if hashing is more efficent
 	// »speed
@@ -16,15 +17,17 @@ GlyphInfo	*atlasFindGlyph(const TextAtlas *atlas, u32 glyph_index)
 }
 
 // This function doesnt actually draw any text, it queues the text to be drawn by the TEXT pipeline
-void	textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
+void textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
 {
-	static hb_buffer_t	*buf = NULL;
+	static hb_buffer_t *buf = NULL;
 
-	const TextAtlas	*atlas = &font->atlas;
-	const f32	font_scale = font_size / font->base_font_size;
+	const TextAtlas *atlas = &font->atlas;
+	const f32 px_per_em = font_size;
+	const f32 hb_scale = font_size / (f32)font->units_per_EM;
 
-	// On first run create hb buf
-	if (!buf) { buf = hb_buffer_create(); }
+
+	if (!buf)
+		buf = hb_buffer_create();
 
 	hb_buffer_add_utf8(buf, (const char *)text.data, text.count, 0, -1);
 	hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
@@ -32,59 +35,111 @@ void	textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
 	hb_buffer_set_language(buf, hb_language_from_string("en", -1));
 	hb_shape(font->hb_font, buf, NULL, 0);
 
-	u32			glyph_count;
-	hb_glyph_info_t		*glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
-	hb_glyph_position_t	*glyph_pos = hb_buffer_get_glyph_positions(buf, &glyph_count);
+	u32 glyph_count;
+	hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
+	hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(buf, &glyph_count);
 
-	f32	cursor_x = pos[0]; f32	cursor_y = pos[1];
+	f32 cursor_x = pos[0];
+	f32 cursor_y = pos[1];
+
+	static int check = 0;
+
 
 	for (u32 i = 0; i < glyph_count; i++) {
-		// NOTE: despite the field name, `codepoint` here is a glyph INDEX
-		// post-shaping, not a Unicode codepoint. Must match how the atlas
-		// was baked (by glyph index via FT_Get_Char_Index + FT_Load_Glyph).
-		const u32	glyph_index = glyph_info[i].codepoint;
-		const GlyphInfo	*g = atlasFindGlyph(atlas, glyph_index);
+		// HarfBuzz's post-shaping codepoint is the font glyph index.
+		const u32 glyph_index = glyph_info[i].codepoint;
+		const GlyphInfo *g = atlasFindGlyph(atlas, glyph_index);
 
-		float	x_offset = (glyph_pos[i].x_offset / 64.0f) * font_scale;
-		float	y_offset = (glyph_pos[i].y_offset / 64.0f) * font_scale;
-
-		if (g && g->size[0] > 0 && g->size[1] > 0) {
-			if (font->glyph_count >= MAX_GLYPH_INSTANCES) { engine_error(LOG_FILE, "Glyph count exceeds max glyphs"); break; }
-			GlyphRenderInstance	*inst = &font->render_instances[font->glyph_count++];
-
-			inst->pos[0] = roundf(cursor_x + x_offset + g->bearing[0] * font_scale);
-			inst->pos[1] = roundf(cursor_y - y_offset - g->bearing[1] * font_scale);
-
-			inst->size[0] = g->size[0] * font_scale;
-			inst->size[1] = g->size[1] * font_scale;
-
-			inst->uv_offset[0] = g->uv_min[0];
-			inst->uv_offset[1] = g->uv_min[1];
-			inst->uv_size[0] = g->uv_max[0] - g->uv_min[0];
-			inst->uv_size[1] = g->uv_max[1] - g->uv_min[1];
-
-			glm_vec4_copy(color, inst->color);
+		if (check == 0) {
+			printf("SHAPED[%u]: glyph_index=%u\n", i, glyph_index);
 		}
-		// TODO:
-		// else: glyph wasn't in the prebaked charset (or has no ink, e.g. space) —
-		// skipped, but the cursor still advances below.
 
-		cursor_x = roundf(cursor_x + glyph_pos[i].x_advance / 64.0f * font_scale);
-		cursor_y = roundf(cursor_y + glyph_pos[i].y_advance / 64.0f * font_scale);
+		f32 x_offset = glyph_pos[i].x_offset * hb_scale;
+		f32 y_offset = glyph_pos[i].y_offset * hb_scale;
+
+		if (g) {
+			const f32 glyph_width =
+				g->plane_max[0] - g->plane_min[0];
+
+			const f32 glyph_height =
+				g->plane_max[1] - g->plane_min[1];
+
+			// Glyphs such as space have no ink/geometry.
+			if (glyph_width > 0 && glyph_height > 0) {
+				if (font->glyph_count >= MAX_GLYPH_INSTANCES) {
+					engine_error(LOG_FILE, "Glyph count exceeds max glyphs");
+					break;
+				}
+
+				GlyphRenderInstance *inst =
+					&font->render_instances[font->glyph_count++];
+
+				const f32 x_min = g->plane_min[0] * px_per_em;
+				const f32 y_min = g->plane_min[1] * px_per_em;
+				const f32 x_max = g->plane_max[0] * px_per_em;
+				const f32 y_max = g->plane_max[1] * px_per_em;
+
+				inst->pos[0] = roundf(cursor_x + x_offset + x_min);
+				inst->pos[1] = roundf(cursor_y - y_offset - y_max);
+
+				inst->size[0] = x_max - x_min;
+				inst->size[1] = y_max - y_min;
+
+				inst->uv_offset[0] = g->uv_min[0];
+				inst->uv_offset[1] = g->uv_min[1];
+
+				inst->uv_size[0] = g->uv_max[0] - g->uv_min[0];
+				inst->uv_size[1] = g->uv_max[1] - g->uv_min[1];
+
+				glm_vec4_copy(color, inst->color);
+			}
+		}
+
+		cursor_x = roundf(
+			cursor_x +
+			glyph_pos[i].x_advance * hb_scale
+		);
+
+		cursor_y = roundf(
+			cursor_y +
+			glyph_pos[i].y_advance * hb_scale
+		);
+
 	}
+	check++;
 
 	hb_buffer_reset(buf);
 }
 
 void	uploadAtlasToGpu(GraphicsContext *ctx, TextAtlas *atlas, u8 *atlas_data)
 {
-	stagingBufferUpload(ctx, atlas->width, atlas->height, atlas_data, &atlas->gpu_image);
+
+	VkImageCreateInfo image_info = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = VK_FORMAT_R8G8B8A8_UNORM,
+		.extent = {atlas->width, atlas->height, 1},
+		.mipLevels = 1,
+		.arrayLayers = 1,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.tiling = VK_IMAGE_TILING_OPTIMAL,
+		.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+	};
+
+	if (wrapperVMAcreateImage(ctx->vma_allocator, &image_info, &atlas->gpu_image.image, &atlas->gpu_image.allocation) != VK_SUCCESS) {
+		engine_error(LOG_FILE, "Unable to create atlas image");
+		exit(1);
+	}
+
+	stagingBufferUpload(ctx, atlas->width, atlas->height, atlas->width * atlas->height * CHANNELS, atlas_data, &atlas->gpu_image);
 
 	VkImageViewCreateInfo	image_view_info = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.viewType = VK_IMAGE_VIEW_TYPE_2D,
 		.image = atlas->gpu_image.image,
-		.format = VK_FORMAT_R8_UNORM,
+		.format = VK_FORMAT_R8G8B8A8_UNORM,
 		.components = {
 			VK_COMPONENT_SWIZZLE_IDENTITY,
 			VK_COMPONENT_SWIZZLE_IDENTITY,
@@ -139,125 +194,79 @@ void	uploadAtlasToGpu(GraphicsContext *ctx, TextAtlas *atlas, u8 *atlas_data)
 
 }
 
-static void	renderGlyphToAtlas(Font *font, u32 glyph_index, u8 *atlas_data, GlyphInfo *atlas_glyph)
+static void	initFont(Font *font, FontHeader header, FT_Library ft_lib)
 {
-	FT_Face		face = font->face;
-	TextAtlas	*atlas = &font->atlas;
+	FT_Face	face;
 
-	FT_Load_Glyph(face, glyph_index, FT_LOAD_DEFAULT | FT_LOAD_NO_AUTOHINT | FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING);
-	FT_Render_Glyph(face->glyph, FT_RENDER_MODE_SDF);
+	FT_New_Face(ft_lib, header.path, 0, &face);
 
-	const FT_GlyphSlot	slot = face->glyph;
-	const FT_Bitmap	*bitmap = &slot->bitmap;
-
-	const u32	glyph_width = bitmap->width;
-	const u32	glyph_height = bitmap->rows;
-
-	const u32	padding = 2;
-	if (atlas->next_x + glyph_width + padding >= atlas->width) {
-		atlas->next_x = padding;
-		atlas->next_y += atlas->row_height + padding;
-		atlas->row_height = 0;
-	}
-
-	if (glyph_height > atlas->row_height) {
-		atlas->row_height = glyph_height;
-	}
-
-	const u32	x = atlas->next_x;
-	const u32	y = atlas->next_y;
-
-	for (u32 row = 0; row < glyph_height; row++) {
-		for (u32 col = 0; col < glyph_width; col++) {
-			u32 atlas_idx = (y + row) * atlas->width + (x + col);
-			// WARN: If there is a problem with rendering chars it might
-			// be because the pitch is negative, check here first
-			u32 bitmap_idx = row * bitmap->pitch + col;
-			atlas_data[atlas_idx] = bitmap->buffer[bitmap_idx];
-		}
-	}
-
-	atlas_glyph->index = glyph_index;
-	glm_vec2((vec2){(float)x / atlas->width, (float)y / atlas->height}, atlas_glyph->uv_min);
-	glm_vec2((vec2){((float)x + glyph_width) / atlas->width, ((float)y + glyph_height) / atlas->height}, atlas_glyph->uv_max);
-	glm_vec2((vec2){glyph_width, glyph_height}, atlas_glyph->size);
-	glm_vec2((vec2){slot->bitmap_left, slot->bitmap_top}, atlas_glyph->bearing);
-	atlas_glyph->advance = slot->advance.x >> 6;	// Convert to pixels
-
-	atlas->next_x += glyph_width + padding;
+	hb_font_t	*hb_font = hb_ft_font_create(face, NULL);
+	hb_font_set_scale(hb_font, face->units_per_EM, face->units_per_EM);
+	font->face = face;
+	font->units_per_EM = face->units_per_EM;
+	font->hb_font = hb_font;
+	font->atlas.width = header.atlas_width;
+	font->atlas.height = header.atlas_height;
+	font->atlas.glyph_count = header.glyph_count;
 }
 
-void	createTextAtlas(GraphicsContext *ctx, Font *font, String charset, Allocator *frame_allocator)
+void	debug_dump_atlas(u8 *pixels, u32 width, u32 height)
 {
-	TextAtlas	*atlas = &font->atlas;
+	// Dump as a raw RGBA image so we can inspect the MSDF channels directly.
+	// Use ImageMagick or a script to convert: magick -size WxH -depth 8 rgba:atlas_debug.raw atlas_debug.png
+	FILE *dbg = fopen("/tmp/atlas_debug.raw", "wb");
+	fwrite(pixels, 1, (size_t)width * height * CHANNELS, dbg);
+	fclose(dbg);
+	printf("Dumped raw RGBA atlas: %dx%d -> /tmp/atlas_debug.raw\n", width, height);
+}
 
-	atlas->width = ATLAS_SIZE;
-	atlas->height = ATLAS_SIZE;
-	atlas->next_x = 1;
-	atlas->next_y = 1;
-	atlas->row_height = 0;
+void	initFonts(GraphicsContext *ctx, LoadedFonts *loaded_fonts, Allocator *allocator, Allocator *frame_allocator)
+{
+	ArenaAllocator	frame_arena = frame_allocator->arena;
+	String	font_file_path = STRING_LIT("data/font_file.bin");
 
-	VkImageCreateInfo image_info = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-		.imageType = VK_IMAGE_TYPE_2D,
-		.format = VK_FORMAT_R8_UNORM,
-		.extent = {atlas->width, atlas->height, 1},
-		.mipLevels = 1,
-		.arrayLayers = 1,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.tiling = VK_IMAGE_TILING_OPTIMAL,
-		.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
-	};
+	FT_Library	ft_lib;
+	FT_Init_FreeType(&ft_lib);
 
-	if (wrapperVMAcreateImage(ctx->vma_allocator, &image_info, &atlas->gpu_image.image, &atlas->gpu_image.allocation) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Unable to create atlas image");
+	String	file = readFile(font_file_path);
+	StringView	fileview = file;
+
+	FileHeader	file_header;
+	strReadSize(&fileview, &file_header, sizeof(FileHeader));
+
+	if (file_header.magic != FATL_MAGIC || file_header.version != FATL_VERSION) {
+		engine_error(LOG_FILE, "Bad or incompatible atlas file: %S", font_file_path);
 		exit(1);
 	}
+	loaded_fonts->font_count = file_header.font_count;
+	loaded_fonts->fonts = allocator->fp_allocation(allocator, sizeof(Font) * loaded_fonts->font_count, DEFAULT_ALIGN);
 
-	const u32	glyph_count = charset.count;
+	for (u32 i = 0; i < loaded_fonts->font_count; i++) {
+		Font	*font = &loaded_fonts->fonts[i];
+		FontHeader	header;
+		strReadSize(&fileview, &header, sizeof(FontHeader));
+		initFont(font, header, ft_lib);
 
-	// TODO: Bad allocation
-	atlas->glyphs = malloc(glyph_count * sizeof(GlyphInfo));
-	atlas->glyph_count = glyph_count;
+		font->atlas.glyphs = allocator->fp_allocation(allocator, sizeof(GlyphInfo) * header.glyph_count, DEFAULT_ALIGN);
+		strReadSize(&fileview, font->atlas.glyphs, sizeof(GlyphInfo) * header.glyph_count);
 
-	// Staging buffer
-	u8	*atlas_data = frame_allocator->fp_allocation(frame_allocator, atlas->width * atlas->height, DEFAULT_ALIGN);
+		const u64	offset = frame_arena.offset;
+		const u32	pixels_size = header.atlas_height * header.atlas_width * CHANNELS;
+		u8	*pixels = frame_allocator->fp_allocation(frame_allocator, pixels_size, DEFAULT_ALIGN);
+		strReadSize(&fileview, pixels, pixels_size);
 
-	for (u32 i = 0; i < glyph_count; i++) {
-		const u32	codepoint = charset.data[i];
-		const u32	glyph_index = FT_Get_Char_Index(font->face, codepoint);
-		renderGlyphToAtlas(font, glyph_index, atlas_data, &atlas->glyphs[i]);
+		uploadAtlasToGpu(ctx, &font->atlas, pixels);
+		debug_dump_atlas(pixels, header.atlas_width, header.atlas_height);
+		font->allocator = frame_allocator;
+		// TODO: Bad allocation
+		font->render_instances = calloc(MAX_GLYPH_INSTANCES, sizeof(GlyphRenderInstance));
+		// WARN: Messing with allocators like this is discouraged but oh well this is more efficent
+		frame_arena.offset = offset;
+
+		engine_log(LOG_FILE, "Loaded font: %s", header.path);
 	}
 
-	uploadAtlasToGpu(ctx, atlas, atlas_data);
-	font->allocator = frame_allocator;
-	// TODO: Bad allocation
-	font->render_instances = calloc(MAX_GLYPH_INSTANCES, sizeof(GlyphRenderInstance));
-}
-
-#define CHARSET_STRING "1234567890ABCDEFGHIJKLMNOPQRSTUVWYZabcdefghijklmnopqrstuvwyz!."
-
-void	initFont(GraphicsContext *ctx, Font *font, const char *font_path, Allocator *allocator)
-{
-	FT_Library	ft_lib;
-
-	// This is just a handle
-	FT_Face		ft_face;
-
-	FT_Init_FreeType(&ft_lib);
-	const u32	spread = 16;
-	FT_Property_Set(ft_lib, "sdf", "spread", &spread);
-	FT_New_Face(ft_lib, font_path, 0, &ft_face);
-	const u32	font_size = 32;
-	FT_Set_Char_Size(ft_face, 0, font_size * 64, 96, 96);
-
-	hb_font_t	*hb_font = hb_ft_font_create(ft_face, NULL);
-	font->face = ft_face;		// This is a handle so this assignment is fine
-	font->hb_font = hb_font;		// Same here since its a pointer
-	font->base_font_size = font_size;
-	createTextAtlas(ctx, font, STRING_LIT(CHARSET_STRING), allocator);
+	destroyFile(file);
 }
 
 TextRenderInfo	buildTextRenderInfo(Font *font)

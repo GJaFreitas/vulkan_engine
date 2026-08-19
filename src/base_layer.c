@@ -79,6 +79,11 @@ String	readFile(String filename)
 	return file;
 }
 
+void	destroyFile(String file)
+{
+	munmap(file.data, file.count);
+}
+
 // No allocations
 StringView	getNextLine(String str, u64 *offset)
 {

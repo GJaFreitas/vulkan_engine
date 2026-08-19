@@ -32,6 +32,7 @@ EntityRenderInfo	buildEntityRenderInfo(Vector *entity_vector, u32 model_count, A
 typedef struct World
 {
 	Allocator	frame_allocator;
+	Allocator	perm_allocator;
 	GraphicsContext	*graphics_ctx;
 
 
@@ -47,7 +48,7 @@ typedef struct World
 
 	double		dt_ms;
 
-	Font		font;
+	LoadedFonts	fonts;
 
 }	World;
 

@@ -7,16 +7,7 @@
 
 #include "base_layer.h"
 #include "graphics_layer.h"
-
-typedef struct GlyphInfo
-{
-	u32		index;
-	vec2		uv_min;
-	vec2		uv_max;
-	vec2		size;		// Glyph size in pixels
-	vec2		bearing;	// Bearing offset
-	float		advance;	// Advance width
-}	GlyphInfo;
+#include "font_atlas_format.h"
 
 #define MAX_GLYPH_INSTANCES 1024
 typedef struct GlyphRenderInstance
@@ -49,7 +40,7 @@ typedef struct Font
 	FT_Face			face;
 	hb_font_t		*hb_font;
 	TextAtlas		atlas;
-	float			base_font_size;
+	u16			units_per_EM;
 	Allocator		*allocator;
 
 	// Per frame stuff
@@ -59,6 +50,12 @@ typedef struct Font
 	u32			glyph_count;
 }	Font;
 
+typedef struct LoadedFonts
+{
+	Font	*fonts;
+	u32	font_count;
+}	LoadedFonts;
+
 void	textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color);
 TextRenderInfo	buildTextRenderInfo(Font *font);
-void	initFont(GraphicsContext *ctx, Font *font, const char *font_path, Allocator *allocator);
+void	initFonts(GraphicsContext *ctx, LoadedFonts *loaded_fonts, Allocator *allocator, Allocator *frame_allocator);

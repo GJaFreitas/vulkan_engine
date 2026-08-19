@@ -21,6 +21,7 @@
 
 String	readFile(String filename);
 u8	*readFileData(String filename, u64 *file_size);
+void	destroyFile(String file);
 // No allocations
 StringView	getNextLine(String str, u64 *offset);
 

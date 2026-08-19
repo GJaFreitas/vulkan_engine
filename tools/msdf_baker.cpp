@@ -52,7 +52,7 @@ int	main(int argc, char **argv)
 		if (!font) { fprintf(stderr, "Failed to load font\n"); return 1; }
 
 		Charset	charset(charset.ASCII);
-		font_geometry.loadCharset(font, 1.0, charset);
+		font_geometry.loadCharset(font, 1.0, charset, msdfgen::FONT_SCALING_EM_NORMALIZED);
 
 		const double	max_corner_angle = 3.0;
 		for (GlyphGeometry &glyph : glyphs) {
@@ -69,7 +69,7 @@ int	main(int argc, char **argv)
 		int width, height;
 		packer.getDimensions(width, height);
 
-		ImmediateAtlasGenerator<float, 3, msdfGenerator, BitmapAtlasStorage<msdfgen::byte, 3>> generator(width, height);
+		ImmediateAtlasGenerator<float, CHANNELS, mtsdfGenerator, BitmapAtlasStorage<msdfgen::byte, CHANNELS>> generator(width, height);
 		GeneratorAttributes attributes;
 		generator.setAttributes(attributes);
 		generator.setThreadCount(4);
@@ -78,7 +78,7 @@ int	main(int argc, char **argv)
 
 		// derive a short name from the filename, e.g. strip path/extension
 		FontHeader	font_header = {};
-		snprintf(font_header.name, sizeof(font_header.name), "%s", basename(font_paths[fi]));
+		snprintf(font_header.path, sizeof(font_header.path), "%s", font_paths[fi]);
 		font_header.atlas_width = width;
 		font_header.atlas_height = height;
 		font_header.px_range = 4.0f;
@@ -92,25 +92,26 @@ int	main(int argc, char **argv)
 
 			GlyphInfo entry = {
 				.index = (u32)g.getIndex(),
-				.uv_min = { (float)(al / width), (float)(at / height) },
-				.uv_max = { (float)(ar / width), (float)(ab / height) },
+				.uv_min = { (float)(al / width), (float)(1.0 - ab / height) },
+				.uv_max = { (float)(ar / width), (float)(1.0 - at / height) },
 				.plane_min = { (float)pl, (float)pb },
 				.plane_max = { (float)pr, (float)pt },
 				.advance = (float)g.getAdvance(),
 			};
+
 			fwrite(&entry, sizeof(entry), 1, out);
 		}
 
-		// Raw RGB pixels straight from the generator's in-memory bitmap —
+		// Raw RGBA pixels straight from the generator's in-memory bitmap —
 		// no PNG encode/decode round-trip needed at all.
-		msdfgen::Bitmap<unsigned char, 3>	bytes(width, height);
+		msdfgen::Bitmap<unsigned char, CHANNELS>	bytes(width, height);
 		generator.atlasStorage().get(0, 0, bytes);
-		auto ref = msdfgen::BitmapConstRef<msdfgen::byte, 3>(bytes);
+		auto ref = msdfgen::BitmapConstRef<msdfgen::byte, CHANNELS>(bytes);
 		const u8	*pixels = ref.pixels;
-		fwrite(pixels, 1, (size_t)width * height * 3, out);
+		fwrite(pixels, 1, (size_t)width * height * CHANNELS, out);
 
 		printf("Baked font %d/%d: %s (%u glyphs, %ux%u)\n",
-		       fi + 1, font_count, font_header.name, font_header.glyph_count, width, height);
+		       fi + 1, font_count, basename(font_header.path), font_header.glyph_count, width, height);
 		msdfgen::destroyFont(font);
 	}
 

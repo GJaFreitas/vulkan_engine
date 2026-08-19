@@ -23,9 +23,8 @@ static inline void	createMappedBuffer(void *allocator, VkBufferCreateInfo *buf_i
 	wrapperVMAmapMemory(allocator, buf->allocation, &buf->mapped);
 }
 
-void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, void *data_for_upload, ImageObject *gpu_image)
+void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, u32 data_size, void *data_for_upload, ImageObject *gpu_image)
 {
-	const u32	data_size = img_h * img_w;
 	VkBuffer	staging_buffer;
 	void		*buf_allocation;
 

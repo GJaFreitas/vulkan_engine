@@ -44,7 +44,7 @@ VKPKG_LIB := $(VKCPKG_ROOT)/$(TRIPLET)/lib
 #### FONT BAKING (SMELLS GOOD IN HERE) ####
 
 FONT_PATHS := /usr/share/fonts/TTF/JetBrainsMonoNerdFont-Bold.ttf
-FONT_PATHS += /usr/share/fonts/TTF/FiraCode-Bold.ttf
+# FONT_PATHS += /usr/share/fonts/TTF/FiraCode-Bold.ttf
 # This is a symbolic link
 MSDF_GEN_ROOT := tools/msdf-atlas-gen
 MSDF_INC := \

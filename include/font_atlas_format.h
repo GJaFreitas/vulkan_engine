@@ -12,7 +12,7 @@ typedef struct
 
 typedef struct
 {
-	char     name[64];        // font name, null-padded
+	char     path[64];        // font path, null-padded
 	uint32_t atlas_width;
 	uint32_t atlas_height;
 	float    px_range;
@@ -35,3 +35,5 @@ typedef struct
 
 #define FATL_MAGIC   0x4C544146u // "FATL"
 #define FATL_VERSION 1u
+// Channel count used by the distance fields. Meaning: how many fields exist
+#define CHANNELS	4
