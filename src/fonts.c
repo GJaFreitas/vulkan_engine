@@ -70,16 +70,16 @@ void textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
 
 				GlyphRenderInstance *inst = &font->render_instances[font->glyph_count++];
 
-				const f32 x_min = g->plane_min[0] * px_per_em;
-				const f32 y_min = g->plane_min[1] * px_per_em;
-				const f32 x_max = g->plane_max[0] * px_per_em;
-				const f32 y_max = g->plane_max[1] * px_per_em;
+				const f32 left = g->plane_min[0] * px_per_em;
+				const f32 top = g->plane_min[1] * px_per_em;
+				const f32 right = g->plane_max[0] * px_per_em;
+				const f32 bottom = g->plane_max[1] * px_per_em;
 
-				inst->pos[0] = roundf(cursor_x + x_min);
-				inst->pos[1] = roundf(cursor_y - y_max);
+				inst->pos[0] = roundf(cursor_x + left);
+				inst->pos[1] = roundf(cursor_y + top);
 
-				inst->size[0] = x_max - x_min;
-				inst->size[1] = y_max - y_min;
+				inst->size[0] = right - left;
+				inst->size[1] = bottom - top;
 
 				inst->uv_offset[0] = g->uv_min[0];
 				inst->uv_offset[1] = g->uv_min[1];
