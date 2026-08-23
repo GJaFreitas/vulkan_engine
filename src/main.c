@@ -105,6 +105,15 @@ static inline void	beginFrame(World world, bool *running) {
 	}
 }
 
+static void	displayFps(World world, Allocator *frame_allocator, double fps)
+{
+	u8	strdata[16];
+	String	fps_string = {.data = strdata};
+
+	fps_string.count = stbsp_snprintf(strdata, 16, "Fps: %.2f", fps);
+	textDraw(fps_string, &world.fonts.fonts[0], 16, (vec2){world.graphics_ctx->window_width - 200, 200}, (vec4){255, 255, 255, 255});
+}
+
 static inline void	endFrame(World world) {
 	modelCacheSweep();
 	inputEndFrame();
@@ -125,8 +134,10 @@ int	loop(World world)
 	{
 		getMsAndFps(&world.dt_ms, &fps, &fps_avg, &last_time, &frames);
 		beginFrame(world, &running);
+		displayFps(world, &world.frame_allocator, fps);
 
-		textDraw(STRING_LIT("Yippe!"), &world.fonts.fonts[0], 64, (vec2){100, 100}, (vec4){255, 0, 255, 255});
+		textDraw(STRING_LIT("12892Yippe.?!!!"), &world.fonts.fonts[0], 64, (vec2){100, 100}, (vec4){255, 0, 255, 255});
+
 		entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
 		text_info = buildTextRenderInfo(&world.fonts.fonts[0]);
 		render(world.graphics_ctx, &world.player->camera, entity_info, text_info);

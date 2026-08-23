@@ -46,7 +46,7 @@ VKPKG_LIB := $(VKCPKG_ROOT)/$(TRIPLET)/lib
 FONT_PATHS := /usr/share/fonts/TTF/JetBrainsMonoNerdFont-Bold.ttf
 # FONT_PATHS += /usr/share/fonts/TTF/FiraCode-Bold.ttf
 
-BAKE_LDLIBS := -I$(INC_DIR) -L$(MYLIB_DIR) -l:mylib.a
+BAKE_LDLIBS := -I$(INC_DIR) -L$(MYLIB_DIR) -l:mylib.a $(shell pkg-config --libs freetype2)
 
 MSDF_BAKER_FLAGS := #-O2
 

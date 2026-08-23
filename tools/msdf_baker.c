@@ -1,4 +1,5 @@
 #include "font_atlas_format.h"
+#include "fonts.h"
 #include "stb_sprintf.h"
 #include "base_layer.h"
 
@@ -31,7 +32,7 @@ u32	readRGBAData(String rgba_file_path, String *data, Allocator *a)
 	return width;
 }
 
-void	readGlyphInfoCSV(String csv_file_path, Vector *glyph_vec, u32 atlas_size)
+void	readGlyphInfoCSV(String csv_file_path, Vector *glyph_vec, u32 atlas_size, FT_Face face)
 {
 	// CSV columns
 	//
@@ -55,7 +56,7 @@ void	readGlyphInfoCSV(String csv_file_path, Vector *glyph_vec, u32 atlas_size)
 	for (; line.count > 0; line = getNextLine(csv, &offset)) {
 		GlyphInfo	glyph = {};
 
-		glyph.index = atoi((char *)line.data);
+		glyph.index = FT_Get_Char_Index(face, atoi((char *)line.data));
 		strViewJumpToChar(&line, ',');
 		strViewAdvance(&line, 1);
 
@@ -102,6 +103,8 @@ int	main(int argc, char **argv) {
 		fprintf(stderr, "Usage: %s <font path1> <font path2> ... <output>\n", argv[0]);
 		exit(1);
 	}
+	FT_Library ft_lib;
+	FT_Init_FreeType(&ft_lib);
 
 	Allocator	a = newArenaAllocator(MB(20), NULL, DEFAULT_ALIGN);
 	Vector		*glyph_vec = vectorCreate(512, sizeof(GlyphInfo), &a);
@@ -120,6 +123,8 @@ int	main(int argc, char **argv) {
 		char		*font_path = font_paths[fi];
 		FontHeader	fheader = {};
 		snprintf(fheader.path, 64, "%s", font_path);
+		FT_Face face;
+		FT_New_Face(ft_lib, font_path, 0, &face);
 
 		StringView	font_name = {.data = (u8*)font_path, .count = strlen(font_path)};
 		u8	*last_bar = strViewPtrToCharR(font_name, '/');
@@ -127,7 +132,7 @@ int	main(int argc, char **argv) {
 		strViewAdvance(&font_name, last_bar_i + 1);
 		font_name.count -= sizeofString(".ttf");
 
-		const String		glyph_set = STRING_LIT("tools/glyphset.txt");
+		const String		char_set = STRING_LIT("tools/charset.txt");
 		String			rgba_output = {.count = font_name.count + sizeofString(".rgba")};
 		String			csv_output = {.count = font_name.count + sizeofString(".csv")};
 		rgba_output.data = calloc(1, font_name.count + sizeofString(".rgba"));
@@ -141,7 +146,7 @@ int	main(int argc, char **argv) {
 
 
 		char	command[512];
-		stbsp_snprintf(command, 512, "tools/msdf-atlas-gen/build/bin/msdf-atlas-gen -glyphset %S -font %s -format rgba -imageout %S -csv %S -type mtsdf -square -minsize 24 -emrange 4.0 -angle 3.0 -miterlimit 1 -threads 0 -yorigin top", glyph_set, font_path, rgba_output, csv_output);
+		stbsp_snprintf(command, 512, "tools/msdf-atlas-gen/build/bin/msdf-atlas-gen -charset %S -font %s -format rgba -imageout %S -csv %S -type mtsdf -square -minsize 24 -emrange 4.0 -angle 3.0 -miterlimit 1 -threads 0 -yorigin top", char_set, font_path, rgba_output, csv_output);
 
 		int result = system(command);
 		if (result != 0) { fprintf(stderr, "Command failed\n"); return 1;}
@@ -149,7 +154,7 @@ int	main(int argc, char **argv) {
 		String	rgba_data;
 		u32	atlas_size = readRGBAData(rgba_output, &rgba_data, &a);
 		print("Atlas size: %ux%u\n", atlas_size, atlas_size);
-		readGlyphInfoCSV(csv_output, glyph_vec, atlas_size);
+		readGlyphInfoCSV(csv_output, glyph_vec, atlas_size, face);
 		print("Glyph count: %zu\n", glyph_vec->used);
 
 		fheader.glyph_count = glyph_vec->used;
