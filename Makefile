@@ -45,26 +45,14 @@ VKPKG_LIB := $(VKCPKG_ROOT)/$(TRIPLET)/lib
 
 FONT_PATHS := /usr/share/fonts/TTF/JetBrainsMonoNerdFont-Bold.ttf
 # FONT_PATHS += /usr/share/fonts/TTF/FiraCode-Bold.ttf
-# This is a symbolic link
-MSDF_GEN_ROOT := tools/msdf-atlas-gen
-MSDF_INC := \
-	-I$(INC_DIR) \
-	-I$(MSDF_GEN_ROOT)/build \
-	-I$(MSDF_GEN_ROOT)/msdfgen \
-	-I$(MSDF_GEN_ROOT)/msdf-atlas-gen
 
-MSDF_LIBS := \
-	$(MSDF_GEN_ROOT)/build/libmsdf-atlas-gen.a \
-	$(MSDF_GEN_ROOT)/build/msdfgen/libmsdfgen-ext.a \
-	$(MSDF_GEN_ROOT)/build/msdfgen/libmsdfgen-core.a
+BAKE_LDLIBS := -I$(INC_DIR) -L$(MYLIB_DIR) -l:mylib.a
 
-BAKE_LDLIBS := $(shell pkg-config --libs freetype2) -lpng -lz
-
-MSDF_BAKER_FLAGS := -O2 $(MSDF_INC)
+MSDF_BAKER_FLAGS := #-O2
 
 # The file with stuff in it
 MSDF_BAKE := data/font_file.bin
-MSDF_BAKER_SRC := tools/msdf_baker.cpp
+MSDF_BAKER_SRC := tools/msdf_baker.c src/base_layer.c
 MSDF_BAKER := tools/msdf_baker.out
 
 #### THIS HAS TO BE HERE BECAUSE IT NEEDS THE REST OF THE STUFF ####
@@ -84,7 +72,7 @@ $(MSDF_BAKE): $(MSDF_BAKER)
 	$(MSDF_BAKER) $(FONT_PATHS) $(MSDF_BAKE)
 
 $(MSDF_BAKER): $(MSDF_BAKER_SRC)
-	@$(CXX) $(CXXFLAGS) $(MSDF_BAKER_FLAGS) $(MSDF_BAKER_SRC) $(MSDF_LIBS) $(BAKE_LDLIBS) -o $(MSDF_BAKER)
+	@$(CC) $(CFLAGS) $(CPPFLAGS) $(MSDF_BAKER_FLAGS) $(MSDF_BAKER_SRC) $(BAKE_LDLIBS) -o $(MSDF_BAKER)
 
 $(MYLIB_LIB): FORCE
 	@$(MAKE) -C $(MYLIB_DIR) --no-print-directory

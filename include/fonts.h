@@ -9,16 +9,6 @@
 #include "graphics_layer.h"
 #include "font_atlas_format.h"
 
-#define MAX_GLYPH_INSTANCES 1024
-typedef struct GlyphRenderInstance
-{
-	vec2	pos;
-	vec2	size;
-	vec2	uv_offset;
-	vec2	uv_size;
-	vec4	color;
-}	GlyphRenderInstance;
-
 typedef struct TextAtlas
 {
 	ImageObject	gpu_image;

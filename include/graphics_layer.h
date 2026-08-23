@@ -337,15 +337,6 @@ typedef struct EntityInstanceData
 	mat4	model_mat;
 }	EntityInstanceData;
 
-typedef struct GlyphInstance
-{
-	vec2	pos;		// top-left, in pixels, screen space (origin top-left)
-	vec2	size;		// width/height in pixels
-	vec2	uv_offset;	// top-left UV in the atlas [0,1]
-	vec2	uv_size;	// UV width/height in the atlas
-	vec4	color;		// RGBA, lets you tint text per-glyph/run
-}	GlyphInstance;
-
 typedef struct EntityRenderData
 {
 	EntityInstanceData	instance_data;
@@ -359,11 +350,23 @@ typedef struct EntityRenderInfo
 
 }	EntityRenderInfo;
 
+
+
+#define MAX_GLYPH_INSTANCES 1024
+typedef struct GlyphRenderInstance
+{
+	vec2	pos;
+	vec2	size;
+	vec2	uv_offset;
+	vec2	uv_size;
+	vec4	color;
+}	GlyphRenderInstance;
+
 typedef struct TextRenderInfo
 {
-	u64	upload_size;
-	u32	glyph_count;
-	void	*render_instances;
+	u64			upload_size;
+	u32			glyph_count;
+	GlyphRenderInstance	*render_instances;
 }	TextRenderInfo;
 
 enum CameraMovement {

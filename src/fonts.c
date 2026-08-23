@@ -58,11 +58,8 @@ void textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
 		f32 y_offset = glyph_pos[i].y_offset * hb_scale;
 
 		if (g) {
-			const f32 glyph_width =
-				g->plane_max[0] - g->plane_min[0];
-
-			const f32 glyph_height =
-				g->plane_max[1] - g->plane_min[1];
+			const f32 glyph_width = g->plane_max[0] - g->plane_min[0];
+			const f32 glyph_height = g->plane_max[1] - g->plane_min[1];
 
 			// Glyphs such as space have no ink/geometry.
 			if (glyph_width > 0 && glyph_height > 0) {
@@ -71,16 +68,15 @@ void textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
 					break;
 				}
 
-				GlyphRenderInstance *inst =
-					&font->render_instances[font->glyph_count++];
+				GlyphRenderInstance *inst = &font->render_instances[font->glyph_count++];
 
 				const f32 x_min = g->plane_min[0] * px_per_em;
 				const f32 y_min = g->plane_min[1] * px_per_em;
 				const f32 x_max = g->plane_max[0] * px_per_em;
 				const f32 y_max = g->plane_max[1] * px_per_em;
 
-				inst->pos[0] = roundf(cursor_x + x_offset + x_min);
-				inst->pos[1] = roundf(cursor_y - y_offset - y_max);
+				inst->pos[0] = roundf(cursor_x + x_min);
+				inst->pos[1] = roundf(cursor_y - y_max);
 
 				inst->size[0] = x_max - x_min;
 				inst->size[1] = y_max - y_min;
@@ -95,15 +91,9 @@ void textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
 			}
 		}
 
-		cursor_x = roundf(
-			cursor_x +
-			glyph_pos[i].x_advance * hb_scale
-		);
+		cursor_x += glyph_pos[i].x_advance * hb_scale;
 
-		cursor_y = roundf(
-			cursor_y +
-			glyph_pos[i].y_advance * hb_scale
-		);
+		cursor_y += glyph_pos[i].y_advance * hb_scale;
 
 	}
 	check++;
@@ -242,28 +232,28 @@ void	initFonts(GraphicsContext *ctx, LoadedFonts *loaded_fonts, Allocator *alloc
 	loaded_fonts->fonts = allocator->fp_allocation(allocator, sizeof(Font) * loaded_fonts->font_count, DEFAULT_ALIGN);
 
 	for (u32 i = 0; i < loaded_fonts->font_count; i++) {
-		Font	*font = &loaded_fonts->fonts[i];
-		FontHeader	header;
-		strReadSize(&fileview, &header, sizeof(FontHeader));
-		initFont(font, header, ft_lib);
+		Font		*font = &loaded_fonts->fonts[i];
+		FontHeader	fheader;
+		strReadSize(&fileview, &fheader, sizeof(FontHeader));
+		initFont(font, fheader, ft_lib);
 
-		font->atlas.glyphs = allocator->fp_allocation(allocator, sizeof(GlyphInfo) * header.glyph_count, DEFAULT_ALIGN);
-		strReadSize(&fileview, font->atlas.glyphs, sizeof(GlyphInfo) * header.glyph_count);
+		font->atlas.glyphs = allocator->fp_allocation(allocator, sizeof(GlyphInfo) * fheader.glyph_count, DEFAULT_ALIGN);
+		strReadSize(&fileview, font->atlas.glyphs, sizeof(GlyphInfo) * fheader.glyph_count);
 
 		const u64	offset = frame_arena.offset;
-		const u32	pixels_size = header.atlas_height * header.atlas_width * CHANNELS;
+		const u32	pixels_size = fheader.atlas_height * fheader.atlas_width * CHANNELS;
 		u8	*pixels = frame_allocator->fp_allocation(frame_allocator, pixels_size, DEFAULT_ALIGN);
 		strReadSize(&fileview, pixels, pixels_size);
 
 		uploadAtlasToGpu(ctx, &font->atlas, pixels);
-		debug_dump_atlas(pixels, header.atlas_width, header.atlas_height);
+		debug_dump_atlas(pixels, fheader.atlas_width, fheader.atlas_height);
 		font->allocator = frame_allocator;
 		// TODO: Bad allocation
 		font->render_instances = calloc(MAX_GLYPH_INSTANCES, sizeof(GlyphRenderInstance));
 		// WARN: Messing with allocators like this is discouraged but oh well this is more efficent
 		frame_arena.offset = offset;
 
-		engine_log(LOG_FILE, "Loaded font: %s", header.path);
+		engine_log(LOG_FILE, "Loaded font: %s", fheader.path);
 	}
 
 	destroyFile(file);

@@ -59,24 +59,13 @@ float4 fragMain(VSOutput input) : SV_Target
 	// MTSDF texture:
 	//   RGB = MSDF
 	//   A   = true SDF
-	//
-	// For basic MSDF rendering we only need RGB.
 	float4 mtsdf = atlas.Sample(input.uv);
 
-	float distance = median(mtsdf.rgb);
+	float sd = median(mtsdf.rgb);
 
-	// Convert the normalized MSDF distance into a
-	// smooth screen-space coverage value.
-	float smoothing = fwidth(distance) * 0.75;
+	float screenPxDistance = fwidth(sd);
 
-	float alpha = smoothstep(
-		0.5 - smoothing,
-		0.5 + smoothing,
-		distance
-	);
+	float opacity = clamp((sd - 0.5) / screenPxDistance, 0.0, 1.0);
 
-	return float4(
-		input.color.rgb,
-		input.color.a * alpha
-	);
+	return float4(input.color.rgb, input.color.a * opacity);
 }
