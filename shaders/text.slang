@@ -1,6 +1,8 @@
 struct PushConstants
 {
-	float2 screen_size;
+	float2	screen_size; // px_size in third float, atlas dim in 4th
+	float	px_range;
+	uint	atlas_dim;
 };
 [[vk::push_constant]] PushConstants pc;
 

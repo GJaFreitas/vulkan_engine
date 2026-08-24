@@ -351,6 +351,12 @@ typedef struct EntityRenderInfo
 }	EntityRenderInfo;
 
 
+typedef struct TextPushConstants
+{
+	vec2	screen_size;
+	float	px_range;
+	u32	atlas_dim;
+}	TextPushConstants;
 
 #define MAX_GLYPH_INSTANCES 1024
 typedef struct GlyphRenderInstance
@@ -364,6 +370,7 @@ typedef struct GlyphRenderInstance
 
 typedef struct TextRenderInfo
 {
+	u32			atlas_size;
 	u64			upload_size;
 	u32			glyph_count;
 	GlyphRenderInstance	*render_instances;

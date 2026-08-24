@@ -33,7 +33,12 @@ void textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
 	hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
 	hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
 	hb_buffer_set_language(buf, hb_language_from_string("en", -1));
-	hb_shape(font->hb_font, buf, NULL, 0);
+	hb_feature_t features[] = {
+		{ HB_TAG('c','a','l','t'), 0, 0, (unsigned int)-1 },
+		{ HB_TAG('l','i','g','a'), 0, 0, (unsigned int)-1 },
+		{ HB_TAG('c','l','i','g'), 0, 0, (unsigned int)-1 },
+	};
+	hb_shape(font->hb_font, buf, features, sizeofarray(features));
 
 	u32 glyph_count;
 	hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
@@ -51,11 +56,9 @@ void textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
 		const GlyphInfo *g = atlasFindGlyph(atlas, glyph_index);
 
 		if (check == 0) {
-			printf("SHAPED[%u]: glyph_index=%u\n", i, glyph_index);
+			printf("SHAPED[%u]: input_char=%c glyph_index=%u found=%s\n", i, text.data[i], glyph_index,
+	  atlasFindGlyph(atlas, glyph_index) ? "yes" : "no");
 		}
-
-		f32 x_offset = glyph_pos[i].x_offset * hb_scale;
-		f32 y_offset = glyph_pos[i].y_offset * hb_scale;
 
 		if (g) {
 			const f32 glyph_width = g->plane_max[0] - g->plane_min[0];
@@ -266,6 +269,7 @@ TextRenderInfo	buildTextRenderInfo(Font *font)
 	info.glyph_count = font->glyph_count;
 	info.render_instances = font->render_instances;
 	info.upload_size = font->glyph_count * sizeof(GlyphRenderInstance);
+	info.atlas_size = font->atlas.width;
 	font->glyph_count = 0;
 	return info;
 }

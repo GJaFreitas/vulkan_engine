@@ -770,7 +770,7 @@ static void	createTEXTPipeline(GraphicsContext *ctx)
 		{
 			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
 			.offset = 0,
-			.size = sizeof(vec2),
+			.size = sizeof(TextPushConstants),
 		},
 	};
 
@@ -1482,8 +1482,12 @@ void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, u32 frame_idx, Tex
 
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, 1, &atlas_descriptor_set, 0, NULL);
 
-	const vec2	push_constants = {ctx->window_width, ctx->window_height};
-	vkCmdPushConstants(cmd, pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_constants), push_constants);
+	const TextPushConstants	push_constants = {
+		{ctx->window_width, ctx->window_height},
+		4.0,
+		info.atlas_size,
+	};
+	vkCmdPushConstants(cmd, pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_constants), &push_constants);
 
 	VkDeviceSize	offset = 0;
 	vkCmdBindVertexBuffers(cmd, 0, 1, &resource->text_instance_buffer.handle, &offset);
