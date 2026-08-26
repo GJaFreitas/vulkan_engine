@@ -146,10 +146,28 @@ int	main(int argc, char **argv) {
 
 
 		char	command[512];
-		stbsp_snprintf(command, 512, "tools/msdf-atlas-gen/build/bin/msdf-atlas-gen -charset %S -font %s -format rgba -imageout %S -csv %S -type mtsdf -square -minsize 24 -emrange 4.0 -angle 3.0 -miterlimit 1 -threads 0 -yorigin top", char_set, font_path, rgba_output, csv_output);
+		stbsp_snprintf(command, 512, "tools/msdf-atlas-gen/build/bin/msdf-atlas-gen -charset %S -font %s -format rgba -imageout %S -csv %S -type mtsdf -square -minsize 24 -pxrange 8.0 -angle 3.0 -miterlimit 1 -threads 0 -yorigin top", char_set, font_path, rgba_output, csv_output);
 
-		int result = system(command);
-		if (result != 0) { fprintf(stderr, "Command failed\n"); return 1;}
+		{
+			FILE	*pipe = popen(command, "r");
+			if (!pipe) { fprintf(stderr, "Command failed\n"); return 1;}
+
+			char		data[512];
+			fgets(data, 512, pipe);
+			fputs(data, stdout); // Still get the output printed in terminal
+
+			// Parse the field from:
+			// Atlas image file saved.
+			// Glyph layout written into CSV file.
+			// Loaded geometry of 113 out of 113 glyphs.
+			// Atlas size: 1249x1249
+			// Glyph count: 113
+			//
+			// DEcide if its not just better to use pxrange in the command itself
+
+			int result = pclose(pipe);
+			if (result != 0) { fprintf(stderr, "Command failed\n"); return 1; }
+		}
 
 		String	rgba_data;
 		u32	atlas_size = readRGBAData(rgba_output, &rgba_data, &a);

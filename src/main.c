@@ -134,9 +134,9 @@ int	loop(World world)
 	{
 		getMsAndFps(&world.dt_ms, &fps, &fps_avg, &last_time, &frames);
 		beginFrame(world, &running);
-
-		textDraw(STRING_LIT("12892Yippe.:?!!!"), &world.fonts.fonts[0], 12, (vec2){100, 100}, (vec4){255, 0, 255, 255});
 		displayFps(world, &world.frame_allocator, fps);
+
+		textDraw(STRING_LIT("12892Yippe:.?!!!"), &world.fonts.fonts[0], 64, (vec2){100, 100}, (vec4){255, 0, 255, 255});
 
 		entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
 		text_info = buildTextRenderInfo(&world.fonts.fonts[0]);

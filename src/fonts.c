@@ -56,9 +56,11 @@ void textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
 		const GlyphInfo *g = atlasFindGlyph(atlas, glyph_index);
 
 		if (check == 0) {
-			printf("SHAPED[%u]: input_char=%c glyph_index=%u found=%s\n", i, text.data[i], glyph_index,
-	  atlasFindGlyph(atlas, glyph_index) ? "yes" : "no");
+			printf("SHAPED[%u]: glyph_index=%u\n", i, glyph_index);
 		}
+
+		f32 x_offset = glyph_pos[i].x_offset * hb_scale;
+		f32 y_offset = glyph_pos[i].y_offset * hb_scale;
 
 		if (g) {
 			const f32 glyph_width = g->plane_max[0] - g->plane_min[0];
@@ -266,10 +268,10 @@ TextRenderInfo	buildTextRenderInfo(Font *font)
 {
 	TextRenderInfo	info = {};
 
+	info.px_range = 8.0f;
 	info.glyph_count = font->glyph_count;
 	info.render_instances = font->render_instances;
 	info.upload_size = font->glyph_count * sizeof(GlyphRenderInstance);
-	info.atlas_size = font->atlas.width;
 	font->glyph_count = 0;
 	return info;
 }

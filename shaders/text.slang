@@ -1,8 +1,7 @@
 struct PushConstants
 {
-	float2	screen_size; // px_size in third float, atlas dim in 4th
+	float2	screen_size;
 	float	px_range;
-	uint	atlas_dim;
 };
 [[vk::push_constant]] PushConstants pc;
 
@@ -47,27 +46,36 @@ VSOutput vertMain(VSInput input, uint vertex_id : SV_VertexID)
 	return output;
 }
 
-float median(float3 v)
+float2	sqr(float2 x)
 {
-	return max(
-		min(v.x, v.y),
-		min(max(v.x, v.y), v.z)
-	);
+	return x * x;
+}
+
+
+float screenPxRange(float2 texCoord)
+{
+    uint width, height;
+    atlas.GetDimensions(width, height);
+    float2 unitRange = float2(pc.px_range) / float2(width, height);
+
+    float2 screenTexSize = rsqrt(sqr(ddx(texCoord)) + sqr(ddy(texCoord)));
+    // Can also be approximated as screenTexSize = float2(1.0) / fwidth(texCoord);
+
+    return max(0.5 * dot(unitRange, screenTexSize), 1.0);
+}
+
+float median(float r, float g, float b)
+{
+    return max(min(r, g), min(max(r, g), b));
 }
 
 [shader("fragment")]
 float4 fragMain(VSOutput input) : SV_Target
 {
-	// MTSDF texture:
-	//   RGB = MSDF
-	//   A   = true SDF
-	float4 mtsdf = atlas.Sample(input.uv);
+    float3 msd = atlas.Sample(input.uv).rgb;
+    float sd = median(msd.r, msd.g, msd.b);
+    float screenPxDistance = screenPxRange(input.uv) * (sd - 0.5);
+    float opacity = clamp(screenPxDistance + 0.5, 0.0, 1.0);
 
-	float sd = median(mtsdf.rgb);
-
-	float screenPxDistance = fwidth(sd);
-
-	float opacity = clamp((sd - 0.5) / screenPxDistance, 0.0, 1.0);
-
-	return float4(input.color.rgb, input.color.a * opacity);
+    return float4(input.color.rgb, input.color.a * opacity);
 }
