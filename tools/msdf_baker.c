@@ -156,15 +156,6 @@ int	main(int argc, char **argv) {
 			fgets(data, 512, pipe);
 			fputs(data, stdout); // Still get the output printed in terminal
 
-			// Parse the field from:
-			// Atlas image file saved.
-			// Glyph layout written into CSV file.
-			// Loaded geometry of 113 out of 113 glyphs.
-			// Atlas size: 1249x1249
-			// Glyph count: 113
-			//
-			// DEcide if its not just better to use pxrange in the command itself
-
 			int result = pclose(pipe);
 			if (result != 0) { fprintf(stderr, "Command failed\n"); return 1; }
 		}
@@ -184,6 +175,10 @@ int	main(int argc, char **argv) {
 		fwrite(&fheader, sizeof(FontHeader), 1, outfile);
 		fwrite(glyph_vec->elems, sizeof(GlyphInfo), glyph_vec->used, outfile);
 		fwrite(rgba_data.data, 1, rgba_data.count, outfile);
+
+		// Yes im leaking the memory, no i dont care at all
+		if (!remove(strToCstring(rgba_output, &a))) { print("Failed to remove file: %S", rgba_output); }
+		if (!remove(strToCstring(csv_output, &a))) { print("Failed to remove file: %S", csv_output); }
 
 		vectorReset(glyph_vec);
 	}
