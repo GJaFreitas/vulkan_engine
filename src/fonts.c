@@ -47,20 +47,11 @@ void textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
 	f32 cursor_x = pos[0];
 	f32 cursor_y = pos[1];
 
-	static int check = 0;
-
 
 	for (u32 i = 0; i < glyph_count; i++) {
 		// HarfBuzz's post-shaping codepoint is the font glyph index.
 		const u32 glyph_index = glyph_info[i].codepoint;
 		const GlyphInfo *g = atlasFindGlyph(atlas, glyph_index);
-
-		if (check == 0) {
-			printf("SHAPED[%u]: glyph_index=%u\n", i, glyph_index);
-		}
-
-		f32 x_offset = glyph_pos[i].x_offset * hb_scale;
-		f32 y_offset = glyph_pos[i].y_offset * hb_scale;
 
 		if (g) {
 			const f32 glyph_width = g->plane_max[0] - g->plane_min[0];
@@ -101,8 +92,6 @@ void textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
 		cursor_y += glyph_pos[i].y_advance * hb_scale;
 
 	}
-	check++;
-
 	hb_buffer_reset(buf);
 }
 
@@ -251,7 +240,7 @@ void	initFonts(GraphicsContext *ctx, LoadedFonts *loaded_fonts, Allocator *alloc
 		strReadSize(&fileview, pixels, pixels_size);
 
 		uploadAtlasToGpu(ctx, &font->atlas, pixels);
-		debug_dump_atlas(pixels, fheader.atlas_width, fheader.atlas_height);
+		// debug_dump_atlas(pixels, fheader.atlas_width, fheader.atlas_height);
 		font->allocator = frame_allocator;
 		// TODO: Bad allocation
 		font->render_instances = calloc(MAX_GLYPH_INSTANCES, sizeof(GlyphRenderInstance));
