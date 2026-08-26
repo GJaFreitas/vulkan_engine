@@ -43,7 +43,7 @@ u8	*readFileData(String filename, u64 *file_size)
 	int	fd = open(filename_cstring, O_RDONLY);
 
 	if (fd == -1) {
-		fprintf(stderr, "Failed to open file: %S\n", filename);
+		engine_error(LOG_FILE, "Failed to open file: %S\n", filename);
 		return NULL;
 	}
 
@@ -57,13 +57,13 @@ u8	*readFileData(String filename, u64 *file_size)
 	close(fd);
 
 	if (data == MAP_FAILED) {
-		fprintf(stderr, "Failed to map file: %S\n", filename);
+		engine_error(LOG_FILE, "Failed to map file: %S\n", filename);
 		return NULL;
 	}
 	if (file_size) {
 		*file_size = stats.st_size;
 	} else {
-		fprintf(stderr, "Failed to get file size: %S\n", filename);
+		engine_error(LOG_FILE, "Failed to get file size: %S\n", filename);
 		munmap(data, stats.st_size);
 		return NULL;
 	}
@@ -77,6 +77,11 @@ String	readFile(String filename)
 	file.data = readFileData(filename, &file.count);
 
 	return file;
+}
+
+void	destroyFile(String file)
+{
+	munmap(file.data, file.count);
 }
 
 // No allocations

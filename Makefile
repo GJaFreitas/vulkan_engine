@@ -3,6 +3,8 @@ CXX := g++
 
 TARGET := engine.out
 
+#### NORMAL MAKEFILE STUFF ####
+
 CPP_DIR := cpp_layer
 SRC_DIR := src
 DEP_DIR	:= deps
@@ -18,9 +20,13 @@ SRCS := $(shell find $(SRC_DIR) -type f -name '*.c')
 SRCS += $(shell find $(DEP_DIR) -type f -name '*.c')
 OBJS := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/c/%.o,$(SRCS))
 
+#### MY LIBRARY ####
+
 MYLIB_DIR := MyLib
 MYLIB_INC := $(MYLIB_DIR)/include
 MYLIB_LIB := $(MYLIB_DIR)/mylib.a
+
+#### HORRIBLE SHADER STUFF ####
 
 SHADER_SRCS := $(shell find $(SHADER_DIR) -maxdepth 1 -type f -name '*.slang')
 SHADERS := $(patsubst $(SHADER_DIR)/%.slang,$(COMPILED_SHADER_DIR)/%.spv,$(SHADER_SRCS))
@@ -28,10 +34,28 @@ SHADER_INC := -I$(SHADER_DIR)/include
 ENTRY_POINTS := -entry vertMain -entry fragMain
 SLANGC := slangc
 
+#### EXTERNAL DEPENDENCIES ####
+
 VKCPKG_ROOT := vcpkg_installed
 TRIPLET := x64-linux
 VKPKG_INC := $(VKCPKG_ROOT)/$(TRIPLET)/include
 VKPKG_LIB := $(VKCPKG_ROOT)/$(TRIPLET)/lib
+
+#### FONT BAKING (SMELLS GOOD IN HERE) ####
+
+FONT_PATHS := /usr/share/fonts/TTF/JetBrainsMonoNerdFont-Bold.ttf
+# FONT_PATHS += /usr/share/fonts/TTF/FiraCode-Bold.ttf
+
+BAKE_LDLIBS := -I$(INC_DIR) -L$(MYLIB_DIR) -l:mylib.a $(shell pkg-config --libs freetype2)
+
+MSDF_BAKER_FLAGS := #-O2
+
+# The file with stuff in it
+MSDF_BAKE := data/font_file.bin
+MSDF_BAKER_SRC := tools/msdf_baker.c src/base_layer.c
+MSDF_BAKER := tools/msdf_baker.out
+
+#### THIS HAS TO BE HERE BECAUSE IT NEEDS THE REST OF THE STUFF ####
 
 CXXFLAGS := -g
 CFLAGS := -Wall -Wextra -g
@@ -41,7 +65,14 @@ LDFLAGS := -L$(MYLIB_DIR) -l:mylib.a -L$(VKPKG_LIB) -Wl,-rpath,$(VKPKG_LIB)
 LDLIBS := -lvolk -lvulkan -lSDL3 -lstdc++ -lshaderc_shared -lm \
 		-lharfbuzz -lfreetype  -lpng16 -lz -lbz2 -lbrotlidec -lbrotlicommon
 
-all: $(OBJ_DIR) $(COMPILED_SHADER_DIR) $(SHADERS) $(MYLIB_LIB) $(TARGET)
+all: $(OBJ_DIR) $(MSDF_BAKE) $(COMPILED_SHADER_DIR) $(SHADERS) $(MYLIB_LIB) $(TARGET)
+
+# msdf_baker.out <font paths> <outfile.bin>
+$(MSDF_BAKE): $(MSDF_BAKER)
+	$(MSDF_BAKER) $(FONT_PATHS) $(MSDF_BAKE)
+
+$(MSDF_BAKER): $(MSDF_BAKER_SRC)
+	@$(CC) $(CFLAGS) $(CPPFLAGS) $(MSDF_BAKER_FLAGS) $(MSDF_BAKER_SRC) $(BAKE_LDLIBS) -o $(MSDF_BAKER)
 
 $(MYLIB_LIB): FORCE
 	@$(MAKE) -C $(MYLIB_DIR) --no-print-directory

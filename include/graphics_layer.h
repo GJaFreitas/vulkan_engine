@@ -21,6 +21,12 @@
 #define TINYGLTF3_ENABLE_FS
 #include "tiny_gltf_v3.h"
 
+typedef struct TextPushConstants
+{
+	vec2	screen_size;
+	float	px_range;
+}	TextPushConstants;
+
 typedef struct UniformBufferObject
 {
 	mat4	view;
@@ -337,15 +343,6 @@ typedef struct EntityInstanceData
 	mat4	model_mat;
 }	EntityInstanceData;
 
-typedef struct GlyphInstance
-{
-	vec2	pos;		// top-left, in pixels, screen space (origin top-left)
-	vec2	size;		// width/height in pixels
-	vec2	uv_offset;	// top-left UV in the atlas [0,1]
-	vec2	uv_size;	// UV width/height in the atlas
-	vec4	color;		// RGBA, lets you tint text per-glyph/run
-}	GlyphInstance;
-
 typedef struct EntityRenderData
 {
 	EntityInstanceData	instance_data;
@@ -359,11 +356,22 @@ typedef struct EntityRenderInfo
 
 }	EntityRenderInfo;
 
+#define MAX_GLYPH_INSTANCES 1024
+typedef struct GlyphRenderInstance
+{
+	vec2	pos;
+	vec2	size;
+	vec2	uv_offset;
+	vec2	uv_size;
+	vec4	color;
+}	GlyphRenderInstance;
+
 typedef struct TextRenderInfo
 {
-	u64	upload_size;
-	u32	glyph_count;
-	void	*render_instances;
+	float			px_range;
+	u64			upload_size;
+	u32			glyph_count;
+	GlyphRenderInstance	*render_instances;
 }	TextRenderInfo;
 
 enum CameraMovement {
@@ -403,7 +411,7 @@ void	startGraphics(GraphicsContext *ctx);
 void	endGraphics(GraphicsContext *ctx);
 void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, TextRenderInfo text_info);
 void	beginSingleTimeCommand(GraphicsContext *ctx, VkCommandBuffer *cmd_buffer);
-void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, void *data_for_upload, ImageObject *gpu_image);
+void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, u32 data_size, void *data_for_upload, ImageObject *gpu_image);
 
 
 void	modelLoad(String filename, GraphicsContext *ctx, Model *model);

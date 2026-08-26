@@ -23,9 +23,8 @@ static inline void	createMappedBuffer(void *allocator, VkBufferCreateInfo *buf_i
 	wrapperVMAmapMemory(allocator, buf->allocation, &buf->mapped);
 }
 
-void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, void *data_for_upload, ImageObject *gpu_image)
+void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, u32 data_size, void *data_for_upload, ImageObject *gpu_image)
 {
-	const u32	data_size = img_h * img_w;
 	VkBuffer	staging_buffer;
 	void		*buf_allocation;
 
@@ -769,9 +768,9 @@ static void	createTEXTPipeline(GraphicsContext *ctx)
 	VkPushConstantRange	push_constant_ranges[] = {
 		// Screen size
 		{
-			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 			.offset = 0,
-			.size = sizeof(vec2),
+			.size = sizeof(TextPushConstants),
 		},
 	};
 
@@ -1483,8 +1482,8 @@ void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, u32 frame_idx, Tex
 
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, 1, &atlas_descriptor_set, 0, NULL);
 
-	const vec2	push_constants = {ctx->window_width, ctx->window_height};
-	vkCmdPushConstants(cmd, pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(push_constants), push_constants);
+	const TextPushConstants	push_constants = {{ctx->window_width, ctx->window_height}, info.px_range};
+	vkCmdPushConstants(cmd, pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants), &push_constants);
 
 	VkDeviceSize	offset = 0;
 	vkCmdBindVertexBuffers(cmd, 0, 1, &resource->text_instance_buffer.handle, &offset);

@@ -22,6 +22,7 @@
 
 ### --- STUFF THAT DOESNT WORK ---
 
+Change strViewChr() to strViewUpToChar()
 
 
 ### --- IDEAS FOR LATER THAT I CANT IMPLEMENT NOW ---

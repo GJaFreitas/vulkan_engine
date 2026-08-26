@@ -1,5 +1,5 @@
 {
-  "dependencies": [
-    "harfbuzz"
-  ]
+	"dependencies": [
+		"harfbuzz"
+	]
 }

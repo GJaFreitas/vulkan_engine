@@ -105,6 +105,15 @@ static inline void	beginFrame(World world, bool *running) {
 	}
 }
 
+static void	displayFps(World world, Allocator *frame_allocator, double fps)
+{
+	u8	strdata[16];
+	String	fps_string = {.data = strdata};
+
+	fps_string.count = stbsp_snprintf(strdata, 16, "Fps: %.2f", fps);
+	textDraw(fps_string, &world.fonts.fonts[0], 16, (vec2){world.graphics_ctx->window_width - 200, 200}, (vec4){255, 255, 255, 255});
+}
+
 static inline void	endFrame(World world) {
 	modelCacheSweep();
 	inputEndFrame();
@@ -125,10 +134,12 @@ int	loop(World world)
 	{
 		getMsAndFps(&world.dt_ms, &fps, &fps_avg, &last_time, &frames);
 		beginFrame(world, &running);
+		displayFps(world, &world.frame_allocator, fps);
 
-		textDraw(STRING_LIT("Yippe!"), &world.font, 16, (vec2){50, 50}, (vec4){255, 255, 255, 255});
+		textDraw(STRING_LIT("12892Yippe:.?!!!"), &world.fonts.fonts[0], 64, (vec2){100, 100}, (vec4){255, 0, 255, 255});
+
 		entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
-		text_info = buildTextRenderInfo(&world.font);
+		text_info = buildTextRenderInfo(&world.fonts.fonts[0]);
 		render(world.graphics_ctx, &world.player->camera, entity_info, text_info);
 
 		updatePlayer(world.player, world.dt_ms, world.graphics_ctx->window);
@@ -174,6 +185,7 @@ int	main(void)
 	world.graphics_ctx = &gctx;
 	world.key_states = SDL_GetKeyboardState(NULL);
 	world.frame_allocator = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
+	world.perm_allocator = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
 	world.entity_allocator = newHeapAllocator(MB(2), NULL, DEFAULT_ALIGN);
 	world.entities = vectorCreate(16, sizeof(Entity *), &world.entity_allocator);
 	updateGridProperties(&world);
@@ -183,7 +195,7 @@ int	main(void)
 
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);
 	initPlayer(world.player);
-	initFont(world.graphics_ctx, &world.font, FONT_PATH, &world.frame_allocator);
+	initFonts(world.graphics_ctx, &world.fonts, &world.perm_allocator, &world.frame_allocator);
 
 	loop(world);
 	printf("\n\n\n");
