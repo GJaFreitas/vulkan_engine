@@ -36,7 +36,7 @@ typedef struct Font
 	// Per frame stuff
 	// NOTE: This 'render_instances' ptr doesnt change for now but later it might
 	// when i add support for more stuff (2026-08-16)
-	GlyphRenderInstance	*render_instances;
+	UiRenderInstance	*render_instances;
 	u32			glyph_count;
 }	Font;
 

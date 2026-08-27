@@ -3,6 +3,7 @@
 #include "base_layer.h"
 #include "graphics_layer.h"
 #include "fonts.h"
+#include "ui.h"
 
 typedef struct Player
 {
@@ -49,6 +50,8 @@ typedef struct World
 	double		dt_ms;
 
 	LoadedFonts	fonts;
+
+	UiState		*ui;
 
 }	World;
 

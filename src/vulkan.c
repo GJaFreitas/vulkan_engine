@@ -809,16 +809,18 @@ static void	createTEXTPipeline(GraphicsContext *ctx)
 
 	VkVertexInputBindingDescription	bind_desc = {
 		.binding = 0,
-		.stride = sizeof(GlyphRenderInstance),
+		.stride = sizeof(UiRenderInstance),
 		.inputRate = VK_VERTEX_INPUT_RATE_INSTANCE,
 	};
 
 	VkVertexInputAttributeDescription	attribute_desc[] = {
-		{0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphRenderInstance, pos)},
-		{1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphRenderInstance, size)},
-		{2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphRenderInstance, uv_offset)},
-		{3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(GlyphRenderInstance, uv_size)},
-		{4, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(GlyphRenderInstance, color)},
+		{0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(UiRenderInstance, pos)},
+		{1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(UiRenderInstance, size)},
+		{2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(UiRenderInstance, uv_offset)},
+		{3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(UiRenderInstance, uv_size)},
+		{4, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(UiRenderInstance, color)},
+		{5, 0, VK_FORMAT_R32_UINT, offsetof(UiRenderInstance, primitive_type)},
+		{6, 0, VK_FORMAT_R32_SFLOAT, offsetof(UiRenderInstance, corner_radius)},
 	};
 
 	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
@@ -1155,7 +1157,7 @@ static void	createFrameResources(GraphicsContext *ctx)
 
 		VkBufferCreateInfo	text_buffer_info = {
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.size = sizeof(GlyphRenderInstance) * MAX_GLYPH_INSTANCES,
+			.size = sizeof(UiRenderInstance) * MAX_GLYPH_INSTANCES,
 			.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		};

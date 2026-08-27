@@ -65,7 +65,7 @@ LDFLAGS := -L$(MYLIB_DIR) -l:mylib.a -L$(VKPKG_LIB) -Wl,-rpath,$(VKPKG_LIB)
 LDLIBS := -lvolk -lvulkan -lSDL3 -lstdc++ -lshaderc_shared -lm \
 		-lharfbuzz -lfreetype  -lpng16 -lz -lbz2 -lbrotlidec -lbrotlicommon
 
-all: $(OBJ_DIR) $(MSDF_BAKE) $(COMPILED_SHADER_DIR) $(SHADERS) $(MYLIB_LIB) $(TARGET)
+all: $(MYLIB_LIB) $(OBJ_DIR) $(MSDF_BAKE) $(COMPILED_SHADER_DIR) $(SHADERS) $(TARGET)
 
 # msdf_baker.out <font paths> <outfile.bin>
 $(MSDF_BAKE): $(MSDF_BAKER)
@@ -74,9 +74,8 @@ $(MSDF_BAKE): $(MSDF_BAKER)
 $(MSDF_BAKER): $(MSDF_BAKER_SRC)
 	@$(CC) $(CFLAGS) $(CPPFLAGS) $(MSDF_BAKER_FLAGS) $(MSDF_BAKER_SRC) $(BAKE_LDLIBS) -o $(MSDF_BAKER)
 
-$(MYLIB_LIB): FORCE
+$(MYLIB_LIB):
 	@$(MAKE) -C $(MYLIB_DIR) --no-print-directory
-FORCE:
 
 $(COMPILED_SHADER_DIR):
 	@mkdir -p shaders/compiled

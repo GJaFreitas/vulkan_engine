@@ -133,7 +133,20 @@ int	loop(World world)
 	while (running)
 	{
 		getMsAndFps(&world.dt_ms, &fps, &fps_avg, &last_time, &frames);
+		if (world.dt_ms <= 16.6) {
+			usleep(16.6 - world.dt_ms);
+		}
 		beginFrame(world, &running);
+
+		UiComponent	component = {
+			.shape = setShape(ELIPSE) | FILLED,
+			.color = {255, 255, 255, 255},
+			.pos = {250, 250},
+			.size = {250, 250},
+		};
+
+		uiComponentCreate(world.ui, component, &world.fonts.fonts[0]);
+		textDraw(STRING_LIT("Ola tiago."), &world.fonts.fonts[0], 32, (vec2){10, 10}, (vec4){255, 255, 255, 255});
 
 		entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
 		text_info = buildTextRenderInfo(&world.fonts.fonts[0]);
@@ -177,9 +190,11 @@ int	main(void)
 	World		world = {};
 	GraphicsContext	gctx = {};
 	Player		p = {};
+	UiState		ui = {};
 
 	world.player = &p;
 	world.graphics_ctx = &gctx;
+	world.ui = &ui;
 	world.key_states = SDL_GetKeyboardState(NULL);
 	world.frame_allocator = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
 	world.perm_allocator = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
@@ -188,6 +203,8 @@ int	main(void)
 	updateGridProperties(&world);
 
 	startGraphics(world.graphics_ctx);
+	initUi(&ui);
+
 
 
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);

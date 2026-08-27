@@ -64,7 +64,8 @@ void textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
 					break;
 				}
 
-				GlyphRenderInstance *inst = &font->render_instances[font->glyph_count++];
+				UiRenderInstance *inst = &font->render_instances[font->glyph_count++];
+				inst->primitive_type = 0;
 
 				const f32 left = g->plane_min[0] * px_per_em;
 				const f32 top = g->plane_min[1] * px_per_em;
@@ -243,7 +244,7 @@ void	initFonts(GraphicsContext *ctx, LoadedFonts *loaded_fonts, Allocator *alloc
 		// debug_dump_atlas(pixels, fheader.atlas_width, fheader.atlas_height);
 		font->allocator = frame_allocator;
 		// TODO: Bad allocation
-		font->render_instances = calloc(MAX_GLYPH_INSTANCES, sizeof(GlyphRenderInstance));
+		font->render_instances = calloc(MAX_GLYPH_INSTANCES, sizeof(UiRenderInstance));
 		// WARN: Messing with allocators like this is discouraged but oh well this is more efficent
 		frame_arena.offset = offset;
 
@@ -260,7 +261,7 @@ TextRenderInfo	buildTextRenderInfo(Font *font)
 	info.px_range = 8.0f;
 	info.glyph_count = font->glyph_count;
 	info.render_instances = font->render_instances;
-	info.upload_size = font->glyph_count * sizeof(GlyphRenderInstance);
+	info.upload_size = font->glyph_count * sizeof(UiRenderInstance);
 	font->glyph_count = 0;
 	return info;
 }

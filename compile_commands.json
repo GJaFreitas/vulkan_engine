@@ -1,21 +1,220 @@
 [
   {
-    "file": "tools/msdf_baker.c",
+    "file": "src/ui.c",
     "arguments": [
       "/bin/gcc",
-      "-Wall",
-      "-Wextra",
-      "-g",
       "-Iinclude",
       "-Ideps",
       "-IMyLib/include",
       "-Ivcpkg_installed/x64-linux/include",
-      "-O2",
-      "tools/msdf_baker.c",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/ui.c",
       "-o",
-      "tools/msdf_baker.out"
+      "obj/c/ui.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/msdf_implementation",
-    "output": "tools/msdf_baker.out"
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/ui_branch",
+    "output": "obj/c/ui.o"
+  },
+  {
+    "file": "src/input.c",
+    "arguments": [
+      "/bin/gcc",
+      "-Iinclude",
+      "-Ideps",
+      "-IMyLib/include",
+      "-Ivcpkg_installed/x64-linux/include",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/input.c",
+      "-o",
+      "obj/c/input.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/ui_branch",
+    "output": "obj/c/input.o"
+  },
+  {
+    "file": "src/hotload_callbacks.c",
+    "arguments": [
+      "/bin/gcc",
+      "-Iinclude",
+      "-Ideps",
+      "-IMyLib/include",
+      "-Ivcpkg_installed/x64-linux/include",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/hotload_callbacks.c",
+      "-o",
+      "obj/c/hotload_callbacks.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/ui_branch",
+    "output": "obj/c/hotload_callbacks.o"
+  },
+  {
+    "file": "src/main.c",
+    "arguments": [
+      "/bin/gcc",
+      "-Iinclude",
+      "-Ideps",
+      "-IMyLib/include",
+      "-Ivcpkg_installed/x64-linux/include",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/main.c",
+      "-o",
+      "obj/c/main.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/ui_branch",
+    "output": "obj/c/main.o"
+  },
+  {
+    "file": "src/vulkan.c",
+    "arguments": [
+      "/bin/gcc",
+      "-Iinclude",
+      "-Ideps",
+      "-IMyLib/include",
+      "-Ivcpkg_installed/x64-linux/include",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/vulkan.c",
+      "-o",
+      "obj/c/vulkan.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/ui_branch",
+    "output": "obj/c/vulkan.o"
+  },
+  {
+    "file": "src/entities.c",
+    "arguments": [
+      "/bin/gcc",
+      "-Iinclude",
+      "-Ideps",
+      "-IMyLib/include",
+      "-Ivcpkg_installed/x64-linux/include",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/entities.c",
+      "-o",
+      "obj/c/entities.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/ui_branch",
+    "output": "obj/c/entities.o"
+  },
+  {
+    "file": "src/base_layer.c",
+    "arguments": [
+      "/bin/gcc",
+      "-Iinclude",
+      "-Ideps",
+      "-IMyLib/include",
+      "-Ivcpkg_installed/x64-linux/include",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/base_layer.c",
+      "-o",
+      "obj/c/base_layer.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/ui_branch",
+    "output": "obj/c/base_layer.o"
+  },
+  {
+    "file": "src/fonts.c",
+    "arguments": [
+      "/bin/gcc",
+      "-Iinclude",
+      "-Ideps",
+      "-IMyLib/include",
+      "-Ivcpkg_installed/x64-linux/include",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/fonts.c",
+      "-o",
+      "obj/c/fonts.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/ui_branch",
+    "output": "obj/c/fonts.o"
+  },
+  {
+    "file": "src/variables.c",
+    "arguments": [
+      "/bin/gcc",
+      "-Iinclude",
+      "-Ideps",
+      "-IMyLib/include",
+      "-Ivcpkg_installed/x64-linux/include",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/variables.c",
+      "-o",
+      "obj/c/variables.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/ui_branch",
+    "output": "obj/c/variables.o"
+  },
+  {
+    "file": "src/gltf_loading.c",
+    "arguments": [
+      "/bin/gcc",
+      "-Iinclude",
+      "-Ideps",
+      "-IMyLib/include",
+      "-Ivcpkg_installed/x64-linux/include",
+      "-Wall",
+      "-Wextra",
+      "-g",
+      "-c",
+      "src/gltf_loading.c",
+      "-o",
+      "obj/c/gltf_loading.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/ui_branch",
+    "output": "obj/c/gltf_loading.o"
+  },
+  {
+    "file": "cpp_layer/vma.cpp",
+    "arguments": [
+      "/bin/g++",
+      "-Iinclude",
+      "-Ideps",
+      "-IMyLib/include",
+      "-Ivcpkg_installed/x64-linux/include",
+      "-g",
+      "-c",
+      "cpp_layer/vma.cpp",
+      "-o",
+      "obj/cpp/vma.o"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/ui_branch",
+    "output": "obj/cpp/vma.o"
+  },
+  {
+    "file": "deps/tiny_gltf_v3.c",
+    "arguments": [
+      "/bin/gcc",
+      "deps/tiny_gltf_v3.c",
+      "-o",
+      "engine.out"
+    ],
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/ui_branch",
+    "output": "engine.out"
   }
 ]
