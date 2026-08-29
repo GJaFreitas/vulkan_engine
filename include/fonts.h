@@ -46,6 +46,5 @@ typedef struct LoadedFonts
 	u32	font_count;
 }	LoadedFonts;
 
-void	textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color);
-TextRenderInfo	buildTextRenderInfo(Font *font);
 void	initFonts(GraphicsContext *ctx, LoadedFonts *loaded_fonts, Allocator *allocator, Allocator *frame_allocator);
+GlyphInfo	*atlasFindGlyph(const TextAtlas *atlas, u32 glyph_index);

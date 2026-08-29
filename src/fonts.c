@@ -4,7 +4,7 @@
 #include "str.h"
 
 
-static GlyphInfo	*atlasFindGlyph(const TextAtlas *atlas, u32 glyph_index)
+GlyphInfo	*atlasFindGlyph(const TextAtlas *atlas, u32 glyph_index)
 {
 	// TODO: Test this to see if hashing is more efficent
 	// »speed
@@ -14,86 +14,6 @@ static GlyphInfo	*atlasFindGlyph(const TextAtlas *atlas, u32 glyph_index)
 		}
 	}
 	return NULL;
-}
-
-// This function doesnt actually draw any text, it queues the text to be drawn by the TEXT pipeline
-void textDraw(String text, Font *font, f32 font_size, vec2 pos, vec4 color)
-{
-	static hb_buffer_t *buf = NULL;
-
-	const TextAtlas *atlas = &font->atlas;
-	const f32 px_per_em = font_size;
-	const f32 hb_scale = font_size / (f32)font->units_per_EM;
-
-
-	if (!buf)
-		buf = hb_buffer_create();
-
-	hb_buffer_add_utf8(buf, (const char *)text.data, text.count, 0, -1);
-	hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
-	hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
-	hb_buffer_set_language(buf, hb_language_from_string("en", -1));
-	hb_feature_t features[] = {
-		{ HB_TAG('c','a','l','t'), 0, 0, (unsigned int)-1 },
-		{ HB_TAG('l','i','g','a'), 0, 0, (unsigned int)-1 },
-		{ HB_TAG('c','l','i','g'), 0, 0, (unsigned int)-1 },
-	};
-	hb_shape(font->hb_font, buf, features, sizeofarray(features));
-
-	u32 glyph_count;
-	hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
-	hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(buf, &glyph_count);
-
-	f32 cursor_x = pos[0];
-	f32 cursor_y = pos[1];
-
-
-	for (u32 i = 0; i < glyph_count; i++) {
-		// HarfBuzz's post-shaping codepoint is the font glyph index.
-		const u32 glyph_index = glyph_info[i].codepoint;
-		const GlyphInfo *g = atlasFindGlyph(atlas, glyph_index);
-
-		if (g) {
-			const f32 glyph_width = g->plane_max[0] - g->plane_min[0];
-			const f32 glyph_height = g->plane_max[1] - g->plane_min[1];
-
-			// Glyphs such as space have no ink/geometry.
-			if (glyph_width > 0 && glyph_height > 0) {
-				if (font->glyph_count >= MAX_GLYPH_INSTANCES) {
-					engine_error(LOG_FILE, "Glyph count exceeds max glyphs");
-					break;
-				}
-
-				UiRenderInstance *inst = &font->render_instances[font->glyph_count++];
-				inst->primitive_type = 0;
-
-				const f32 left = g->plane_min[0] * px_per_em;
-				const f32 top = g->plane_min[1] * px_per_em;
-				const f32 right = g->plane_max[0] * px_per_em;
-				const f32 bottom = g->plane_max[1] * px_per_em;
-
-				inst->pos[0] = roundf(cursor_x + left);
-				inst->pos[1] = roundf(cursor_y + top);
-
-				inst->size[0] = right - left;
-				inst->size[1] = bottom - top;
-
-				inst->uv_offset[0] = g->uv_min[0];
-				inst->uv_offset[1] = g->uv_min[1];
-
-				inst->uv_size[0] = g->uv_max[0] - g->uv_min[0];
-				inst->uv_size[1] = g->uv_max[1] - g->uv_min[1];
-
-				glm_vec4_copy(color, inst->color);
-			}
-		}
-
-		cursor_x += glyph_pos[i].x_advance * hb_scale;
-
-		cursor_y += glyph_pos[i].y_advance * hb_scale;
-
-	}
-	hb_buffer_reset(buf);
 }
 
 void	uploadAtlasToGpu(GraphicsContext *ctx, TextAtlas *atlas, u8 *atlas_data)
@@ -252,16 +172,4 @@ void	initFonts(GraphicsContext *ctx, LoadedFonts *loaded_fonts, Allocator *alloc
 	}
 
 	destroyFile(file);
-}
-
-TextRenderInfo	buildTextRenderInfo(Font *font)
-{
-	TextRenderInfo	info = {};
-
-	info.px_range = 8.0f;
-	info.glyph_count = font->glyph_count;
-	info.render_instances = font->render_instances;
-	info.upload_size = font->glyph_count * sizeof(UiRenderInstance);
-	font->glyph_count = 0;
-	return info;
 }

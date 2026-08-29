@@ -24,6 +24,7 @@
 typedef struct TextPushConstants
 {
 	vec2	screen_size;
+	vec2	atlas_size;
 	float	px_range;
 }	TextPushConstants;
 
@@ -356,6 +357,7 @@ typedef struct EntityRenderInfo
 
 }	EntityRenderInfo;
 
+// TODO: Change all colors to u32
 #define MAX_GLYPH_INSTANCES 1024
 typedef struct UiRenderInstance
 {
@@ -364,15 +366,18 @@ typedef struct UiRenderInstance
 	vec2	uv_offset;
 	vec2	uv_size;
 	vec4	color;
+	vec4	inner_color;
 	u32	primitive_type;
 	f32	corner_radius;
+	f32	stroke_width;		// 0.0 = Solid Fill, >0.0 = Outline thickness (pixels)
 }	UiRenderInstance;
 
 typedef struct TextRenderInfo
 {
-	float			px_range;
+	vec2			atlas_size;
+	f32			px_range;
 	u64			upload_size;
-	u32			glyph_count;
+	u32			instance_count;
 	UiRenderInstance	*render_instances;
 }	TextRenderInfo;
 

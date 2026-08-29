@@ -9,11 +9,6 @@
 // 	print("Pos: %.2f,%.2f,%.2f\n", camera->position[0], camera->position[1], camera->position[2]);
 // }
 
-static void	print_fps(double fps)
-{
-	print("Current FPS: %.2f\n", fps);
-}
-
 static inline void	getMsAndFps(double *ms, double *fps, double *fps_avg, u64 *last_time, u64 *frames) {
 	static u32	frame_start = 2000;
 	static u64	freq = 0;
@@ -32,7 +27,7 @@ static inline void	getMsAndFps(double *ms, double *fps, double *fps_avg, u64 *la
 	}
 }
 
-static void updateCamera(Camera *camera, SDL_Window *window, double dt)
+static void updateCamera(Camera *camera, SDL_Window *window)
 {
 	// Mouse look - only when right mouse button is held
 	if (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_LMASK)
@@ -105,22 +100,17 @@ static inline void	beginFrame(World world, bool *running) {
 	}
 }
 
-static void	displayFps(World world, Allocator *frame_allocator, double fps)
-{
-	u8	strdata[16];
-	String	fps_string = {.data = strdata};
-
-	fps_string.count = stbsp_snprintf(strdata, 16, "Fps: %.2f", fps);
-	textDraw(fps_string, &world.fonts.fonts[0], 16, (vec2){world.graphics_ctx->window_width - 200, 200}, (vec4){255, 255, 255, 255});
-}
-
 static inline void	endFrame(World world) {
 	modelCacheSweep();
+	imguiResetFrame();
 	inputEndFrame();
 }
 
 int	loop(World world)
 {
+	Font	*font = &world.fonts.fonts[0];
+	Allocator	*frame_arena = &world.frame_allocator;
+
 	u64	frames = 0;
 	double	fps = 0;
 	double	fps_avg = 0;
@@ -128,34 +118,34 @@ int	loop(World world)
 	EntityRenderInfo	entity_info;
 	TextRenderInfo		text_info;
 
+	bool	show_debug_hud = true;
 	bool	running = true;
 	u64	last_time = SDL_GetPerformanceCounter();
 	while (running)
 	{
+		// --- Begining of frame ---
 		getMsAndFps(&world.dt_ms, &fps, &fps_avg, &last_time, &frames);
 		if (world.dt_ms <= 16.6) {
 			usleep(16.6 - world.dt_ms);
 		}
 		beginFrame(world, &running);
+		if (show_debug_hud) {
+			imguiBeginPanel(world.ui->imgui_root, UI_ANCHOR_TOP_LEFT, 10.0f, 10.0f, 120.0f, 40.0f);
+			imguiText(font, 24, frame_arena, "FPS: %u", fps);
+			imguiEndPanel();
+		}
 
-		UiComponent	component = {
-			.shape = setShape(ELIPSE) | FILLED,
-			.color = {255, 255, 255, 255},
-			.pos = {250, 250},
-			.size = {250, 250},
-		};
-
-		uiComponentCreate(world.ui, component, &world.fonts.fonts[0]);
-		textDraw(STRING_LIT("Ola tiago."), &world.fonts.fonts[0], 32, (vec2){10, 10}, (vec4){255, 255, 255, 255});
-
+		// --- RENDERING ---
 		entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
-		text_info = buildTextRenderInfo(&world.fonts.fonts[0]);
+		text_info = uiBuildRenderData(world.ui->rmgui_root, world.ui->imgui_root, &world.frame_allocator);
 		render(world.graphics_ctx, &world.player->camera, entity_info, text_info);
 
+		// --- UPDATES ---
 		updatePlayer(world.player, world.dt_ms, world.graphics_ctx->window);
-		updateCamera(&world.player->camera, world.graphics_ctx->window, world.dt_ms);
+		updateCamera(&world.player->camera, world.graphics_ctx->window);
 		updateEntities(world.entities, world.dt_ms);
 
+		// --- End of frame ---
 		endFrame(world);
 		world.frame_allocator.fp_reset(&world.frame_allocator);
 
@@ -203,9 +193,7 @@ int	main(void)
 	updateGridProperties(&world);
 
 	startGraphics(world.graphics_ctx);
-	initUi(&ui);
-
-
+	initUi(&ui, gctx.window_width, gctx.window_height, &world.perm_allocator);
 
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);
 	initPlayer(world.player);

@@ -819,8 +819,10 @@ static void	createTEXTPipeline(GraphicsContext *ctx)
 		{2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(UiRenderInstance, uv_offset)},
 		{3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(UiRenderInstance, uv_size)},
 		{4, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(UiRenderInstance, color)},
-		{5, 0, VK_FORMAT_R32_UINT, offsetof(UiRenderInstance, primitive_type)},
-		{6, 0, VK_FORMAT_R32_SFLOAT, offsetof(UiRenderInstance, corner_radius)},
+		{5, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(UiRenderInstance, inner_color)},
+		{6, 0, VK_FORMAT_R32_UINT, offsetof(UiRenderInstance, primitive_type)},
+		{7, 0, VK_FORMAT_R32_SFLOAT, offsetof(UiRenderInstance, corner_radius)},
+		{8, 0, VK_FORMAT_R32_SFLOAT, offsetof(UiRenderInstance, stroke_width)},
 	};
 
 	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
@@ -872,7 +874,7 @@ static void	createTEXTPipeline(GraphicsContext *ctx)
 		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
 		.colorBlendOp = VK_BLEND_OP_ADD,
 		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
 		.alphaBlendOp = VK_BLEND_OP_ADD,
 		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
 		VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
@@ -1484,13 +1486,13 @@ void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, u32 frame_idx, Tex
 
 	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, 1, &atlas_descriptor_set, 0, NULL);
 
-	const TextPushConstants	push_constants = {{ctx->window_width, ctx->window_height}, info.px_range};
+	const TextPushConstants	push_constants = {{ctx->window_width, ctx->window_height}, {info.atlas_size[0], info.atlas_size[1]}, info.px_range};
 	vkCmdPushConstants(cmd, pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants), &push_constants);
 
 	VkDeviceSize	offset = 0;
 	vkCmdBindVertexBuffers(cmd, 0, 1, &resource->text_instance_buffer.handle, &offset);
 
-	vkCmdDraw(cmd, 4, info.glyph_count, 0, 0);
+	vkCmdDraw(cmd, 6, info.instance_count, 0, 0);
 }
 
 void	GRIDPass(GraphicsContext *ctx, FrameResources *resource, u32 frame_idx)

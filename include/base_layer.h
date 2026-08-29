@@ -19,6 +19,12 @@
 
 #include "all.h"
 
+// For cglm
+#define X 0
+#define Y 1
+#define Z 2
+#define W 3
+
 String	readFile(String filename);
 u8	*readFileData(String filename, u64 *file_size);
 void	destroyFile(String file);
