@@ -7,6 +7,10 @@
 #include <stdio.h>
 #include "stb_sprintf.h"
 
+#define RMGUI_MAX_COMPONENTS		8192
+#define IMGUI_START_INDEX		8192
+#define MAX_COMPONENTS			16384
+
 enum ComponentShapeType
 {
 	GLYPH,
@@ -21,25 +25,31 @@ enum ComponentShapeFillType
 	TRANSPARENT,
 };
 
+typedef u8	UiPrimitiveType;
 enum {
+	UI_PRIMITIVE_TEXT_GLYPH,
 	UI_PRIMITIVE_RECTANGLE,
 	UI_PRIMITIVE_CIRCLE,
-	UI_PRIMITIVE_TEXT_GLYPH,
 };
 
 typedef u8	UiLayoutType;
 enum {
-	UI_LAYOUT_ABSOLUTE, // Children use their own anchors/offsets
-	UI_LAYOUT_VERTICAL, // Parent stacks children top-to-bottom
-	UI_LAYOUT_HORIZONTAL // Parent stacks children left-to-right
+	UI_LAYOUT_ABSOLUTE,		// Children use their own anchors/offsets
+	UI_LAYOUT_VERTICAL,		// Parent stacks children top-to-bottom
+	UI_LAYOUT_HORIZONTAL,		// Parent stacks children left-to-right
 };
 
 typedef u8	UiAnchor;
 enum {
 	UI_ANCHOR_TOP_LEFT,
 	UI_ANCHOR_TOP_CENTER,
+	UI_ANCHOR_TOP_RIGHT,
+	UI_ANCHOR_CENTER_LEFT,
 	UI_ANCHOR_CENTER,
-	UI_ANCHOR_PARENT,
+	UI_ANCHOR_CENTER_RIGHT,
+	UI_ANCHOR_BOTTOM_LEFT,
+	UI_ANCHOR_BOTTOM_CENTER,
+	UI_ANCHOR_BOTTOM_RIGHT,
 };
 
 #define UI_NULL_INDEX	0
@@ -50,7 +60,7 @@ typedef struct UiComponent
 	u16 parent, first_child, last_child, next_sibling, prev_sibling;
 
 	// --- LAYOUT DEFINITION ---
-	u8		primitive_type;
+	UiPrimitiveType	primitive_type;
 	UiLayoutType	layout_type; // How I arrange my children
 	UiAnchor	anchor;      // How I attach to my parent (if absolute)
 
@@ -92,4 +102,5 @@ void	imguiText(Font *font, f32 font_size, Allocator *frame_arena, const char *fm
 u16	setShape(enum ComponentShapeType shape);
 u16	setShapeFill(enum ComponentShapeFillType fill);
 
-TextRenderInfo	uiBuildRenderData(u16 rm_root_node, u16 im_root_node, Allocator *frame_arena);
+TextRenderInfo	uiBuildRenderData(u16 rm_root_node, Allocator *frame_arena);
+void		uiCalculateLayout(u16 node_idx, f32 parent_x, f32 parent_y, f32 parent_w, f32 parent_h);

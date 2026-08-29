@@ -1,4 +1,5 @@
 #include "vulkan_inner.h"
+#include "ui.h"
 #include "graphics_layer.h"
 #include "fonts.h"
 
@@ -1159,7 +1160,7 @@ static void	createFrameResources(GraphicsContext *ctx)
 
 		VkBufferCreateInfo	text_buffer_info = {
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.size = sizeof(UiRenderInstance) * MAX_GLYPH_INSTANCES,
+			.size = sizeof(UiRenderInstance) * MAX_COMPONENTS,
 			.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		};

@@ -130,14 +130,15 @@ int	loop(World world)
 		}
 		beginFrame(world, &running);
 		if (show_debug_hud) {
-			imguiBeginPanel(world.ui->imgui_root, UI_ANCHOR_TOP_LEFT, 10.0f, 10.0f, 120.0f, 40.0f);
-			imguiText(font, 24, frame_arena, "FPS: %u", fps);
+			imguiBeginPanel(world.ui->imgui_root, UI_ANCHOR_BOTTOM_RIGHT, -10.0f, -10.0f, 120.0f, 40.0f);
+			imguiText(font, 24, frame_arena, "FPS: %.1f", fps);
 			imguiEndPanel();
 		}
 
 		// --- RENDERING ---
 		entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
-		text_info = uiBuildRenderData(world.ui->rmgui_root, world.ui->imgui_root, &world.frame_allocator);
+		uiCalculateLayout(world.ui->rmgui_root, 0, 0, world.graphics_ctx->window_width, world.graphics_ctx->window_height);
+		text_info = uiBuildRenderData(world.ui->rmgui_root, &world.frame_allocator);
 		render(world.graphics_ctx, &world.player->camera, entity_info, text_info);
 
 		// --- UPDATES ---

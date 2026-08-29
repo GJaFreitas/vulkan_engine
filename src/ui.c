@@ -1,9 +1,5 @@
 #include "ui.h"
 
-#define RMGUI_MAX_COMPONENTS		8192
-#define IMGUI_START_INDEX		8192
-#define MAX_COMPONENTS			16384
-
 typedef struct ComponentPool
 {
 	u16	hint;
@@ -283,9 +279,21 @@ void	initUi(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm)
 	pool.mem = perm->fp_allocation(perm, sizeof(UiComponent) * RMGUI_MAX_COMPONENTS, DEFAULT_ALIGN);
 	pool.used = perm->fp_allocation(perm, sizeof(bool) * RMGUI_MAX_COMPONENTS, DEFAULT_ALIGN);
 	memset(pool.used, 0, sizeof(bool) * RMGUI_MAX_COMPONENTS);
-	pool.used[0] = true;
 
-	// Root node
+	ui->rmgui_root = allocateComponent();
+	UiComponent	*rmgui_root = uiGet(ui->rmgui_root);
+	*rmgui_root = (UiComponent){
+		.parent = UI_NULL_INDEX,
+		.first_child = UI_NULL_INDEX,
+		.last_child = UI_NULL_INDEX,
+		.next_sibling = UI_NULL_INDEX,
+		.prev_sibling = UI_NULL_INDEX,
+		.layout_type = UI_LAYOUT_ABSOLUTE,
+		.anchor = UI_ANCHOR_TOP_LEFT,
+		.final_screen_size = {screen_w, screen_h},
+		.color = {0, 0, 0, 0},
+	};
+
 	ui->imgui_root = allocateComponent();
 	UiComponent	*imgui_root = uiGet(ui->imgui_root);
 	*imgui_root = (UiComponent){
@@ -297,20 +305,9 @@ void	initUi(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm)
 		.layout_type = UI_LAYOUT_ABSOLUTE,
 		.anchor = UI_ANCHOR_TOP_LEFT,
 		.final_screen_size = {screen_w, screen_h},
+		.color = {0, 0, 0, 0},
 	};
 
-	ui->rmgui_root = imguiAllocateComponent();
-	UiComponent	*rmgui_root = uiGet(ui->rmgui_root);
-	*rmgui_root = (UiComponent){
-		.parent = UI_NULL_INDEX,
-		.first_child = UI_NULL_INDEX,
-		.last_child = UI_NULL_INDEX,
-		.next_sibling = UI_NULL_INDEX,
-		.prev_sibling = UI_NULL_INDEX,
-		.layout_type = UI_LAYOUT_ABSOLUTE,
-		.anchor = UI_ANCHOR_TOP_LEFT,
-		.final_screen_size = {screen_w, screen_h},
-	};
 	g_ui_ctx.rmgui_root = ui->rmgui_root;
 	g_ui_ctx.imgui_root = ui->imgui_root;
 	uiAppendChild(g_ui_ctx.rmgui_root, g_ui_ctx.imgui_root);
@@ -363,7 +360,7 @@ static void pushTextInstances(UiComponent *node, UiRenderInstance *instances, u3
 		{ HB_TAG('l','i','g','a'), 0, 0, (unsigned int)-1 },
 		{ HB_TAG('c','l','i','g'), 0, 0, (unsigned int)-1 },
 	};
-	hb_shape(font->hb_font, buf, features, 3); // sizeofarray(features) is 3
+	hb_shape(font->hb_font, buf, features, sizeofarray(features));
 
 	u32 glyph_count;
 	hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
@@ -385,7 +382,7 @@ static void pushTextInstances(UiComponent *node, UiRenderInstance *instances, u3
 				u32 idx = *count;
 				UiRenderInstance *inst = &instances[idx];
 
-				inst->primitive_type = UI_PRIMITIVE_TEXT_GLYPH; // Set to whatever your shader expects
+				inst->primitive_type = UI_PRIMITIVE_TEXT_GLYPH;
 				inst->stroke_width   = 0.0f;
 				inst->corner_radius  = 0.0f;
 
@@ -423,8 +420,11 @@ static void traverseForRender(u16 node_idx, UiRenderInstance *instances, u32 *co
 {
 	UiComponent *node = uiGet(node_idx);
 
-	if (node->final_screen_size[X] > 0.0f && node->final_screen_size[Y] > 0.0f) {
+	// A node is visible if it's text, OR if it has physical dimensions. And it must have alpha > 0.
+	bool has_size = (node->primitive_type == UI_PRIMITIVE_TEXT_GLYPH) || 
+	                (node->final_screen_size[X] > 0.0f && node->final_screen_size[Y] > 0.0f);
 
+	if (has_size && node->color[3] > 0.0f) {
 		if (node->primitive_type == UI_PRIMITIVE_TEXT_GLYPH) {
 			pushTextInstances(node, instances, count);
 		} else {
@@ -439,7 +439,55 @@ static void traverseForRender(u16 node_idx, UiRenderInstance *instances, u32 *co
 	}
 }
 
-TextRenderInfo	uiBuildRenderData(u16 rm_root_node, u16 im_root_node, Allocator *frame_arena)
+void uiCalculateLayout(u16 node_idx, f32 parent_x, f32 parent_y, f32 parent_w, f32 parent_h)
+{
+	UiComponent *node = uiGet(node_idx);
+
+	// 1. Root nodes take the passed-in screen dimensions. Everyone else uses fixed_size.
+	if (node_idx == g_ui_ctx.rmgui_root || node_idx == g_ui_ctx.imgui_root) {
+		node->final_screen_pos[X] = parent_x;
+		node->final_screen_pos[Y] = parent_y;
+		node->final_screen_size[X] = parent_w;
+		node->final_screen_size[Y] = parent_h;
+	} else {
+		node->final_screen_size[X] = node->fixed_size[X];
+		node->final_screen_size[Y] = node->fixed_size[Y];
+
+		// Map the anchor enum to a 0.0 -> 1.0 multiplier
+		f32 anchor_x = 0.0f;
+		f32 anchor_y = 0.0f;
+		switch (node->anchor) {
+			case UI_ANCHOR_TOP_LEFT:      anchor_x = 0.0f; anchor_y = 0.0f; break;
+			case UI_ANCHOR_TOP_CENTER:    anchor_x = 0.5f; anchor_y = 0.0f; break;
+			case UI_ANCHOR_TOP_RIGHT:     anchor_x = 1.0f; anchor_y = 0.0f; break;
+			case UI_ANCHOR_CENTER_LEFT:   anchor_x = 0.0f; anchor_y = 0.5f; break;
+			case UI_ANCHOR_CENTER:        anchor_x = 0.5f; anchor_y = 0.5f; break;
+			case UI_ANCHOR_CENTER_RIGHT:  anchor_x = 1.0f; anchor_y = 0.5f; break;
+			case UI_ANCHOR_BOTTOM_LEFT:   anchor_x = 0.0f; anchor_y = 1.0f; break;
+			case UI_ANCHOR_BOTTOM_CENTER: anchor_x = 0.5f; anchor_y = 1.0f; break;
+			case UI_ANCHOR_BOTTOM_RIGHT:  anchor_x = 1.0f; anchor_y = 1.0f; break;
+		}
+
+		// Calculate position
+		node->final_screen_pos[X] = parent_x + (parent_w * anchor_x) + node->offset[X] - (node->final_screen_size[X] * anchor_x);
+		node->final_screen_pos[Y] = parent_y + (parent_h * anchor_y) + node->offset[Y] - (node->final_screen_size[Y] * anchor_y);
+	}
+
+	// 2. Cascade down to children
+	u16 child_idx = node->first_child;
+	while (child_idx != UI_NULL_INDEX) {
+		uiCalculateLayout(child_idx, 
+		    node->final_screen_pos[X], 
+		    node->final_screen_pos[Y],
+		    node->final_screen_size[X], 
+		    node->final_screen_size[Y]);
+
+		child_idx = uiGet(child_idx)->next_sibling;
+	}
+}
+
+// TODO: Remove extra u16
+TextRenderInfo	uiBuildRenderData(u16 rm_root_node, Allocator *frame_arena)
 {
 	TextRenderInfo	info = {};
 
