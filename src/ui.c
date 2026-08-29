@@ -210,10 +210,13 @@ void	imguiText(Font *font, f32 font_size, Allocator *frame_arena, const char *fm
 	text->primitive_type = UI_PRIMITIVE_TEXT_GLYPH;
 	text->font = font;
 	text->font_size = font_size;
+	text->is_text_dirty = true;
 
 	// Since the parent panel is UI_LAYOUT_VERTICAL, we only need to define its height padding
 	text->fixed_size[Y] = font_size + 4.0f; // Give it a little breathing room
 	text->offset[X] = 10.0f; // Indent slightly from the panel edge
+	text->size_mode[X] = UI_SIZE_AUTO;
+	text->size_mode[Y] = UI_SIZE_AUTO;
 
 	// Point the component to the arena string
 	text->text.data = text_data;
@@ -223,6 +226,7 @@ void	imguiText(Font *font, f32 font_size, Allocator *frame_arena, const char *fm
 	text->color[0] = 1.0f; text->color[1] = 1.0f; text->color[2] = 1.0f; text->color[3] = 1.0f;
 }
 
+// TODO: This function needs to allow for customization
 void	imguiBeginPanel(u16 parent_node, UiAnchor anchor, f32 x, f32 y, f32 w, f32 h)
 {
 	u16 panel_idx = imguiAllocateComponent();
@@ -237,9 +241,12 @@ void	imguiBeginPanel(u16 parent_node, UiAnchor anchor, f32 x, f32 y, f32 w, f32 
 	panel->fixed_size[Y] = h;
 	panel->primitive_type = UI_PRIMITIVE_RECTANGLE;
 	panel->corner_radius = 6.0f;
+	panel->size_mode[X] = UI_SIZE_AUTO;
+	panel->size_mode[Y] = UI_SIZE_AUTO;
 
 	// Dark semi-transparent background
-	panel->color[0] = 0.0f; panel->color[1] = 0.0f; panel->color[2] = 0.0f; panel->color[3] = 0.6f;
+	// TODO: Fix color
+	panel->color[0] = 255.0f; panel->color[1] = 255.0f; panel->color[2] = 0.0f; panel->color[3] = 255.0f;
 
 	// Anchor it to the provided RMGUI node (usually the screen root)
 	uiAppendChild(parent_node, panel_idx);
@@ -439,23 +446,153 @@ static void traverseForRender(u16 node_idx, UiRenderInstance *instances, u32 *co
 	}
 }
 
-void uiCalculateLayout(u16 node_idx, f32 parent_x, f32 parent_y, f32 parent_w, f32 parent_h)
+static f32 calculateTextWidth(UiComponent *node)
+{
+	if (node->text.count == 0 || !node->font) {
+		return 0.0f;
+	}
+
+	static hb_buffer_t *buf = NULL;
+	if (!buf) {
+		buf = hb_buffer_create();
+	}
+
+	Font *font = node->font;
+	const f32 hb_scale = node->font_size / (f32)font->units_per_EM;
+
+	hb_buffer_add_utf8(buf, (const char *)node->text.data, node->text.count, 0, -1);
+	hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
+	hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
+	hb_buffer_set_language(buf, hb_language_from_string("en", -1));
+	
+	hb_feature_t features[] = {
+		{ HB_TAG('c','a','l','t'), 0, 0, (unsigned int)-1 },
+		{ HB_TAG('l','i','g','a'), 0, 0, (unsigned int)-1 },
+		{ HB_TAG('c','l','i','g'), 0, 0, (unsigned int)-1 },
+	};
+	hb_shape(font->hb_font, buf, features, 3);
+
+	u32 glyph_count;
+	hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(buf, &glyph_count);
+
+	f32 total_width = 0.0f;
+	for (u32 i = 0; i < glyph_count; i++) {
+		total_width += glyph_pos[i].x_advance * hb_scale;
+	}
+
+	hb_buffer_reset(buf);
+	return total_width;
+}
+
+// Pass your frame_arena into this function now!
+void uiCalculateSizes(u16 node_idx, Allocator *arena)
 {
 	UiComponent *node = uiGet(node_idx);
 
-	// 1. Root nodes take the passed-in screen dimensions. Everyone else uses fixed_size.
+	// 1. Traverse to the absolute bottom of the tree first
+	u16 child_idx = node->first_child;
+	while (child_idx != UI_NULL_INDEX) {
+		uiCalculateSizes(child_idx, arena);
+		child_idx = uiGet(child_idx)->next_sibling;
+	}
+
+	// 2. Now calculate our own size
+	for (int axis = 0; axis < 2; axis++) {
+		if (node->size_mode[axis] == UI_SIZE_FIXED) {
+			node->final_screen_size[axis] = node->fixed_size[axis];
+		} 
+		else if (node->size_mode[axis] == UI_SIZE_AUTO) {
+			
+			// === TEXT CACHING & MEASUREMENT ===
+			if (node->primitive_type == UI_PRIMITIVE_TEXT_GLYPH) {
+				if (node->is_text_dirty) {
+					// 1. Run HarfBuzz
+					static hb_buffer_t *buf = NULL;
+					if (!buf) buf = hb_buffer_create();
+
+					Font *font = node->font;
+					const f32 hb_scale = node->font_size / (f32)font->units_per_EM;
+
+					hb_buffer_add_utf8(buf, (const char *)node->text.data, node->text.count, 0, -1);
+					hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
+					hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
+					hb_buffer_set_language(buf, hb_language_from_string("en", -1));
+					hb_shape(font->hb_font, buf, NULL, 0);
+
+					u32 g_count;
+					hb_glyph_info_t *g_info = hb_buffer_get_glyph_infos(buf, &g_count);
+					hb_glyph_position_t *g_pos = hb_buffer_get_glyph_positions(buf, &g_count);
+
+					// 2. Allocate cache array from the arena
+					node->shaped_glyph_count = g_count;
+					node->shaped_glyphs = arena->fp_allocation(arena, sizeof(UiShapedGlyph) * g_count, DEFAULT_ALIGN);
+
+					// 3. Cache the glyphs AND calculate the total width
+					f32 total_width = 0.0f;
+					for (u32 i = 0; i < g_count; i++) {
+						node->shaped_glyphs[i].atlas_index = g_info[i].codepoint;
+						node->shaped_glyphs[i].x_advance = g_pos[i].x_advance * hb_scale;
+						node->shaped_glyphs[i].y_advance = g_pos[i].y_advance * hb_scale;
+						
+						total_width += node->shaped_glyphs[i].x_advance;
+					}
+
+					node->final_screen_size[X] = total_width;
+					node->final_screen_size[Y] = node->font_size;
+					
+					hb_buffer_reset(buf);
+					node->is_text_dirty = false;
+				}
+				continue; // Skip the container logic below
+			}
+
+			// If it's a container, size is based on children
+			f32 children_sum = 0.0f;
+			f32 max_child_size = 0.0f;
+
+			u16 c_idx = node->first_child;
+			while (c_idx != UI_NULL_INDEX) {
+				UiComponent *child = uiGet(c_idx);
+				
+				// Calculate total stacked size, and largest single child
+				children_sum += child->final_screen_size[axis];
+				if (child->final_screen_size[axis] > max_child_size) {
+					max_child_size = child->final_screen_size[axis];
+				}
+				
+				c_idx = child->next_sibling;
+			}
+
+			// If we stack in this axis, our size is the sum. 
+			// If we stack in the opposite axis, our size is the largest child.
+			if ((axis == X && node->layout_type == UI_LAYOUT_HORIZONTAL) ||
+			    (axis == Y && node->layout_type == UI_LAYOUT_VERTICAL)) {
+				node->final_screen_size[axis] = children_sum;
+			} else {
+				node->final_screen_size[axis] = max_child_size;
+			}
+			
+			if (node->first_child != UI_NULL_INDEX) {
+				// TODO: Create padding optional in struct for use here
+				node->final_screen_size[axis] += 10.0f; // 5px padding on each side
+			}
+		}
+	}
+}
+
+void uiCalculatePositions(u16 node_idx, f32 parent_x, f32 parent_y, f32 parent_w, f32 parent_h)
+{
+	UiComponent *node = uiGet(node_idx);
+
+	// 1. Root nodes take screen dimensions. Everyone else uses their computed size.
 	if (node_idx == g_ui_ctx.rmgui_root || node_idx == g_ui_ctx.imgui_root) {
 		node->final_screen_pos[X] = parent_x;
 		node->final_screen_pos[Y] = parent_y;
 		node->final_screen_size[X] = parent_w;
 		node->final_screen_size[Y] = parent_h;
 	} else {
-		node->final_screen_size[X] = node->fixed_size[X];
-		node->final_screen_size[Y] = node->fixed_size[Y];
-
 		// Map the anchor enum to a 0.0 -> 1.0 multiplier
-		f32 anchor_x = 0.0f;
-		f32 anchor_y = 0.0f;
+		f32 anchor_x = 0.0f; f32 anchor_y = 0.0f;
 		switch (node->anchor) {
 			case UI_ANCHOR_TOP_LEFT:      anchor_x = 0.0f; anchor_y = 0.0f; break;
 			case UI_ANCHOR_TOP_CENTER:    anchor_x = 0.5f; anchor_y = 0.0f; break;
@@ -468,22 +605,54 @@ void uiCalculateLayout(u16 node_idx, f32 parent_x, f32 parent_y, f32 parent_w, f
 			case UI_ANCHOR_BOTTOM_RIGHT:  anchor_x = 1.0f; anchor_y = 1.0f; break;
 		}
 
-		// Calculate position
 		node->final_screen_pos[X] = parent_x + (parent_w * anchor_x) + node->offset[X] - (node->final_screen_size[X] * anchor_x);
 		node->final_screen_pos[Y] = parent_y + (parent_h * anchor_y) + node->offset[Y] - (node->final_screen_size[Y] * anchor_y);
 	}
 
 	// 2. Cascade down to children
+	f32 cursor_x = 0.0f; // Tracks stacking offsets
+	f32 cursor_y = 0.0f; 
+
 	u16 child_idx = node->first_child;
 	while (child_idx != UI_NULL_INDEX) {
-		uiCalculateLayout(child_idx, 
-		    node->final_screen_pos[X], 
-		    node->final_screen_pos[Y],
-		    node->final_screen_size[X], 
-		    node->final_screen_size[Y]);
+		UiComponent *child = uiGet(child_idx);
+		
+		f32 original_offset_x = child->offset[X];
+		f32 original_offset_y = child->offset[Y];
 
-		child_idx = uiGet(child_idx)->next_sibling;
+		// If stacking, push the child down/right by the cursor amount
+		if (node->layout_type == UI_LAYOUT_VERTICAL) {
+			child->offset[Y] += cursor_y; 
+		} else if (node->layout_type == UI_LAYOUT_HORIZONTAL) {
+			child->offset[X] += cursor_x;
+		}
+
+		// Recurse with our final positions
+		uiCalculatePositions(child_idx, 
+		                     node->final_screen_pos[X], 
+		                     node->final_screen_pos[Y],
+		                     node->final_screen_size[X], 
+		                     node->final_screen_size[Y]);
+
+		// Restore offsets so IMGUI doesn't infinitely accumulate them
+		child->offset[X] = original_offset_x;
+		child->offset[Y] = original_offset_y;
+
+		// Advance cursor by the child's computed size
+		if (node->layout_type == UI_LAYOUT_VERTICAL) {
+			cursor_y += child->final_screen_size[Y]; 
+		} else if (node->layout_type == UI_LAYOUT_HORIZONTAL) {
+			cursor_x += child->final_screen_size[X];
+		}
+		
+		child_idx = child->next_sibling;
 	}
+}
+
+void	uiCalculateLayout(f32 screen_w, f32 screen_h, Allocator *frame_arena)
+{
+	uiCalculateSizes(g_ui_ctx.rmgui_root, frame_arena);
+	uiCalculatePositions(g_ui_ctx.rmgui_root, 0, 0, screen_w, screen_h);
 }
 
 // TODO: Remove extra u16

@@ -25,6 +25,13 @@ enum ComponentShapeFillType
 	TRANSPARENT,
 };
 
+typedef u8	UiSizeMode;
+enum {
+	UI_SIZE_FIXED,
+	UI_SIZE_AUTO,
+};
+
+
 typedef u8	UiPrimitiveType;
 enum {
 	UI_PRIMITIVE_TEXT_GLYPH,
@@ -54,6 +61,19 @@ enum {
 
 #define UI_NULL_INDEX	0
 
+typedef struct UiShapedGlyph
+{
+	u32	atlas_index;
+	f32	x_advance;
+	f32	y_advance;
+}	UiShapedGlyph;
+
+// Add these to your UiComponent struct:
+// UiShapedGlyph *shaped_glyphs;
+// u32 shaped_glyph_count;
+// bool is_text_dirty;
+
+// TODO: Pack this struct... a lot
 typedef struct UiComponent
 {
 	// --- TOPOLOGY ---
@@ -61,25 +81,38 @@ typedef struct UiComponent
 
 	// --- LAYOUT DEFINITION ---
 	UiPrimitiveType	primitive_type;
-	UiLayoutType	layout_type; // How I arrange my children
-	UiAnchor	anchor;      // How I attach to my parent (if absolute)
+	UiLayoutType	layout_type;	// How I arrange my children
+	UiAnchor	anchor;		// How I attach to my parent (if absolute)
+	UiSizeMode	size_mode[2];	// X and Y size policies
 
-	vec2		offset;     // My manual X/Y nudge
-	vec2		fixed_size; // My requested width/height
+	vec2		offset;		// My manual X/Y nudge
+	vec2		fixed_size;	// My requested width/height
 
 	// --- COMPUTED RESULT ---
 	vec2		final_screen_pos;  // Calculated during the layout pass
 	vec2		final_screen_size;
 
-	// --- LOGIC & LAYOUT ---
+	// --- TEXT ---
 	Font		*font;
 	String		text;
 	u8		font_size;
-	vec4		color;
-	vec4		inner_color;
+	// TODO: Add support for this
+	vec4		text_color;
+	UiShapedGlyph	*shaped_glyphs;
+	u32		shaped_glyph_count;
+	bool		is_text_dirty;
+
+	// --- SHAPE ---
 	u32		shape;
+	// TODO: Add support for this
+	vec4		color;
+	// TODO: Add support for this
+	vec4		inner_color;
+	// TODO: Add support for this
 	f32		stroke_width;
+	// TODO: Add support for this
 	f32		corner_radius;
+
 } UiComponent;
 
 // For the RMGUI
@@ -103,4 +136,4 @@ u16	setShape(enum ComponentShapeType shape);
 u16	setShapeFill(enum ComponentShapeFillType fill);
 
 TextRenderInfo	uiBuildRenderData(u16 rm_root_node, Allocator *frame_arena);
-void		uiCalculateLayout(u16 node_idx, f32 parent_x, f32 parent_y, f32 parent_w, f32 parent_h);
+void		uiCalculateLayout(f32 screen_w, f32 screen_h, Allocator *frame_arena);

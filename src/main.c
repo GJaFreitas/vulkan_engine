@@ -137,7 +137,7 @@ int	loop(World world)
 
 		// --- RENDERING ---
 		entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
-		uiCalculateLayout(world.ui->rmgui_root, 0, 0, world.graphics_ctx->window_width, world.graphics_ctx->window_height);
+		uiCalculateLayout(world.graphics_ctx->window_width, world.graphics_ctx->window_height, &world.frame_allocator);
 		text_info = uiBuildRenderData(world.ui->rmgui_root, &world.frame_allocator);
 		render(world.graphics_ctx, &world.player->camera, entity_info, text_info);
 
