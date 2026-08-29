@@ -133,17 +133,25 @@ int	loop(World world)
 			const PanelSpec spec = {
 				.primitive_type = UI_PRIMITIVE_RECTANGLE,
 				.layout_type = UI_LAYOUT_VERTICAL,
-				.anchor = UI_ANCHOR_BOTTOM_CENTER,
+				.anchor = UI_ANCHOR_TOP_RIGHT,
 				.size_mode = {UI_SIZE_AUTO, UI_SIZE_AUTO},
-				.offset = {-10.0f, -10.0f},
+				.offset = {},
 				.fixed_size = {}, // Not needed since auto sizing
-				.outer_color = {255, 0, 0, 255},
-				.inner_color = {0, 0, 255, 255},
-				.border_width = 4.0f,
-				.corner_radius = 3.0f,
+				.outer_color = {},
+				.inner_color = {},
+				.border_width = 0.0f,
+				.corner_radius = 0.0f,
+				.padding = 0.0f,
+			};
+			const TextSpec tspec = {
+				.anchor = UI_ANCHOR_CENTER,
+				.font = font,
+				.font_size = 12,
+				.text_color = {255, 255, 255, 255},
+				.nudge_x = 1.0f,
 			};
 			imguiBeginPanel(world.ui->imgui_root, spec);
-			imguiText(font, 24, frame_arena, "FPS: %.1f", fps);
+			imguiText(tspec, frame_arena, "FPS: %.1f", fps);
 			imguiEndPanel();
 		}
 

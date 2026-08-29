@@ -96,7 +96,6 @@ typedef struct UiComponent
 	Font		*font;
 	String		text;
 	u8		font_size;
-	// TODO: Add support for this
 	vec4		text_color;
 	UiShapedGlyph	*shaped_glyphs;
 	u32		shaped_glyph_count;
@@ -107,6 +106,7 @@ typedef struct UiComponent
 	vec4		inner_color;
 	f32		border_width;
 	f32		corner_radius;
+	f32		padding;	// Padding applied to all things inside
 
 } UiComponent;
 
@@ -132,7 +132,18 @@ typedef struct PanelSpec
 	vec4		inner_color;	// Inner color
 	f32		border_width;	// Size of border
 	f32		corner_radius;	// Rounded corners
+	f32		padding;	// The padding (left and right)
 }	PanelSpec;
+
+typedef struct TextSpec
+{
+	UiAnchor	anchor;			// How I attach to my parent (if absolute)
+	Font		*font;			// The font the text will use
+	u8		font_size;
+	vec4		text_color;
+	f32		nudge_x;
+	f32		nudge_y;
+}	TextSpec;
 
 void	initUi(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm);
 
@@ -142,7 +153,7 @@ bool	imguiButton(StringView text);
 void	imguiEndPanel(void);
 u16	imguiAllocateComponent(void);
 void	imguiResetFrame(void);
-void	imguiText(Font *font, f32 font_size, Allocator *frame_arena, const char *fmt, ...);
+void	imguiText(TextSpec spec, Allocator *frame_arena, const char *fmt, ...);
 
 u16	setShape(enum ComponentShapeType shape);
 u16	setShapeFill(enum ComponentShapeFillType fill);

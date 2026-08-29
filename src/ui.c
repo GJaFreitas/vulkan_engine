@@ -178,7 +178,7 @@ void	uiAppendChild(u16 parent, u16 new_idx)
 	new_node->prev_sibling = last_child;
 }
 
-void	imguiText(Font *font, f32 font_size, Allocator *frame_arena, const char *fmt, ...)
+void	imguiText(TextSpec spec, Allocator *frame_arena, const char *fmt, ...)
 {
 	// 1. Get the current active panel from the stack
 	if (g_ui_ctx.imgui_stack_count == 0) {
@@ -208,22 +208,19 @@ void	imguiText(Font *font, f32 font_size, Allocator *frame_arena, const char *fm
 
 	UiComponent *text = uiGet(text_idx);
 	text->primitive_type = UI_PRIMITIVE_TEXT_GLYPH;
-	text->font = font;
-	text->font_size = font_size;
-	text->is_text_dirty = true;
-
-	// Since the parent panel is UI_LAYOUT_VERTICAL, we only need to define its height padding
-	text->fixed_size[Y] = font_size + 4.0f; // Give it a little breathing room
-	text->offset[X] = 10.0f; // Indent slightly from the panel edge
+	text->font = spec.font;
+	text->font_size = spec.font_size;
+	text->fixed_size[Y] = spec.font_size + 4.0f; // Y padding
 	text->size_mode[X] = UI_SIZE_AUTO;
 	text->size_mode[Y] = UI_SIZE_AUTO;
+	glm_vec4_copy(spec.text_color, text->text_color);
+	text->is_text_dirty = true;
+	text->offset[X] = spec.nudge_x;
+	text->offset[Y] = spec.nudge_y;
 
 	// Point the component to the arena string
 	text->text.data = text_data;
 	text->text.count = len;
-
-	// Solid white text
-	text->text_color[0] = 1.0f; text->text_color[1] = 1.0f; text->text_color[2] = 1.0f; text->text_color[3] = 1.0f;
 }
 
 void	imguiBeginPanel(u16 parent_node, PanelSpec spec)
@@ -244,6 +241,7 @@ void	imguiBeginPanel(u16 parent_node, PanelSpec spec)
 	glm_vec4_copy(spec.inner_color, panel->inner_color);
 	panel->border_width = spec.border_width;
 	panel->corner_radius = spec.corner_radius;
+	panel->padding = spec.padding;
 
 	// Anchor it to the provided RMGUI node (usually the screen root)
 	uiAppendChild(parent_node, panel_idx);
@@ -348,7 +346,8 @@ static void pushTextInstances(UiComponent *node, UiRenderInstance *instances, u3
 	const f32 px_per_em = node->font_size;
 	
 	f32 cursor_x = node->final_screen_pos[X];
-	f32 cursor_y = node->final_screen_pos[Y];
+	// Font size so that the baseline of the text aligns with the box its in
+	f32 cursor_y = node->final_screen_pos[Y] + node->font_size;
 
 	// Loop over our cached glyphs instead of calling HarfBuzz!
 	for (u32 i = 0; i < node->shaped_glyph_count; i++) {
@@ -372,8 +371,8 @@ static void pushTextInstances(UiComponent *node, UiRenderInstance *instances, u3
 				const f32 right  = g->plane_max[X] * px_per_em;
 				const f32 bottom = g->plane_max[Y] * px_per_em;
 
-				inst->pos[X] = roundf(cursor_x + left);
-				inst->pos[Y] = roundf(cursor_y + top);
+				inst->pos[X] = cursor_x + left;
+				inst->pos[Y] = cursor_y + top;
 				inst->size[X] = right - left;
 				inst->size[Y] = bottom - top;
 
@@ -504,9 +503,9 @@ void uiCalculateSizes(u16 node_idx, Allocator *arena)
 				// If we stack in the opposite axis, our size is the largest child.
 				if ((axis == X && node->layout_type == UI_LAYOUT_HORIZONTAL) ||
 					(axis == Y && node->layout_type == UI_LAYOUT_VERTICAL)) {
-					node->final_screen_size[axis] = children_sum;
+					node->final_screen_size[axis] = children_sum + node->padding * 2.0f;
 				} else {
-					node->final_screen_size[axis] = max_child_size;
+					node->final_screen_size[axis] = max_child_size + node->padding * 2.0f;
 				}
 
 				if (node->first_child != UI_NULL_INDEX) {
@@ -518,7 +517,7 @@ void uiCalculateSizes(u16 node_idx, Allocator *arena)
 	}
 }
 
-void uiCalculatePositions(u16 node_idx, f32 parent_x, f32 parent_y, f32 parent_w, f32 parent_h)
+void	uiCalculatePositions(u16 node_idx, f32 parent_x, f32 parent_y, f32 parent_w, f32 parent_h)
 {
 	UiComponent *node = uiGet(node_idx);
 
@@ -565,12 +564,12 @@ void uiCalculatePositions(u16 node_idx, f32 parent_x, f32 parent_y, f32 parent_w
 			child->offset[X] += cursor_x;
 		}
 
-		// Recurse with our final positions
+		// Recurse using the inner padded rectangle
 		uiCalculatePositions(child_idx, 
-		                     node->final_screen_pos[X], 
-		                     node->final_screen_pos[Y],
-		                     node->final_screen_size[X], 
-		                     node->final_screen_size[Y]);
+		                     node->final_screen_pos[X] + node->padding, 
+		                     node->final_screen_pos[Y] + node->padding,
+		                     node->final_screen_size[X] - (node->padding * 2.0f), 
+		                     node->final_screen_size[Y] - (node->padding * 2.0f));
 
 		// Restore offsets so IMGUI doesn't infinitely accumulate them
 		child->offset[X] = original_offset_x;
