@@ -130,7 +130,19 @@ int	loop(World world)
 		}
 		beginFrame(world, &running);
 		if (show_debug_hud) {
-			imguiBeginPanel(world.ui->imgui_root, UI_ANCHOR_BOTTOM_RIGHT, -10.0f, -10.0f, 120.0f, 40.0f);
+			const PanelSpec spec = {
+				.primitive_type = UI_PRIMITIVE_RECTANGLE,
+				.layout_type = UI_LAYOUT_VERTICAL,
+				.anchor = UI_ANCHOR_BOTTOM_CENTER,
+				.size_mode = {UI_SIZE_AUTO, UI_SIZE_AUTO},
+				.offset = {-10.0f, -10.0f},
+				.fixed_size = {}, // Not needed since auto sizing
+				.outer_color = {255, 0, 0, 255},
+				.inner_color = {0, 0, 255, 255},
+				.border_width = 4.0f,
+				.corner_radius = 3.0f,
+			};
+			imguiBeginPanel(world.ui->imgui_root, spec);
 			imguiText(font, 24, frame_arena, "FPS: %.1f", fps);
 			imguiEndPanel();
 		}

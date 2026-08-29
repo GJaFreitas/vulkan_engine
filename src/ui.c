@@ -223,30 +223,27 @@ void	imguiText(Font *font, f32 font_size, Allocator *frame_arena, const char *fm
 	text->text.count = len;
 
 	// Solid white text
-	text->color[0] = 1.0f; text->color[1] = 1.0f; text->color[2] = 1.0f; text->color[3] = 1.0f;
+	text->text_color[0] = 1.0f; text->text_color[1] = 1.0f; text->text_color[2] = 1.0f; text->text_color[3] = 1.0f;
 }
 
-// TODO: This function needs to allow for customization
-void	imguiBeginPanel(u16 parent_node, UiAnchor anchor, f32 x, f32 y, f32 w, f32 h)
+void	imguiBeginPanel(u16 parent_node, PanelSpec spec)
 {
 	u16 panel_idx = imguiAllocateComponent();
 	UiComponent *panel = uiGet(panel_idx);
 
-	// Layout and Styling
-	panel->layout_type = UI_LAYOUT_VERTICAL; // Automatically stack contents downwards
-	panel->anchor = anchor;
-	panel->offset[X] = x;
-	panel->offset[Y] = y;
-	panel->fixed_size[X] = w;
-	panel->fixed_size[Y] = h;
-	panel->primitive_type = UI_PRIMITIVE_RECTANGLE;
-	panel->corner_radius = 6.0f;
-	panel->size_mode[X] = UI_SIZE_AUTO;
-	panel->size_mode[Y] = UI_SIZE_AUTO;
-
-	// Dark semi-transparent background
-	// TODO: Fix color
-	panel->color[0] = 255.0f; panel->color[1] = 255.0f; panel->color[2] = 0.0f; panel->color[3] = 255.0f;
+	panel->primitive_type = spec.primitive_type;
+	panel->layout_type = spec.layout_type;
+	panel->anchor = spec.anchor;
+	panel->size_mode[X] = spec.size_mode[X];
+	panel->size_mode[Y] = spec.size_mode[Y];
+	panel->offset[X] = spec.offset[X];
+	panel->offset[Y] = spec.offset[Y];
+	panel->fixed_size[X] = spec.fixed_size[X];
+	panel->fixed_size[Y] = spec.fixed_size[Y];
+	glm_vec4_copy(spec.outer_color, panel->outer_color);
+	glm_vec4_copy(spec.inner_color, panel->inner_color);
+	panel->border_width = spec.border_width;
+	panel->corner_radius = spec.corner_radius;
 
 	// Anchor it to the provided RMGUI node (usually the screen root)
 	uiAppendChild(parent_node, panel_idx);
@@ -298,7 +295,6 @@ void	initUi(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm)
 		.layout_type = UI_LAYOUT_ABSOLUTE,
 		.anchor = UI_ANCHOR_TOP_LEFT,
 		.final_screen_size = {screen_w, screen_h},
-		.color = {0, 0, 0, 0},
 	};
 
 	ui->imgui_root = allocateComponent();
@@ -312,7 +308,6 @@ void	initUi(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm)
 		.layout_type = UI_LAYOUT_ABSOLUTE,
 		.anchor = UI_ANCHOR_TOP_LEFT,
 		.final_screen_size = {screen_w, screen_h},
-		.color = {0, 0, 0, 0},
 	};
 
 	g_ui_ctx.rmgui_root = ui->rmgui_root;
@@ -336,56 +331,35 @@ static void pushShapeInstance(UiComponent *node, UiRenderInstance *instances, u3
 	instances[idx].uv_size[X] = 1.0f;
 	instances[idx].uv_size[Y] = 1.0f;
 
-	// Copy styling...
 	instances[idx].primitive_type = node->primitive_type; 
-	// ... set colors, radius, etc.
+	
+	glm_vec4_copy(node->outer_color, instances[idx].color);
+	glm_vec4_copy(node->inner_color, instances[idx].inner_color);
+	
+	instances[idx].stroke_width = node->border_width;
+	instances[idx].corner_radius = node->corner_radius;
 
 	(*count)++;
 }
 
-// »speed, this can be cached
 static void pushTextInstances(UiComponent *node, UiRenderInstance *instances, u32 *count)
 {
-	static hb_buffer_t *buf = NULL;
-	if (!buf) {
-		buf = hb_buffer_create();
-	}
-
-	Font *font = node->font;
-	const TextAtlas *atlas = &font->atlas;
+	const TextAtlas *atlas = &node->font->atlas;
 	const f32 px_per_em = node->font_size;
-	const f32 hb_scale = node->font_size / (f32)font->units_per_EM;
-
-	// Note: using node->text (assuming it is your String type)
-	hb_buffer_add_utf8(buf, (const char *)node->text.data, node->text.count, 0, -1);
-	hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
-	hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
-	hb_buffer_set_language(buf, hb_language_from_string("en", -1));
-
-	hb_feature_t features[] = {
-		{ HB_TAG('c','a','l','t'), 0, 0, (unsigned int)-1 },
-		{ HB_TAG('l','i','g','a'), 0, 0, (unsigned int)-1 },
-		{ HB_TAG('c','l','i','g'), 0, 0, (unsigned int)-1 },
-	};
-	hb_shape(font->hb_font, buf, features, sizeofarray(features));
-
-	u32 glyph_count;
-	hb_glyph_info_t *glyph_info = hb_buffer_get_glyph_infos(buf, &glyph_count);
-	hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(buf, &glyph_count);
-
+	
 	f32 cursor_x = node->final_screen_pos[X];
 	f32 cursor_y = node->final_screen_pos[Y];
 
-	for (u32 i = 0; i < glyph_count; i++) {
-		const u32 glyph_index = glyph_info[i].codepoint;
-		const GlyphInfo *g = atlasFindGlyph(atlas, glyph_index);
+	// Loop over our cached glyphs instead of calling HarfBuzz!
+	for (u32 i = 0; i < node->shaped_glyph_count; i++) {
+		UiShapedGlyph *cached = &node->shaped_glyphs[i];
+		const GlyphInfo *g = atlasFindGlyph(atlas, cached->atlas_index);
 
 		if (g) {
-			const f32 glyph_width = g->plane_max[0] - g->plane_min[0];
-			const f32 glyph_height = g->plane_max[1] - g->plane_min[1];
+			const f32 glyph_width = g->plane_max[X] - g->plane_min[X];
+			const f32 glyph_height = g->plane_max[Y] - g->plane_min[Y];
 
 			if (glyph_width > 0 && glyph_height > 0) {
-
 				u32 idx = *count;
 				UiRenderInstance *inst = &instances[idx];
 
@@ -393,34 +367,30 @@ static void pushTextInstances(UiComponent *node, UiRenderInstance *instances, u3
 				inst->stroke_width   = 0.0f;
 				inst->corner_radius  = 0.0f;
 
-				const f32 left = g->plane_min[0] * px_per_em;
-				const f32 top = g->plane_min[1] * px_per_em;
-				const f32 right = g->plane_max[0] * px_per_em;
-				const f32 bottom = g->plane_max[1] * px_per_em;
+				const f32 left   = g->plane_min[X] * px_per_em;
+				const f32 top    = g->plane_min[Y] * px_per_em;
+				const f32 right  = g->plane_max[X] * px_per_em;
+				const f32 bottom = g->plane_max[Y] * px_per_em;
 
 				inst->pos[X] = roundf(cursor_x + left);
 				inst->pos[Y] = roundf(cursor_y + top);
-
 				inst->size[X] = right - left;
 				inst->size[Y] = bottom - top;
 
-				inst->uv_offset[X] = g->uv_min[0];
-				inst->uv_offset[Y] = g->uv_min[1];
+				inst->uv_offset[X] = g->uv_min[X];
+				inst->uv_offset[Y] = g->uv_min[Y];
+				inst->uv_size[X] = g->uv_max[X] - g->uv_min[X];
+				inst->uv_size[Y] = g->uv_max[Y] - g->uv_min[Y];
 
-				inst->uv_size[X] = g->uv_max[0] - g->uv_min[0];
-				inst->uv_size[Y] = g->uv_max[1] - g->uv_min[1];
-
-				glm_vec4_copy(node->color, inst->color);
-
+				glm_vec4_copy(node->text_color, inst->color);
 				(*count)++;
 			}
 		}
 
-		cursor_x += glyph_pos[i].x_advance * hb_scale;
-		cursor_y += glyph_pos[i].y_advance * hb_scale;
+		// Advance the cursor using the cached HarfBuzz metrics
+		cursor_x += cached->x_advance;
+		cursor_y += cached->y_advance;
 	}
-
-	hb_buffer_reset(buf);
 }
 
 static void traverseForRender(u16 node_idx, UiRenderInstance *instances, u32 *count)
@@ -428,10 +398,16 @@ static void traverseForRender(u16 node_idx, UiRenderInstance *instances, u32 *co
 	UiComponent *node = uiGet(node_idx);
 
 	// A node is visible if it's text, OR if it has physical dimensions. And it must have alpha > 0.
-	bool has_size = (node->primitive_type == UI_PRIMITIVE_TEXT_GLYPH) || 
+	const bool has_size =
+			(node->primitive_type == UI_PRIMITIVE_TEXT_GLYPH) || 
 	                (node->final_screen_size[X] > 0.0f && node->final_screen_size[Y] > 0.0f);
 
-	if (has_size && node->color[3] > 0.0f) {
+	const bool has_color =
+			(node->outer_color[3] > 0.0f) || 
+			(node->inner_color[3] > 0.0f) ||
+			(node->text_color[3] > 0.0f);
+
+	if (has_size && has_color) {
 		if (node->primitive_type == UI_PRIMITIVE_TEXT_GLYPH) {
 			pushTextInstances(node, instances, count);
 		} else {
@@ -446,45 +422,6 @@ static void traverseForRender(u16 node_idx, UiRenderInstance *instances, u32 *co
 	}
 }
 
-static f32 calculateTextWidth(UiComponent *node)
-{
-	if (node->text.count == 0 || !node->font) {
-		return 0.0f;
-	}
-
-	static hb_buffer_t *buf = NULL;
-	if (!buf) {
-		buf = hb_buffer_create();
-	}
-
-	Font *font = node->font;
-	const f32 hb_scale = node->font_size / (f32)font->units_per_EM;
-
-	hb_buffer_add_utf8(buf, (const char *)node->text.data, node->text.count, 0, -1);
-	hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
-	hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
-	hb_buffer_set_language(buf, hb_language_from_string("en", -1));
-	
-	hb_feature_t features[] = {
-		{ HB_TAG('c','a','l','t'), 0, 0, (unsigned int)-1 },
-		{ HB_TAG('l','i','g','a'), 0, 0, (unsigned int)-1 },
-		{ HB_TAG('c','l','i','g'), 0, 0, (unsigned int)-1 },
-	};
-	hb_shape(font->hb_font, buf, features, 3);
-
-	u32 glyph_count;
-	hb_glyph_position_t *glyph_pos = hb_buffer_get_glyph_positions(buf, &glyph_count);
-
-	f32 total_width = 0.0f;
-	for (u32 i = 0; i < glyph_count; i++) {
-		total_width += glyph_pos[i].x_advance * hb_scale;
-	}
-
-	hb_buffer_reset(buf);
-	return total_width;
-}
-
-// Pass your frame_arena into this function now!
 void uiCalculateSizes(u16 node_idx, Allocator *arena)
 {
 	UiComponent *node = uiGet(node_idx);
@@ -505,76 +442,77 @@ void uiCalculateSizes(u16 node_idx, Allocator *arena)
 			
 			// === TEXT CACHING & MEASUREMENT ===
 			if (node->primitive_type == UI_PRIMITIVE_TEXT_GLYPH) {
-				if (node->is_text_dirty) {
-					// 1. Run HarfBuzz
-					static hb_buffer_t *buf = NULL;
-					if (!buf) buf = hb_buffer_create();
+				if (node->is_text_dirty == false) break ;
 
-					Font *font = node->font;
-					const f32 hb_scale = node->font_size / (f32)font->units_per_EM;
+				// 1. Run HarfBuzz
+				static hb_buffer_t *buf = NULL;
+				if (!buf) buf = hb_buffer_create();
 
-					hb_buffer_add_utf8(buf, (const char *)node->text.data, node->text.count, 0, -1);
-					hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
-					hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
-					hb_buffer_set_language(buf, hb_language_from_string("en", -1));
-					hb_shape(font->hb_font, buf, NULL, 0);
+				Font *font = node->font;
+				const f32 hb_scale = node->font_size / (f32)font->units_per_EM;
 
-					u32 g_count;
-					hb_glyph_info_t *g_info = hb_buffer_get_glyph_infos(buf, &g_count);
-					hb_glyph_position_t *g_pos = hb_buffer_get_glyph_positions(buf, &g_count);
+				hb_buffer_add_utf8(buf, (const char *)node->text.data, node->text.count, 0, -1);
+				hb_buffer_set_direction(buf, HB_DIRECTION_LTR);
+				hb_buffer_set_script(buf, HB_SCRIPT_LATIN);
+				hb_buffer_set_language(buf, hb_language_from_string("en", -1));
+				hb_shape(font->hb_font, buf, NULL, 0);
 
-					// 2. Allocate cache array from the arena
-					node->shaped_glyph_count = g_count;
-					node->shaped_glyphs = arena->fp_allocation(arena, sizeof(UiShapedGlyph) * g_count, DEFAULT_ALIGN);
+				u32 g_count;
+				hb_glyph_info_t *g_info = hb_buffer_get_glyph_infos(buf, &g_count);
+				hb_glyph_position_t *g_pos = hb_buffer_get_glyph_positions(buf, &g_count);
 
-					// 3. Cache the glyphs AND calculate the total width
-					f32 total_width = 0.0f;
-					for (u32 i = 0; i < g_count; i++) {
-						node->shaped_glyphs[i].atlas_index = g_info[i].codepoint;
-						node->shaped_glyphs[i].x_advance = g_pos[i].x_advance * hb_scale;
-						node->shaped_glyphs[i].y_advance = g_pos[i].y_advance * hb_scale;
-						
-						total_width += node->shaped_glyphs[i].x_advance;
+				// 2. Allocate cache array from the arena
+				// TODO: Investigate possible optimizations by caching text for rmgui
+				node->shaped_glyph_count = g_count;
+				node->shaped_glyphs = arena->fp_allocation(arena, sizeof(UiShapedGlyph) * g_count, DEFAULT_ALIGN);
+
+				// 3. Cache the glyphs AND calculate the total width
+				f32 total_width = 0.0f;
+				for (u32 i = 0; i < g_count; i++) {
+					node->shaped_glyphs[i].atlas_index = g_info[i].codepoint;
+					node->shaped_glyphs[i].x_advance = g_pos[i].x_advance * hb_scale;
+					node->shaped_glyphs[i].y_advance = g_pos[i].y_advance * hb_scale;
+
+					total_width += node->shaped_glyphs[i].x_advance;
+				}
+
+				node->final_screen_size[X] = total_width;
+				node->final_screen_size[Y] = node->font_size;
+
+				hb_buffer_reset(buf);
+				node->is_text_dirty = false;
+			} else {
+
+				// If it's a container, size is based on children
+				f32 children_sum = 0.0f;
+				f32 max_child_size = 0.0f;
+
+				u16 c_idx = node->first_child;
+				while (c_idx != UI_NULL_INDEX) {
+					UiComponent *child = uiGet(c_idx);
+
+					// Calculate total stacked size, and largest single child
+					children_sum += child->final_screen_size[axis];
+					if (child->final_screen_size[axis] > max_child_size) {
+						max_child_size = child->final_screen_size[axis];
 					}
 
-					node->final_screen_size[X] = total_width;
-					node->final_screen_size[Y] = node->font_size;
-					
-					hb_buffer_reset(buf);
-					node->is_text_dirty = false;
+					c_idx = child->next_sibling;
 				}
-				continue; // Skip the container logic below
-			}
 
-			// If it's a container, size is based on children
-			f32 children_sum = 0.0f;
-			f32 max_child_size = 0.0f;
-
-			u16 c_idx = node->first_child;
-			while (c_idx != UI_NULL_INDEX) {
-				UiComponent *child = uiGet(c_idx);
-				
-				// Calculate total stacked size, and largest single child
-				children_sum += child->final_screen_size[axis];
-				if (child->final_screen_size[axis] > max_child_size) {
-					max_child_size = child->final_screen_size[axis];
+				// If we stack in this axis, our size is the sum. 
+				// If we stack in the opposite axis, our size is the largest child.
+				if ((axis == X && node->layout_type == UI_LAYOUT_HORIZONTAL) ||
+					(axis == Y && node->layout_type == UI_LAYOUT_VERTICAL)) {
+					node->final_screen_size[axis] = children_sum;
+				} else {
+					node->final_screen_size[axis] = max_child_size;
 				}
-				
-				c_idx = child->next_sibling;
-			}
 
-			// If we stack in this axis, our size is the sum. 
-			// If we stack in the opposite axis, our size is the largest child.
-			if ((axis == X && node->layout_type == UI_LAYOUT_HORIZONTAL) ||
-			    (axis == Y && node->layout_type == UI_LAYOUT_VERTICAL)) {
-				node->final_screen_size[axis] = children_sum;
-			} else {
-				node->final_screen_size[axis] = max_child_size;
-			}
-			
-			if (node->first_child != UI_NULL_INDEX) {
-				// TODO: Create padding optional in struct for use here
-				node->final_screen_size[axis] += 10.0f; // 5px padding on each side
+				if (node->first_child != UI_NULL_INDEX) {
+					// TODO: Create padding optional in struct for use here
+					node->final_screen_size[axis] += 10.0f; // 5px padding on each side
+				}
 			}
 		}
 	}

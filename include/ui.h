@@ -103,14 +103,9 @@ typedef struct UiComponent
 	bool		is_text_dirty;
 
 	// --- SHAPE ---
-	u32		shape;
-	// TODO: Add support for this
-	vec4		color;
-	// TODO: Add support for this
+	vec4		outer_color;
 	vec4		inner_color;
-	// TODO: Add support for this
-	f32		stroke_width;
-	// TODO: Add support for this
+	f32		border_width;
 	f32		corner_radius;
 
 } UiComponent;
@@ -122,10 +117,27 @@ typedef struct UiState
 	u16	imgui_root;
 }	UiState;
 
+typedef struct PanelSpec
+{
+	// --- LAYOUT DEFINITION ---
+	UiPrimitiveType	primitive_type;	// Type of panel (Rectangle/Elipse)
+	UiLayoutType	layout_type;	// How I arrange my children
+	UiAnchor	anchor;		// How I attach to my parent (if absolute)
+	UiSizeMode	size_mode[2];	// X and Y size policies
+
+	vec2		offset;		// My manual X/Y nudge
+	vec2		fixed_size;	// My requested width/height (UI_SIZE_FIXED)
+
+	vec4		outer_color;	// Color outside inner space (Border)
+	vec4		inner_color;	// Inner color
+	f32		border_width;	// Size of border
+	f32		corner_radius;	// Rounded corners
+}	PanelSpec;
+
 void	initUi(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm);
 
 
-void	imguiBeginPanel(u16 parent_node, UiAnchor anchor, f32 x, f32 y, f32 w, f32 h);
+void	imguiBeginPanel(u16 parent_node, PanelSpec spec);
 bool	imguiButton(StringView text);
 void	imguiEndPanel(void);
 u16	imguiAllocateComponent(void);
