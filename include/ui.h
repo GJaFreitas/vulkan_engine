@@ -160,3 +160,8 @@ u16	setShapeFill(enum ComponentShapeFillType fill);
 
 TextRenderInfo	uiBuildRenderData(u16 rm_root_node, Allocator *frame_arena);
 void		uiCalculateLayout(f32 screen_w, f32 screen_h, Allocator *frame_arena);
+
+void	openConsole(u32 screen_w, u32 screen_h, Font *font, u8 console_font_size, Allocator *frame_arena);
+void	showFps(u16 imgui_root, Font *font, double fps, Allocator *frame_arena);
+
+String	consoleBackend(void);

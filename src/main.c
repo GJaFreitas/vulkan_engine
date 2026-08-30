@@ -108,6 +108,9 @@ static inline void	endFrame(World world) {
 
 int	loop(World world)
 {
+	const u32	screen_w = world.graphics_ctx->window_width;
+	const u32	screen_h = world.graphics_ctx->window_height;
+
 	Font	*font = &world.fonts.fonts[0];
 	Allocator	*frame_arena = &world.frame_allocator;
 
@@ -119,6 +122,7 @@ int	loop(World world)
 	TextRenderInfo		text_info;
 
 	bool	show_debug_hud = true;
+	bool	show_console = false;
 	bool	running = true;
 	u64	last_time = SDL_GetPerformanceCounter();
 	while (running)
@@ -129,30 +133,11 @@ int	loop(World world)
 			usleep(16.6 - world.dt_ms);
 		}
 		beginFrame(world, &running);
+		if (show_console) {
+			openConsole(screen_w, screen_h, &world.fonts.fonts[0], 12, frame_arena);
+		}
 		if (show_debug_hud) {
-			const PanelSpec spec = {
-				.primitive_type = UI_PRIMITIVE_RECTANGLE,
-				.layout_type = UI_LAYOUT_VERTICAL,
-				.anchor = UI_ANCHOR_TOP_RIGHT,
-				.size_mode = {UI_SIZE_AUTO, UI_SIZE_AUTO},
-				.offset = {},
-				.fixed_size = {}, // Not needed since auto sizing
-				.outer_color = {},
-				.inner_color = {},
-				.border_width = 0.0f,
-				.corner_radius = 0.0f,
-				.padding = 0.0f,
-			};
-			const TextSpec tspec = {
-				.anchor = UI_ANCHOR_CENTER,
-				.font = font,
-				.font_size = 12,
-				.text_color = {255, 255, 255, 255},
-				.nudge_x = 1.0f,
-			};
-			imguiBeginPanel(world.ui->imgui_root, spec);
-			imguiText(tspec, frame_arena, "FPS: %.1f", fps);
-			imguiEndPanel();
+			showFps(world.ui->imgui_root, &world.fonts.fonts[0], fps, frame_arena);
 		}
 
 		// --- RENDERING ---
@@ -165,6 +150,12 @@ int	loop(World world)
 		updatePlayer(world.player, world.dt_ms, world.graphics_ctx->window);
 		updateCamera(&world.player->camera, world.graphics_ctx->window);
 		updateEntities(world.entities, world.dt_ms);
+		if (key_pressed(g_keybinds[ACTION_DEBUG_TOGGLE])) {
+			show_debug_hud = !show_debug_hud;
+		}
+		if (key_pressed(g_keybinds[ACTION_CONSOLE_TOGGLE])) {
+			show_console = !show_console;
+		}
 
 		// --- End of frame ---
 		endFrame(world);

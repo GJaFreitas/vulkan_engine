@@ -208,6 +208,7 @@ void	imguiText(TextSpec spec, Allocator *frame_arena, const char *fmt, ...)
 
 	UiComponent *text = uiGet(text_idx);
 	text->primitive_type = UI_PRIMITIVE_TEXT_GLYPH;
+	text->anchor = spec.anchor;
 	text->font = spec.font;
 	text->font_size = spec.font_size;
 	text->fixed_size[Y] = spec.font_size + 4.0f; // Y padding
@@ -221,6 +222,11 @@ void	imguiText(TextSpec spec, Allocator *frame_arena, const char *fmt, ...)
 	// Point the component to the arena string
 	text->text.data = text_data;
 	text->text.count = len;
+}
+
+void	imguiSetActivePanel(u16 idx)
+{
+	g_ui_ctx.imgui_parent_stack[g_ui_ctx.imgui_stack_count++] = idx;
 }
 
 void	imguiBeginPanel(u16 parent_node, PanelSpec spec)
@@ -247,7 +253,7 @@ void	imguiBeginPanel(u16 parent_node, PanelSpec spec)
 	uiAppendChild(parent_node, panel_idx);
 
 	// Push to the context stack so imgui_text knows who its parent is
-	g_ui_ctx.imgui_parent_stack[g_ui_ctx.imgui_stack_count++] = panel_idx;
+	imguiSetActivePanel(panel_idx);
 }
 
 void	imguiEndPanel(void)
@@ -608,4 +614,103 @@ TextRenderInfo	uiBuildRenderData(u16 rm_root_node, Allocator *frame_arena)
 	traverseForRender(rm_root_node, info.render_instances, &info.instance_count);
 	info.upload_size = info.instance_count * sizeof(UiRenderInstance);
 	return (info);
+}
+
+// --- OTHER STUFF ---
+void	openConsole(u32 screen_w, u32 screen_h, Font *font, u8 console_font_size, Allocator *frame_arena)
+{
+
+	static f32	scroll_y;
+
+	if (scroll_y < 0.0f) scroll_y = 0.0f;
+
+	// --- MAIN PANEL --- //
+	const u32	third_height = screen_h / 3;
+	const u16	main_panel_idx = imguiAllocateComponent();
+	imguiSetActivePanel(main_panel_idx);
+	uiAppendChild(g_ui_ctx.imgui_root, main_panel_idx);
+	UiComponent	*panel_component = uiGet(main_panel_idx);
+	*panel_component = (UiComponent){
+		.primitive_type = UI_PRIMITIVE_RECTANGLE,
+		.layout_type = UI_LAYOUT_VERTICAL,
+		.anchor = UI_ANCHOR_TOP_LEFT,
+		.size_mode = {UI_SIZE_FIXED, UI_SIZE_FIXED},
+		.offset = {},
+		.fixed_size = {screen_w, third_height},
+		.outer_color = {},
+		.inner_color = {0.5f, 0.5f, 0.5f, 1.0f},
+		.border_width = 0,
+		.corner_radius = 0,
+		.padding = 0,
+	};
+
+	TextSpec	text_console_spec = {
+		.anchor = UI_ANCHOR_TOP_LEFT,
+		.font = font,
+		.font_size = console_font_size,
+		.text_color = {1, 1, 1, 1},
+		.nudge_x = 0,
+		.nudge_y = -scroll_y,
+	};
+	imguiText(text_console_spec, frame_arena, "%S", consoleBackend());
+
+	// --- TEXT PANEL --- //
+	const u32	text_box_w = screen_w;
+	const u16	text_panel_idx = imguiAllocateComponent();
+	imguiSetActivePanel(text_panel_idx);
+	uiAppendChild(main_panel_idx, text_panel_idx);
+	UiComponent	*text_component = uiGet(text_panel_idx);
+	*text_component = (UiComponent){
+		.primitive_type = UI_PRIMITIVE_RECTANGLE,
+		.layout_type = UI_LAYOUT_VERTICAL,
+		.anchor = UI_ANCHOR_BOTTOM_LEFT,
+		.size_mode = {UI_SIZE_FIXED, UI_SIZE_AUTO},
+		.offset = {},
+		.fixed_size = {text_box_w, 0},
+		.outer_color = {1, 1, 1, 1},
+		.inner_color = {0.5f, 0.5f, 0.5f, 1.0f},
+		.border_width = 2.0f,
+		.corner_radius = 0,
+		.padding = 10.0f,
+	};
+
+	TextSpec	text_input_spec = {
+		.anchor = UI_ANCHOR_BOTTOM_LEFT,
+		.font = font,
+		.font_size = console_font_size,
+		.text_color = {255, 255, 255, 255},
+		.nudge_x = 0,
+		.nudge_y = 0,
+	};
+	imguiText(text_input_spec, frame_arena, ":%S", consoleBackend());
+
+	imguiEndPanel();
+	imguiEndPanel();
+}
+
+void	showFps(u16 imgui_root, Font *font, double fps, Allocator *frame_arena)
+{
+	const PanelSpec spec = {
+		.primitive_type = UI_PRIMITIVE_RECTANGLE,
+		.layout_type = UI_LAYOUT_VERTICAL,
+		.anchor = UI_ANCHOR_TOP_RIGHT,
+		.size_mode = {UI_SIZE_AUTO, UI_SIZE_AUTO},
+		.offset = {},
+		.fixed_size = {}, // Not needed since auto sizing
+		.outer_color = {},
+		.inner_color = {},
+		.border_width = 0.0f,
+		.corner_radius = 0.0f,
+		.padding = 0.0f,
+	};
+	const TextSpec tspec = {
+		.anchor = UI_ANCHOR_CENTER,
+		.font = font,
+		.font_size = 12,
+		.text_color = {255, 255, 255, 255},
+		.nudge_x = 1.0f,
+	};
+	imguiBeginPanel(imgui_root, spec);
+	imguiText(tspec, frame_arena, "FPS: %.1f", fps);
+	imguiEndPanel();
 }
