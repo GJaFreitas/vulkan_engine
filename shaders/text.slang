@@ -10,15 +10,16 @@ struct PushConstants
 
 struct VSInput
 {
-    float2 pos            : POSITION;
-    float2 size           : SIZE;
-    float2 uv_offset       : UVOFFSET;
-    float2 uv_size         : UVSIZE;
-    float4 color          : COLOR;
-    float4 inner_color    : COLOR1;
-    uint   primitive_type : PRIMITIVE_TYPE;
-    float  corner_radius  : CORNER_RADIUS;
-    float  stroke_width   : STROKE_WIDTH;
+    float2 pos			: POSITION;
+    float2 size			: SIZE;
+    float2 uv_offset		: UVOFFSET;
+    float2 uv_size		: UVSIZE;
+    float4 color		: COLOR;
+    float4 inner_color		: COLOR1;
+    uint   primitive_type	: PRIMITIVE_TYPE;
+    float  corner_radius	: CORNER_RADIUS;
+    float  stroke_width		: STROKE_WIDTH;
+    float4 clip_rect		: CLIP;
 };
 
 struct VSOutput
@@ -29,9 +30,10 @@ struct VSOutput
     float2 half_size      : EXTRA0;
     float4 color          : COLOR0;
     float4 inner_color    : COLOR1;
-    nointerpolation uint  primitive_type : EXTRA1;
-    nointerpolation float corner_radius  : EXTRA2;
-    nointerpolation float stroke_width   : EXTRA3;
+    nointerpolation uint  primitive_type	: EXTRA1;
+    nointerpolation float corner_radius	: EXTRA2;
+    nointerpolation float stroke_width	: EXTRA3;
+    nointerpolation float4 clip_rect	: EXTRA4;
 };
 
 [shader("vertex")]
@@ -82,6 +84,13 @@ float sdEllipse(float2 p, float2 r)
 [shader("fragment")]
 float4 fragMain(VSOutput input) : SV_Target
 {
+    if (input.sv_position.x < input.clip_rect.x || 
+        input.sv_position.y < input.clip_rect.y || 
+        input.sv_position.x > input.clip_rect.z || 
+        input.sv_position.y > input.clip_rect.w) 
+    {
+        discard;
+    }
     // --- PRIMITIVE 0: MSDF / MTSDF TEXT ---
     if (input.primitive_type == 0u)
     {

@@ -368,6 +368,7 @@ static void pushTextInstances(UiComponent *node, UiRenderInstance *instances, u3
 				u32 idx = *count;
 				UiRenderInstance *inst = &instances[idx];
 
+				glm_vec4_copy(node->clip_rect, inst->clip_rect);
 				inst->primitive_type = UI_PRIMITIVE_TEXT_GLYPH;
 				inst->stroke_width   = 0.0f;
 				inst->corner_radius  = 0.0f;
@@ -525,7 +526,8 @@ void uiCalculateSizes(u16 node_idx, Allocator *arena)
 
 void	uiCalculatePositions(u16 node_idx, f32 parent_x, f32 parent_y, f32 parent_w, f32 parent_h)
 {
-	UiComponent *node = uiGet(node_idx);
+	UiComponent	*node = uiGet(node_idx);
+	UiComponent	*parent_node = uiGet(node->parent);
 
 	// 1. Root nodes take screen dimensions. Everyone else uses their computed size.
 	if (node_idx == g_ui_ctx.rmgui_root || node_idx == g_ui_ctx.imgui_root) {
@@ -533,6 +535,8 @@ void	uiCalculatePositions(u16 node_idx, f32 parent_x, f32 parent_y, f32 parent_w
 		node->final_screen_pos[Y] = parent_y;
 		node->final_screen_size[X] = parent_w;
 		node->final_screen_size[Y] = parent_h;
+		node->clip_rect[0] = 0.0f; node->clip_rect[1] = 0.0f;
+		node->clip_rect[2] = parent_w; node->clip_rect[3] = parent_h;
 	} else {
 		// Map the anchor enum to a 0.0 -> 1.0 multiplier
 		f32 anchor_x = 0.0f; f32 anchor_y = 0.0f;
@@ -550,6 +554,10 @@ void	uiCalculatePositions(u16 node_idx, f32 parent_x, f32 parent_y, f32 parent_w
 
 		node->final_screen_pos[X] = parent_x + (parent_w * anchor_x) + node->offset[X] - (node->final_screen_size[X] * anchor_x);
 		node->final_screen_pos[Y] = parent_y + (parent_h * anchor_y) + node->offset[Y] - (node->final_screen_size[Y] * anchor_y);
+		node->clip_rect[0] = MAX(parent_node->clip_rect[0], parent_node->final_screen_pos[X]);
+		node->clip_rect[1] = MAX(parent_node->clip_rect[1], parent_node->final_screen_pos[Y]);
+		node->clip_rect[2] = MIN(parent_node->clip_rect[2], parent_node->final_screen_pos[X] + parent_node->final_screen_size[X]);
+		node->clip_rect[3] = MIN(parent_node->clip_rect[3], parent_node->final_screen_pos[Y] + parent_node->final_screen_size[Y]);
 	}
 
 	// 2. Cascade down to children
@@ -608,6 +616,7 @@ TextRenderInfo	uiBuildRenderData(u16 rm_root_node, Allocator *frame_arena)
 	u64 max_bytes = MAX_COMPONENTS * sizeof(UiRenderInstance);
 
 	info.render_instances = (UiRenderInstance *)frame_arena->fp_allocation(frame_arena, max_bytes, DEFAULT_ALIGN);
+	memset(info.render_instances, 0, max_bytes);
 	info.instance_count = 0;
 	info.px_range = 8.0;
 
@@ -619,7 +628,6 @@ TextRenderInfo	uiBuildRenderData(u16 rm_root_node, Allocator *frame_arena)
 // --- OTHER STUFF ---
 void	openConsole(u32 screen_w, u32 screen_h, Font *font, u8 console_font_size, Allocator *frame_arena)
 {
-
 	static f32	scroll_y;
 
 	if (scroll_y < 0.0f) scroll_y = 0.0f;
@@ -652,7 +660,7 @@ void	openConsole(u32 screen_w, u32 screen_h, Font *font, u8 console_font_size, A
 		.nudge_x = 0,
 		.nudge_y = -scroll_y,
 	};
-	imguiText(text_console_spec, frame_arena, "%S", consoleBackend());
+	imguiText(text_console_spec, frame_arena, "%S", consoleHist());
 
 	// --- TEXT PANEL --- //
 	const u32	text_box_w = screen_w;
@@ -682,7 +690,7 @@ void	openConsole(u32 screen_w, u32 screen_h, Font *font, u8 console_font_size, A
 		.nudge_x = 0,
 		.nudge_y = 0,
 	};
-	imguiText(text_input_spec, frame_arena, ":%S", consoleBackend());
+	imguiText(text_input_spec, frame_arena, "> %S", consoleInput());
 
 	imguiEndPanel();
 	imguiEndPanel();

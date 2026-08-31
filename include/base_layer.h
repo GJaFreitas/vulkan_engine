@@ -25,6 +25,9 @@
 #define Z 2
 #define W 3
 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
 String	readFile(String filename);
 u8	*readFileData(String filename, u64 *file_size);
 void	destroyFile(String file);

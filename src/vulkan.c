@@ -824,6 +824,7 @@ static void	createTEXTPipeline(GraphicsContext *ctx)
 		{6, 0, VK_FORMAT_R32_UINT, offsetof(UiRenderInstance, primitive_type)},
 		{7, 0, VK_FORMAT_R32_SFLOAT, offsetof(UiRenderInstance, corner_radius)},
 		{8, 0, VK_FORMAT_R32_SFLOAT, offsetof(UiRenderInstance, stroke_width)},
+		{9, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(UiRenderInstance, clip_rect)},
 	};
 
 	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {

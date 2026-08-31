@@ -370,6 +370,7 @@ typedef struct UiRenderInstance
 	u32	primitive_type;
 	f32	corner_radius;
 	f32	stroke_width;		// 0.0 = Solid Fill, >0.0 = Outline thickness (pixels)
+	vec4	clip_rect;
 }	UiRenderInstance;
 
 typedef struct TextRenderInfo

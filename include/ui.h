@@ -6,6 +6,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include "stb_sprintf.h"
+#include "console.h"
 
 #define RMGUI_MAX_COMPONENTS		8192
 #define IMGUI_START_INDEX		8192
@@ -91,6 +92,7 @@ typedef struct UiComponent
 	// --- COMPUTED RESULT ---
 	vec2		final_screen_pos;  // Calculated during the layout pass
 	vec2		final_screen_size;
+	f32		clip_rect[4];
 
 	// --- TEXT ---
 	Font		*font;

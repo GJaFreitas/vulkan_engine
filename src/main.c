@@ -3,11 +3,7 @@
 #include "world.h"
 #include "vars.h"
 #include "fonts.h"
-
-// static void getCameraPos(Camera *camera)
-// {
-// 	print("Pos: %.2f,%.2f,%.2f\n", camera->position[0], camera->position[1], camera->position[2]);
-// }
+#include "console.h"
 
 static inline void	getMsAndFps(double *ms, double *fps, double *fps_avg, u64 *last_time, u64 *frames) {
 	static u32	frame_start = 2000;
@@ -76,7 +72,7 @@ void	createRandomEntity(World world)
 	initializeRandomVec(e->pos, 3, -1, 1);
 }
 
-static inline void	beginFrame(World world, bool *running) {
+static inline void	beginFrame(World world, bool *running, bool show_console) {
 	SDL_Event	event = {0};
 	inputBeginFrame();
 	do_callbacks();
@@ -84,18 +80,30 @@ static inline void	beginFrame(World world, bool *running) {
 	{
 		if (event.type == SDL_EVENT_QUIT) {
 			*running = false;
-			break ;
 		} else if (event.key.key == SDLK_ESCAPE) {
 			*running = false;
-			break ;
 		} else if (event.key.key == SDLK_M) {
 			createRandomEntity(world);
-			break ;
 		} else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
 			world.graphics_ctx->window_width = event.window.data1;
 			world.graphics_ctx->window_height = event.window.data2;
-			break ;
 		}
+		if (show_console) {
+			if (event.type == SDL_EVENT_TEXT_INPUT) {
+				u64	new_text_len = strlen(event.text.text);
+				consoleInputInsert(event.text.text, new_text_len);
+			} else if (event.type == SDL_EVENT_KEY_DOWN) {
+				switch (event.key.scancode) {
+					case SDL_SCANCODE_BACKSPACE: consoleBackspace(); break;
+					case SDL_SCANCODE_RETURN:
+					case SDL_SCANCODE_KP_ENTER: consoleEnter(); break;
+					case SDL_SCANCODE_LEFT: consoleLeftArrow(); break;
+					case SDL_SCANCODE_RIGHT: consoleRightArrow(); break;
+					default: break;
+				}
+			}
+		}
+		// TODO: Change all this code over to input.c
 		inputProccessEvent(&event);
 	}
 }
@@ -132,7 +140,7 @@ int	loop(World world)
 		if (world.dt_ms <= 16.6) {
 			usleep(16.6 - world.dt_ms);
 		}
-		beginFrame(world, &running);
+		beginFrame(world, &running, show_console);
 		if (show_console) {
 			openConsole(screen_w, screen_h, &world.fonts.fonts[0], 12, frame_arena);
 		}
@@ -154,7 +162,13 @@ int	loop(World world)
 			show_debug_hud = !show_debug_hud;
 		}
 		if (key_pressed(g_keybinds[ACTION_CONSOLE_TOGGLE])) {
-			show_console = !show_console;
+			if (show_console) {	// Console is enabled
+				show_console = 0;
+				SDL_StopTextInput(world.graphics_ctx->window);
+			} else {		// Console is disabled
+				show_console = 1;
+				SDL_StartTextInput(world.graphics_ctx->window);
+			}
 		}
 
 		// --- End of frame ---
