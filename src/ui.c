@@ -706,7 +706,7 @@ void	openConsole(u32 screen_w, u32 screen_h, Font *font, u8 console_font_size, A
 		.anchor = UI_ANCHOR_BOTTOM_LEFT,
 		.font = font,
 		.font_size = console_font_size,
-		.text_color = {255, 255, 255, 255},
+		.text_color = {1, 1, 1, 1},
 		.nudge_x = 0,
 		.nudge_y = 0,
 	};
@@ -735,7 +735,7 @@ void	showFps(u16 imgui_root, Font *font, double fps, Allocator *frame_arena)
 		.anchor = UI_ANCHOR_CENTER,
 		.font = font,
 		.font_size = 12,
-		.text_color = {255, 255, 255, 255},
+		.text_color = {1, 1, 1, 1},
 		.nudge_x = 1.0f,
 	};
 	imguiBeginPanel(imgui_root, spec);
