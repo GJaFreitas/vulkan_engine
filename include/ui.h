@@ -160,7 +160,7 @@ void	imguiText(TextSpec spec, Allocator *frame_arena, const char *fmt, ...);
 u16	setShape(enum ComponentShapeType shape);
 u16	setShapeFill(enum ComponentShapeFillType fill);
 
-TextRenderInfo	uiBuildRenderData(u16 rm_root_node, Allocator *frame_arena);
+UiRenderInfo	buildUiRenderInfo(u16 rm_root_node, Allocator *frame_arena);
 void		uiCalculateLayout(f32 screen_w, f32 screen_h, Allocator *frame_arena);
 
 void	openConsole(u32 screen_w, u32 screen_h, Font *font, u8 console_font_size, Allocator *frame_arena);

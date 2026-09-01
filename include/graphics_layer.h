@@ -373,14 +373,14 @@ typedef struct UiRenderInstance
 	vec4	clip_rect;
 }	UiRenderInstance;
 
-typedef struct TextRenderInfo
+typedef struct UiRenderInfo
 {
 	vec2			atlas_size;
 	f32			px_range;
 	u64			upload_size;
 	u32			instance_count;
 	UiRenderInstance	*render_instances;
-}	TextRenderInfo;
+}	UiRenderInfo;
 
 enum CameraMovement {
 	FORWARD,
@@ -417,7 +417,7 @@ typedef struct Camera
 void	immediate_submit(GraphicsContext *ctx, void (*fn)(VkCommandBuffer cmd, void *data), void *data);
 void	startGraphics(GraphicsContext *ctx);
 void	endGraphics(GraphicsContext *ctx);
-void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, TextRenderInfo text_info);
+void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, UiRenderInfo text_info);
 void	beginSingleTimeCommand(GraphicsContext *ctx, VkCommandBuffer *cmd_buffer);
 void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, u32 data_size, void *data_for_upload, ImageObject *gpu_image);
 

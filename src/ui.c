@@ -606,10 +606,9 @@ void	uiCalculateLayout(f32 screen_w, f32 screen_h, Allocator *frame_arena)
 	uiCalculatePositions(g_ui_ctx.rmgui_root, 0, 0, screen_w, screen_h);
 }
 
-// TODO: Remove extra u16
-TextRenderInfo	uiBuildRenderData(u16 rm_root_node, Allocator *frame_arena)
+UiRenderInfo	buildUiRenderInfo(u16 rm_root_node, Allocator *frame_arena)
 {
-	TextRenderInfo	info = {};
+	UiRenderInfo	info = {};
 
 	// Pessimistic allocation: MAX_COMPONENTS is the maximum possible instances
 	// Since it's a frame arena, this over-allocation is instantaneous and free.

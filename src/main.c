@@ -126,8 +126,8 @@ int	loop(World world)
 	double	fps = 0;
 	double	fps_avg = 0;
 
-	EntityRenderInfo	entity_info;
-	TextRenderInfo		text_info;
+	EntityRenderInfo	entity_info = {};
+	UiRenderInfo		ui_info = {};
 
 	bool	show_debug_hud = true;
 	bool	show_console = false;
@@ -141,18 +141,21 @@ int	loop(World world)
 			usleep(16.6 - world.dt_ms);
 		}
 		beginFrame(world, &running, show_console);
+
 		if (show_console) {
-			openConsole(screen_w, screen_h, &world.fonts.fonts[0], 12, frame_arena);
+			openConsole(screen_w, screen_h, font, 12, frame_arena);
 		}
 		if (show_debug_hud) {
-			showFps(world.ui->imgui_root, &world.fonts.fonts[0], fps, frame_arena);
+			showFps(world.ui->imgui_root, font, fps, frame_arena);
 		}
 
 		// --- RENDERING ---
-		entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
+		if (getModelCountFromCache())
+			entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
 		uiCalculateLayout(world.graphics_ctx->window_width, world.graphics_ctx->window_height, &world.frame_allocator);
-		text_info = uiBuildRenderData(world.ui->rmgui_root, &world.frame_allocator);
-		render(world.graphics_ctx, &world.player->camera, entity_info, text_info);
+		ui_info = buildUiRenderInfo(world.ui->rmgui_root, &world.frame_allocator);
+
+		render(world.graphics_ctx, &world.player->camera, entity_info, ui_info);
 
 		// --- UPDATES ---
 		updatePlayer(world.player, world.dt_ms, world.graphics_ctx->window);

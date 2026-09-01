@@ -1476,7 +1476,7 @@ static void	updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 	memcpy(resource->uniform_buffer.mapped, &ubo, sizeof(UniformBufferObject));
 }
 
-void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, u32 frame_idx, TextRenderInfo info)
+void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, u32 frame_idx, UiRenderInfo info)
 {
 	const VkCommandBuffer	cmd = resource->cmd_buf;
 	const PipelineObject	pipeline = ctx->pipeline_text;
@@ -1582,7 +1582,7 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 	}
 }
 
-void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, TextRenderInfo text_info)
+void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, UiRenderInfo text_info)
 {
 	if (ctx->swapchain_require_recreate)
 	{
