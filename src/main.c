@@ -97,7 +97,7 @@ static inline void	beginFrame(World world, bool *running, bool show_console) {
 				switch (event.key.scancode) {
 					case SDL_SCANCODE_BACKSPACE: consoleBackspace(); break;
 					case SDL_SCANCODE_RETURN:
-					case SDL_SCANCODE_KP_ENTER: consoleEnter(); break;
+					case SDL_SCANCODE_KP_ENTER: consoleEnter(&world.frame_allocator); break;
 					case SDL_SCANCODE_LEFT: consoleLeftArrow(); break;
 					case SDL_SCANCODE_RIGHT: consoleRightArrow(); break;
 					default: break;

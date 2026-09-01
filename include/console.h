@@ -14,10 +14,11 @@ typedef struct ConsoleHistory
 
 void	consoleInputInsert(const char *text, u64 len);
 void	consoleBackspace(void);
-void	consoleEnter(void);
+void	consoleEnter(Allocator *frame_allocator);
 void	consoleLeftArrow(void);
 void	consoleRightArrow(void);
 
 
 ConsoleCommand	*consoleHist(u16 *start);
 String	consoleInput(void);
+void	consoleAppend(String text);
