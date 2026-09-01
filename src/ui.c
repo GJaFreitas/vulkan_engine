@@ -639,7 +639,7 @@ void	openConsole(u32 screen_w, u32 screen_h, Font *font, u8 console_font_size, A
 	UiComponent	*panel_component = uiGet(main_panel_idx);
 	*panel_component = (UiComponent){
 		.primitive_type = UI_PRIMITIVE_RECTANGLE,
-		.layout_type = UI_LAYOUT_VERTICAL,
+		.layout_type = UI_LAYOUT_ABSOLUTE,
 		.anchor = UI_ANCHOR_TOP_LEFT,
 		.size_mode = {UI_SIZE_FIXED, UI_SIZE_FIXED},
 		.offset = {},
@@ -651,15 +651,36 @@ void	openConsole(u32 screen_w, u32 screen_h, Font *font, u8 console_font_size, A
 		.padding = 0,
 	};
 
-	TextSpec	text_console_spec = {
+	// --- LOG PANEL --- //
+	const u16 log_panel_idx = imguiAllocateComponent();
+	uiAppendChild(main_panel_idx, log_panel_idx);
+	imguiSetActivePanel(log_panel_idx);
+	UiComponent *log_panel = uiGet(log_panel_idx);
+	*log_panel = (UiComponent){
+		.primitive_type = UI_PRIMITIVE_RECTANGLE,
+		.layout_type = UI_LAYOUT_VERTICAL,
 		.anchor = UI_ANCHOR_TOP_LEFT,
-		.font = font,
-		.font_size = console_font_size,
-		.text_color = {1, 1, 1, 1},
-		.nudge_x = 0,
-		.nudge_y = -scroll_y,
+		.size_mode = {UI_SIZE_AUTO, UI_SIZE_AUTO},
 	};
-	imguiText(text_console_spec, frame_arena, "%S", consoleHist());
+
+	u16		current_history_idx;
+	ConsoleCommand	*commands = consoleHist(&current_history_idx);
+	for (u16 i = 0; i < MAX_HISTORY; i++) {
+		u16 idx = (current_history_idx + i) % MAX_HISTORY;
+
+		if (commands[idx].command_len > 0) {
+			TextSpec log_spec = {
+				.anchor = UI_ANCHOR_TOP_LEFT,
+				.font = font,
+				.font_size = console_font_size,
+				.text_color = {0.8f, 0.8f, 0.8f, 1.0f},
+				.nudge_x = 0,
+				.nudge_y = -scroll_y,
+			};
+
+			imguiText(log_spec, frame_arena, "%s", commands[idx].command);
+		}
+	}
 
 	// --- TEXT PANEL --- //
 	const u32	text_box_w = screen_w;
@@ -675,7 +696,7 @@ void	openConsole(u32 screen_w, u32 screen_h, Font *font, u8 console_font_size, A
 		.offset = {},
 		.fixed_size = {text_box_w, 0},
 		.outer_color = {1, 1, 1, 1},
-		.inner_color = {0.5f, 0.5f, 0.5f, 1.0f},
+		.inner_color = {0.4f, 0.4f, 0.4f, 1.0f},
 		.border_width = 2.0f,
 		.corner_radius = 0,
 		.padding = 10.0f,

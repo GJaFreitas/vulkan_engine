@@ -76,6 +76,7 @@ static inline void	beginFrame(World world, bool *running, bool show_console) {
 	SDL_Event	event = {0};
 	inputBeginFrame();
 	do_callbacks();
+	// TODO: Change all this code over to input.c
 	while (SDL_PollEvent(&event))
 	{
 		if (event.type == SDL_EVENT_QUIT) {
@@ -103,7 +104,6 @@ static inline void	beginFrame(World world, bool *running, bool show_console) {
 				}
 			}
 		}
-		// TODO: Change all this code over to input.c
 		inputProccessEvent(&event);
 	}
 }
@@ -161,6 +161,8 @@ int	loop(World world)
 		updatePlayer(world.player, world.dt_ms, world.graphics_ctx->window);
 		updateCamera(&world.player->camera, world.graphics_ctx->window);
 		updateEntities(world.entities, world.dt_ms);
+
+		// TODO: Move this to input.c
 		if (key_pressed(g_keybinds[ACTION_DEBUG_TOGGLE])) {
 			show_debug_hud = !show_debug_hud;
 		}

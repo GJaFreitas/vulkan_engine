@@ -2,12 +2,6 @@
 
 // TODO: When disabling the console the '\' character stays in the input buffer
 
-#define MAX_HISTORY	200
-typedef struct ConsoleHistory
-{
-	u8	command[CONSOLE_MAX_INPUT_LEN];
-	u16	command_len;
-}	ConsoleCommand;
 ConsoleCommand	commands[MAX_HISTORY];
 u16		current_history_idx = 0;
 
@@ -60,10 +54,10 @@ void	consoleInputInsert(const char *text, u64 len)
 	}
 }
 
-String	consoleHist(void)
+ConsoleCommand	*consoleHist(u16 *start)
 {
-	String	s = {commands[current_history_idx + 1].command, commands[current_history_idx + 1].command_len};
-	return s;
+	*start = current_history_idx;
+	return commands;
 }
 
 String	consoleInput(void)
