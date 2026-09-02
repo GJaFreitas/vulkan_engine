@@ -1,4 +1,6 @@
 #include "console.h"
+#include "stb_sprintf.h"
+#include "world.h"
 
 // TODO: When disabling the console the '\' character stays in the input buffer
 
@@ -16,13 +18,17 @@ static InputBuffer	input = {{0}, 0, 0};
 
 // --- COMMAND DISPATCH --- //
 
-static void	_placeholder(int argc, String *argv)
+static void	_toggle(int argc, String *argv)
 {
+	(void)argc;
 	(void)argv;
-	print("Argument count: %i\n", argc);
-	u8	yippe[] = "This is placeholder text";
-	String	append = {yippe, sizeofString(yippe)};
-	consoleAppend(append);
+	if (argc != 2) {
+		consoleAppend("Usage: toggle [variable]");
+	}
+	if (strEq(argv[1], STRING_LIT("fps")))
+		gameStateToggle(&game_state, ShowFps);
+	else if (strEq(argv[1], STRING_LIT("grid")))
+		gameStateToggle(&game_state, ShowGrid);
 }
 
 // A standard signature for console commands. 
@@ -40,7 +46,8 @@ typedef struct
 	{(String){(u8 *)(string_name), sizeof(string_name) - 1}, func_ptr, {(u8*)(desc), sizeof(desc)-1}}
 
 static const CCmd g_commands[] = {
-	RegisterCmd("test", _placeholder, "Testing"),
+	RegisterCmd("spawn", spawnCommand, "Spawns an entity"),
+	RegisterCmd("toggle", _toggle, "Toggles fps counter"),
 };
 static const u32 g_cmd_count = sizeof(g_commands) / sizeof(g_commands[0]);
 
@@ -160,8 +167,19 @@ void	consoleInputInsert(const char *text, u64 len)
 	}
 }
 
-void	consoleAppend(String text)
+void	consoleAppend(const char *fmt, ...)
 {
+	va_list	ap;
+	va_start(ap, fmt);
+
+	const u64	buf_size = CONSOLE_MAX_INPUT_LEN;
+	u8		buf[buf_size];
+
+	u64	written = stbsp_vsnprintf((char *)buf, buf_size, fmt, ap);
+	va_end(ap);
+
+	String	text = {buf, written};
+
 	ConsoleCommand	new_command;
 	if (text.count >= CONSOLE_MAX_INPUT_LEN) text.count = CONSOLE_MAX_INPUT_LEN - 1;
 	memcpy(new_command.command, text.data, text.count);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "base_layer.h"
+#include <stdarg.h>
 
 #define CONSOLE_MAX_INPUT_LEN	256
 
@@ -21,4 +22,4 @@ void	consoleRightArrow(void);
 
 ConsoleCommand	*consoleHist(u16 *start);
 String	consoleInput(void);
-void	consoleAppend(String text);
+void	consoleAppend(const char *fmt, ...);

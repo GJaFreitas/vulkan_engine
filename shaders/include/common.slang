@@ -9,9 +9,10 @@ public struct UniformBufferObject
     public float4x4 inv_view;
     public float4x4 inv_proj;
 
-    public float4 lightPositions[4];
-    public float4 lightColors[4];
-    public float4 camPos;
+    public float4 sun_direction;
+    public float4 sun_color;
+
+    public float4 cam_pos;
     public float exposure;
     public float gamma;
     public float prefilteredCubeMipLevels;

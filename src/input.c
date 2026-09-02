@@ -1,5 +1,7 @@
 #include "world.h"
 
+// TODO: When a main menu is added remember to change this
+EngineMode	g_engine_mode = ENGINE_MODE_GAME;
 InputState	g_input_state;
 SDL_Scancode	g_keybinds[ACTION_MAX_ENUM] = {
 	[ ACTION_MOVE_FORWARD ] = SDL_SCANCODE_W,

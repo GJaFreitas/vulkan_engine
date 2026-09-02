@@ -28,6 +28,12 @@ typedef struct TextPushConstants
 	float	px_range;
 }	TextPushConstants;
 
+typedef struct
+{
+	vec4	position;
+	vec4	color;
+}	PointLight;
+
 typedef struct UniformBufferObject
 {
 	mat4	view;
@@ -35,8 +41,9 @@ typedef struct UniformBufferObject
 	mat4	inv_view;
 	mat4	inv_proj;
 
-	vec4	light_positions[4];		// Pos and radius
-	vec4	light_colors[4];		// Color and intensity
+	vec4	sun_direction;
+	vec4	sun_color;
+
 	vec4	cam_pos;			// For view dependent effects
 	float	exposure;			// for HDR rendering
 	float	gamma;				// gamma correction
@@ -107,7 +114,8 @@ typedef struct Node
 	// TODO: I dont know if this should stay
 	String	name;
 
-	Mesh	mesh;
+	Mesh	*meshes;
+	u32	mesh_count;
 	u32	index;
 
 	float	rotation[4];     /* Default: {0,0,0,1} */

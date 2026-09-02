@@ -1,4 +1,5 @@
 #include "graphics_layer.h"
+#include "console.h"
 #include "stb_sprintf.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -495,45 +496,43 @@ static void	gltfBuildSceneGraph(Model *model, tg3_model gltf_model)
 		if (gltf_node.children_count != 0)
 			node.children = model->arena.fp_allocation(&model->arena, sizeof(u32) * gltf_node.children_count, DEFAULT_ALIGN);
 
-		vec3	translation;
-		vec3	scale;
-		vec4	rotation;
-		rotation[0] = gltf_node.rotation[0];
-		rotation[1] = gltf_node.rotation[1];
-		rotation[2] = gltf_node.rotation[2];
-		rotation[3] = gltf_node.rotation[3];
-		scale[0] = gltf_node.scale[0];
-		scale[1] = gltf_node.scale[1];
-		scale[2] = gltf_node.scale[2];
-		translation[0] = gltf_node.translation[0];
-		translation[1] = gltf_node.translation[1];
-		translation[2] = gltf_node.translation[2];
+		if (gltf_node.has_matrix) {
+			memcpy(node.local_transform, gltf_node.matrix, sizeof(mat4));
+		} else {
 
-		//  »speed
-		//  TODO: Benchmark
-		// // Start with identity
-		// glm_mat4_identity(node.local_transform);
-		//
-		// // Apply translation
-		// glm_translate(node.local_transform, translation);
-		//
-		// // Apply rotation (quaternion to matrix)
-		// mat4 rot_mat;
-		// glm_quat_mat4(rotation, rot_mat);
-		// glm_mul(node.local_transform, rot_mat, node.local_transform);
-		//
-		// // Apply scale
-		// glm_scale(node.local_transform, scale);
+			vec3	translation;
+			vec3	scale;
+			vec4	rotation;
+			rotation[0] = gltf_node.rotation[0];
+			rotation[1] = gltf_node.rotation[1];
+			rotation[2] = gltf_node.rotation[2];
+			rotation[3] = gltf_node.rotation[3];
+			scale[0] = gltf_node.scale[0];
+			scale[1] = gltf_node.scale[1];
+			scale[2] = gltf_node.scale[2];
+			translation[0] = gltf_node.translation[0];
+			translation[1] = gltf_node.translation[1];
+			translation[2] = gltf_node.translation[2];
 
-		// -----------------
-		glm_quat_mat4(rotation, node.local_transform);
+			// If scale is 0 (undefined in glTF), default to 1.0
+			if (scale[0] == 0.0f && scale[1] == 0.0f && scale[2] == 0.0f) {
+				scale[0] = 1.0f; scale[1] = 1.0f; scale[2] = 1.0f;
+			}
+			// If rotation is 0 (undefined in glTF), default to Identity Quaternion
+			if (rotation[0] == 0.0f && rotation[1] == 0.0f && rotation[2] == 0.0f && rotation[3] == 0.0f) {
+				rotation[3] = 1.0f; // w = 1.0
+			}
 
-		glm_vec4_scale(node.local_transform[0], scale[0], node.local_transform[0]);
-		glm_vec4_scale(node.local_transform[1], scale[1], node.local_transform[1]);
-		glm_vec4_scale(node.local_transform[2], scale[2], node.local_transform[2]);
+			glm_quat_mat4(rotation, node.local_transform);
 
-		glm_vec3_copy(translation, node.local_transform[3]);
-		node.local_transform[3][3] = 1.0f;
+			glm_vec4_scale(node.local_transform[0], scale[0], node.local_transform[0]);
+			glm_vec4_scale(node.local_transform[1], scale[1], node.local_transform[1]);
+			glm_vec4_scale(node.local_transform[2], scale[2], node.local_transform[2]);
+
+			glm_vec3_copy(translation, node.local_transform[3]);
+			node.local_transform[3][3] = 1.0f;
+
+		}
 
 		model->linear_nodes[i] = node;
 	}
@@ -552,19 +551,6 @@ static void	gltfBuildSceneGraph(Model *model, tg3_model gltf_model)
 	for (u32 i = 0; i < model->node_count; i++) {
 		computeWorldTransformRecursive(model->linear_nodes, i);
 	}
-
-
-	for (u32 i = 0; i < model->node_count; i++) {
-		Node *n = &model->linear_nodes[i];
-		print("Node[%u] parent=%d\n", i, n->parent);
-		print("  local_transform:\n");
-		for (int r = 0; r < 4; r++)
-			print("    %.3f %.3f %.3f %.3f\n", n->local_transform[r][0], n->local_transform[r][1], n->local_transform[r][2], n->local_transform[r][3]);
-		print("  world_transform:\n");
-		for (int r = 0; r < 4; r++)
-			print("    %.3f %.3f %.3f %.3f\n", n->world_transform[r][0], n->world_transform[r][1], n->world_transform[r][2], n->world_transform[r][3]);
-	}
-
 }
 
 static inline void	calculate_tangent_triangle(Vertex v0, Vertex v1, Vertex v2, vec3 *tangent, vec3 *bitangent)
@@ -607,6 +593,8 @@ static void	gltfSetMeshData(Model *model, tg3_model gltf_model)
 
 		if (gltf_node.mesh >= 0) {
 			const tg3_mesh	gltf_mesh = gltf_model.meshes[gltf_node.mesh];
+			model->linear_nodes[n].mesh_count = gltf_mesh.primitives_count;
+			model->linear_nodes[n].meshes = model->arena.fp_allocation(&model->arena, sizeof(Mesh) * gltf_mesh.primitives_count, DEFAULT_ALIGN);
 
 			for (u32 p = 0; p < gltf_mesh.primitives_count; p++) {
 				const tg3_primitive	primitive = gltf_mesh.primitives[p];
@@ -740,7 +728,7 @@ static void	gltfSetMeshData(Model *model, tg3_model gltf_model)
 					mesh.vertices[i2] = v2;
 				}
 
-				model->linear_nodes[n].mesh = mesh;
+				model->linear_nodes[n].meshes[p] = mesh;
 			}
 		}
 	}
@@ -1058,14 +1046,18 @@ void	modelLoad(String filename, GraphicsContext *ctx, Model *model)
 		}
 	}
 
+	consoleAppend("Loading: %S\n", filename);
+
 	gltfLoadTextures(ctx, model, gltf_model);
 	gltfLoadMaterials(model, gltf_model);
 	gltfBuildSceneGraph(model, gltf_model);
 	gltfSetMeshData(model, gltf_model);
 	for (u32 i = 0; i < model->node_count; i++) {
-		Mesh	*mesh = &model->linear_nodes[i].mesh;
+		for (u32 m = 0; m < model->linear_nodes[i].mesh_count; m++) {
+			Mesh	*mesh = &model->linear_nodes[i].meshes[m];
 
-		gltfCreateMeshBuffers(mesh, ctx);
+			gltfCreateMeshBuffers(mesh, ctx);
+		}
 	}
 	gltfLoadAnimations(model, gltf_model);
 	createDescriptorSetsForMaterials(ctx, model->materials, model->material_count);
