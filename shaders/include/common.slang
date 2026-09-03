@@ -15,8 +15,6 @@ public struct UniformBufferObject
     public float4 cam_pos;
     public float exposure;
     public float gamma;
-    public float prefilteredCubeMipLevels;
-    public float scaleIBLAmbient;
 };
 
 [[vk::binding(0, 0)]]
