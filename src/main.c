@@ -7,7 +7,6 @@
 
 void	createPBRPipeline(GraphicsContext *ctx);
 
-
 GameState	game_state = 0;
 
 static inline void	getMsAndFps(double *ms, double *fps, double *fps_avg, u64 *last_time, u64 *frames) {

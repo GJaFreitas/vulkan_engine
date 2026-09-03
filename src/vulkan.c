@@ -598,7 +598,7 @@ static void	createShaders(GraphicsContext *ctx, StringView shader_name, Pipeline
 	pipeline->frag_shader = pipeline->vertex_shader;
 }
 
-static void	createPBRPipeline(GraphicsContext *ctx)
+void	createPBRPipeline(GraphicsContext *ctx)
 {
 	VkPushConstantRange	push_constant_ranges[] = {
 		// Mat push constant
