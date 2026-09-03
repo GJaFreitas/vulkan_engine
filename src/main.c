@@ -5,6 +5,8 @@
 #include "fonts.h"
 #include "console.h"
 
+void	createPBRPipeline(GraphicsContext *ctx);
+
 
 GameState	game_state = 0;
 
@@ -150,6 +152,13 @@ static inline void beginFrame(World *world) {
 					if (event.key.key == SDLK_ESCAPE) {
 						gameStateToggle(&game_state, Running);
 						consumed = true;
+					} else if (event.key.key == SDLK_R) {
+						vkDeviceWaitIdle(world->graphics_ctx->device);
+						if (system("make")) {
+							consoleAppend("Error detected recompiling shaders.");
+						} else {
+							createPBRPipeline(world->graphics_ctx);
+						}
 					}
 				}
 			break;
@@ -201,7 +210,7 @@ int	loop(World world)
 		// --- Begining of frame ---
 		getMsAndFps(&world.dt_ms, &fps, &fps_avg, &last_time, &frames);
 		if (world.dt_ms <= 16.6) {
-			usleep(16.6 - world.dt_ms);
+			usleep((useconds_t)(16.6 - world.dt_ms) * 1000);
 		}
 		beginFrame(&world);
 

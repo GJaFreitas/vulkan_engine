@@ -8,19 +8,6 @@ void	spawnCommand(int argc, String *argv)
 
 void	updateEntities(Vector *entities, double dt)
 {
-	Entity	**entity_array = entities->elems;
-	const u32	entity_count = entities->used;
-
-	for (u32 i = 0; i < entity_count; i++) {
-		Entity	*entity = entity_array[i];
-		versor	delta;
-		vec3	axis = {1, 1, 1}; glm_vec3_normalize(axis);
-		float	angle = entity->spin * dt / 1000.0f;
-
-		glm_quatv(delta, angle, axis);
-		glm_quat_mul(entity->rotation, delta, entity->rotation);
-		glm_quat_normalize(entity->rotation);
-	}
 }
 
 static void modelMatFromPosDir(vec3 position, versor rotation, mat4 dest)
@@ -107,6 +94,10 @@ Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a)
 
 	e->model = modelCacheAcquire(ctx, model_path);
 	e->active = true;
+	e->rotation[X] = 0;
+	e->rotation[Y] = 0;
+	e->rotation[Z] = 0;
+	e->rotation[W] = 1;
 	return e;
 }
 

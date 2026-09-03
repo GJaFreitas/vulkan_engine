@@ -463,21 +463,17 @@ static void	gltfLoadMaterials(Model *model, tg3_model gltf_model)
 	}
 }
 
-/*	Temp code	*/
-
+// »speed
 static void computeWorldTransformRecursive(Node *nodes, u32 index)
 {
 	Node *node = &nodes[index];
 	if (node->parent == -1) {
 		glm_mat4_copy(node->local_transform, node->world_transform);
 	} else {
-		// ensure parent is computed first
 		computeWorldTransformRecursive(nodes, node->parent);
 		glm_mat4_mul(nodes[node->parent].world_transform, node->local_transform, node->world_transform);
 	}
 }
-
-/*	Temp code	*/
 
 static void	gltfBuildSceneGraph(Model *model, tg3_model gltf_model)
 {
@@ -487,6 +483,7 @@ static void	gltfBuildSceneGraph(Model *model, tg3_model gltf_model)
 		const tg3_node	gltf_node = gltf_model.nodes[i];
 
 		Node	node = {};
+		glm_mat4_identity(node.local_transform);
 
 		node.name = tg3_to_String(gltf_model.nodes[i].name);
 		node.index = i;
