@@ -1,6 +1,8 @@
 #include "world.h"
 
 InputState	g_input_state;
+
+// Default keybinds
 SDL_Scancode	g_keybinds[ACTION_MAX_ENUM] = {
 	[ ACTION_MOVE_FORWARD ] = SDL_SCANCODE_W,
 	[ ACTION_MOVE_LEFT ] = SDL_SCANCODE_A,

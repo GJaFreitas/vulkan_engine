@@ -74,8 +74,8 @@ void	createRandomEntity(World world)
 
 static inline void	beginFrame(World world, bool *running, bool show_console) {
 	SDL_Event	event = {0};
-	inputBeginFrame();
 	do_callbacks();
+	inputBeginFrame();
 	// TODO: Change all this code over to input.c
 	while (SDL_PollEvent(&event))
 	{
