@@ -1,20 +1,13 @@
 #include "world.h"
+#include "console.h"
+
+void	spawnCommand(int argc, String *argv)
+{
+	consoleAppend("To be implemented");
+}
 
 void	updateEntities(Vector *entities, double dt)
 {
-	Entity	**entity_array = entities->elems;
-	const u32	entity_count = entities->used;
-
-	for (u32 i = 0; i < entity_count; i++) {
-		Entity	*entity = entity_array[i];
-		versor	delta;
-		vec3	axis = {1, 1, 1}; glm_vec3_normalize(axis);
-		float	angle = entity->spin * dt / 1000.0f;
-
-		glm_quatv(delta, angle, axis);
-		glm_quat_mul(entity->rotation, delta, entity->rotation);
-		glm_quat_normalize(entity->rotation);
-	}
 }
 
 static void modelMatFromPosDir(vec3 position, versor rotation, mat4 dest)
@@ -76,9 +69,9 @@ EntityRenderInfo	buildEntityRenderInfo(Vector *entity_vector, u32 model_count, A
 			cur_model_count++;
 		}
 
-		render_idx++;
 		entity_info.data[render_idx].model_idx = model_idx;
 		modelMatFromPosDir(ent->pos, ent->rotation, entity_info.data[render_idx].instance_data.model_mat);
+		render_idx++;
 	}
 
 	entity_info.model_count = cur_model_count;
@@ -101,15 +94,19 @@ Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a)
 
 	e->model = modelCacheAcquire(ctx, model_path);
 	e->active = true;
+	e->rotation[X] = 0;
+	e->rotation[Y] = 0;
+	e->rotation[Z] = 0;
+	e->rotation[W] = 1;
 	return e;
 }
-
-
 
 void	updatePlayer(Player *p, double dt, SDL_Window *window)
 {
 	Camera	*camera = &p->camera;
 	vec3 move = {0};
+
+	if (g_engine_mode != ENGINE_MODE_GAME) return ;
 
 	if (key_held(g_keybinds[ACTION_MOVE_FORWARD])) {
 		glm_vec3_muladds(camera->front, p->movSpeed * dt, move);
@@ -134,7 +131,7 @@ void	initPlayer(Player *p)
 
 
 	Camera	*camera = &p->camera;
-	glm_vec3_copy((vec3){-0.52f,-0.40f,5.19f},  camera->position);
+	glm_vec3_copy((vec3){0.0f,1.0f,4.0f},  camera->position);
 	glm_vec3_copy((vec3){0.0f, 0.0f, -1.0f}, camera->front);
 	glm_vec3_copy((vec3){0.0f, 1.0f, 0.0f},  camera->up);
 	glm_vec3_copy((vec3){1.0f, 0.0f, 0.0f},  camera->right);

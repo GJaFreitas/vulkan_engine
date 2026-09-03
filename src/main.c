@@ -5,6 +5,11 @@
 #include "fonts.h"
 #include "console.h"
 
+void	createPBRPipeline(GraphicsContext *ctx);
+
+
+GameState	game_state = 0;
+
 static inline void	getMsAndFps(double *ms, double *fps, double *fps_avg, u64 *last_time, u64 *frames) {
 	static u32	frame_start = 2000;
 	static u64	freq = 0;
@@ -72,38 +77,105 @@ void	createRandomEntity(World world)
 	initializeRandomVec(e->pos, 3, -1, 1);
 }
 
-static inline void	beginFrame(World world, bool *running, bool show_console) {
-	SDL_Event	event = {0};
-	do_callbacks();
+static inline void beginFrame(World *world) {
+	SDL_Event event = {0};
 	inputBeginFrame();
-	// TODO: Change all this code over to input.c
+	do_callbacks();
+
 	while (SDL_PollEvent(&event))
 	{
+		// ---------------------------------------------------------
+		// 1. GLOBAL / SYSTEM EVENTS (Always process these)
+		// ---------------------------------------------------------
 		if (event.type == SDL_EVENT_QUIT) {
-			*running = false;
-		} else if (event.key.key == SDLK_ESCAPE) {
-			*running = false;
-		} else if (event.key.key == SDLK_M) {
-			createRandomEntity(world);
-		} else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
-			world.graphics_ctx->window_width = event.window.data1;
-			world.graphics_ctx->window_height = event.window.data2;
+			gameStateToggle(&game_state, Running);
+			continue; 
 		}
-		if (show_console) {
-			if (event.type == SDL_EVENT_TEXT_INPUT) {
-				u64	new_text_len = strlen(event.text.text);
-				consoleInputInsert(event.text.text, new_text_len);
-			} else if (event.type == SDL_EVENT_KEY_DOWN) {
-				switch (event.key.scancode) {
-					case SDL_SCANCODE_BACKSPACE: consoleBackspace(); break;
-					case SDL_SCANCODE_RETURN:
-					case SDL_SCANCODE_KP_ENTER: consoleEnter(&world.frame_allocator); break;
-					case SDL_SCANCODE_LEFT: consoleLeftArrow(); break;
-					case SDL_SCANCODE_RIGHT: consoleRightArrow(); break;
-					default: break;
+		if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+			world->graphics_ctx->window_width = event.window.data1;
+			world->graphics_ctx->window_height = event.window.data2;
+			continue;
+		}
+
+		// ---------------------------------------------------------
+		// 2. CONTEXT TOGGLES (Highest priority input)
+		// ---------------------------------------------------------
+		if (event.type == SDL_EVENT_KEY_DOWN) {
+			if (event.key.scancode == g_keybinds[ACTION_CONSOLE_TOGGLE]) {
+				gameStateToggle(&game_state, ShowConsole);
+				if (g_engine_mode == ENGINE_MODE_CONSOLE) {
+					// TODO: When more modes are added i need a queue
+					g_engine_mode = ENGINE_MODE_GAME;
+					SDL_StopTextInput(world->graphics_ctx->window); // Stop OS text capture
+				} else {
+					g_engine_mode = ENGINE_MODE_CONSOLE;
+					SDL_StartTextInput(world->graphics_ctx->window); // Start OS text capture
 				}
+				continue; // CONSUME the toggle event!
 			}
 		}
+
+		// ---------------------------------------------------------
+		// 3. ROUTE BY ACTIVE CONTEXT
+		// ---------------------------------------------------------
+		bool consumed = false;
+
+		switch (g_engine_mode) {
+			case ENGINE_MODE_CONSOLE:
+				// Handle text input
+				if (event.type == SDL_EVENT_TEXT_INPUT) {
+					consoleInputInsert(event.text.text, strlen(event.text.text));
+					consumed = true;
+				} 
+				else if (event.type == SDL_EVENT_KEY_DOWN) {
+					switch (event.key.scancode) {
+						case SDL_SCANCODE_ESCAPE: 
+							// ESC in console closes console, doesn't quit game!
+							g_engine_mode = ENGINE_MODE_GAME;
+							gameStateToggle(&game_state, ShowConsole);
+							SDL_StopTextInput(world->graphics_ctx->window);
+							consumed = true; 
+							break;
+						case SDL_SCANCODE_BACKSPACE: consoleBackspace(); consumed = true; break;
+						case SDL_SCANCODE_RETURN:
+						case SDL_SCANCODE_KP_ENTER:  consoleEnter(&world->frame_allocator); consumed = true; break;
+						case SDL_SCANCODE_LEFT:      consoleLeftArrow(); consumed = true; break;
+						case SDL_SCANCODE_RIGHT:     consoleRightArrow(); consumed = true; break;
+						default: break;
+					}
+				}
+			break;
+
+			case ENGINE_MODE_GAME:
+				// Only process game-specific event presses here
+				if (event.type == SDL_EVENT_KEY_DOWN) {
+					if (event.key.key == SDLK_ESCAPE) {
+						gameStateToggle(&game_state, Running);
+						consumed = true;
+					} else if (event.key.key == SDLK_R) {
+						vkDeviceWaitIdle(world->graphics_ctx->device);
+						if (system("make")) {
+							consoleAppend("Error detected recompiling shaders.");
+						} else {
+							createPBRPipeline(world->graphics_ctx);
+						}
+					}
+				}
+			break;
+
+			case ENGINE_MODE_MENU:
+			break;
+		}
+
+		// If a context swallowed the event, do not pass it to the physical key tracker!
+		if (consumed) {
+			continue; 
+		}
+
+		// ---------------------------------------------------------
+		// 4. FALLBACK: RECORD PHYSICAL KEY STATE
+		// ---------------------------------------------------------
+		// Only unconsumed events make it here to update the physical key arrays
 		inputProccessEvent(&event);
 	}
 }
@@ -129,23 +201,23 @@ int	loop(World world)
 	EntityRenderInfo	entity_info = {};
 	UiRenderInfo		ui_info = {};
 
-	bool	show_debug_hud = true;
-	bool	show_console = false;
-	bool	running = true;
+	Entity	*e = loadEntity(world.graphics_ctx, STRING_LIT("data/models/test_scene.glb"), &world.entity_allocator);
+	vectorAppend(world.entities, &e);
+
 	u64	last_time = SDL_GetPerformanceCounter();
-	while (running)
+	while (gameStateQuery(game_state, Running))
 	{
 		// --- Begining of frame ---
 		getMsAndFps(&world.dt_ms, &fps, &fps_avg, &last_time, &frames);
 		if (world.dt_ms <= 16.6) {
-			usleep(16.6 - world.dt_ms);
+			usleep((useconds_t)(16.6 - world.dt_ms) * 1000);
 		}
-		beginFrame(world, &running, show_console);
+		beginFrame(&world);
 
-		if (show_console) {
+		if (gameStateQuery(game_state, ShowConsole)) {
 			openConsole(screen_w, screen_h, font, 12, frame_arena);
 		}
-		if (show_debug_hud) {
+		if (gameStateQuery(game_state, ShowFps)) {
 			showFps(world.ui->imgui_root, font, fps, frame_arena);
 		}
 
@@ -161,20 +233,6 @@ int	loop(World world)
 		updatePlayer(world.player, world.dt_ms, world.graphics_ctx->window);
 		updateCamera(&world.player->camera, world.graphics_ctx->window);
 		updateEntities(world.entities, world.dt_ms);
-
-		// TODO: Move this to input.c
-		if (key_pressed(g_keybinds[ACTION_DEBUG_TOGGLE])) {
-			show_debug_hud = !show_debug_hud;
-		}
-		if (key_pressed(g_keybinds[ACTION_CONSOLE_TOGGLE])) {
-			if (show_console) {	// Console is enabled
-				show_console = 0;
-				SDL_StopTextInput(world.graphics_ctx->window);
-			} else {		// Console is disabled
-				show_console = 1;
-				SDL_StartTextInput(world.graphics_ctx->window);
-			}
-		}
 
 		// --- End of frame ---
 		endFrame(world);
@@ -213,6 +271,7 @@ int	main(void)
 	Player		p = {};
 	UiState		ui = {};
 
+	gameStateToggle(&game_state, Running);
 	world.player = &p;
 	world.graphics_ctx = &gctx;
 	world.ui = &ui;

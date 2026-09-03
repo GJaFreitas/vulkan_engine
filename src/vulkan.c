@@ -1,4 +1,5 @@
 #include "vulkan_inner.h"
+#include "world.h"
 #include "ui.h"
 #include "graphics_layer.h"
 #include "fonts.h"
@@ -1456,10 +1457,10 @@ static inline void	getViewMatrix(mat4 dst, Camera *c)
 	glm_lookat(c->position, center, c->up, dst);
 }
 
-static void	updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, Camera *cam)
+static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, Camera *cam)
 {
+	UniformBufferObject ubo = {0}; // Ensure zero initialization
 
-	UniformBufferObject ubo = {};
 	getViewMatrix(ubo.view, cam);
 	getProjectionMatrix(ubo.proj, cam, (float)ctx->swapchain_width / (float)ctx->swapchain_height);
 
@@ -1469,9 +1470,18 @@ static void	updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 	glm_mat4_inv(ubo.view, ubo.inv_view);
 
 	glm_vec4_copy((vec4){cam->position[0], cam->position[1], cam->position[2], 1.0f}, ubo.cam_pos);
+
+	// --- Setup Global Sun ---
+	// Pointing slightly down and to the side
+	vec3 sun_dir = { -0.2f, -1.0f, -0.3f };
+	glm_vec3_normalize(sun_dir);
+	glm_vec4_copy((vec4){sun_dir[0], sun_dir[1], sun_dir[2], 0.0f}, ubo.sun_direction);
+
+	// Warm sunlight, intensity 5.0
+	glm_vec4_copy((vec4){1.0f, 0.95f, 0.8f, 5.0f}, ubo.sun_color);
+
 	ubo.exposure = 4.5f;
 	ubo.gamma = 2.2f;
-
 
 	memcpy(resource->uniform_buffer.mapped, &ubo, sizeof(UniformBufferObject));
 }
@@ -1533,49 +1543,58 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 
 		for (u32 n = 0; n < model->node_count; n++) {
 			Node		*node = &model->linear_nodes[n];
-			const Mesh	*mesh = &node->mesh;
-			if (mesh->vertex_count == 0) continue;
+			for (u32 m = 0; m < node->mesh_count; m++) {
+				const Mesh	*mesh = &node->meshes[m];
 
-			u32	first_instance = instance_cursor;
-			for (u32 r = 0; r < run_count; r++) {
-				EntityRenderData	*e_data = &entity_info.data[run_start + r];
-				glm_mat4_mul(e_data->instance_data.model_mat, node->world_transform, instance_data_buf[instance_cursor].model_mat);
-				instance_cursor++;
+
+				if (mesh->vertex_count == 0) continue;
+
+				u32	first_instance = instance_cursor;
+				for (u32 r = 0; r < run_count; r++) {
+					EntityRenderData	*e_data = &entity_info.data[run_start + r];
+					glm_mat4_mul(e_data->instance_data.model_mat, node->world_transform, instance_data_buf[instance_cursor].model_mat);
+					instance_cursor++;
+				}
+
+				VkDescriptorSet		pbr_descriptor_sets[] = { ubo_descriptor_set, instance_descriptor_set, VK_NULL_HANDLE };
+
+				MaterialProperties push_constants_mat = {
+					.base_color_factor = {1.0f, 1.0f, 1.0f, 1.0f},
+					.metallic_factor = 0.0f,
+					.roughness_factor = 0.8f,
+					.basecolor_texture_set = -1,
+					.physical_descriptor_texture_set = -1,
+					.normal_texture_set = -1,
+					.occlusion_texture_set = -1,
+					.emissive_texture_set = -1,
+					.alpha_mask = 0.0f,
+					.alpha_mask_cut_off = 0.5f
+				};
+				u32		pbr_descriptor_set_count = 2;
+				if (mesh->material_index >= 0) {
+					Material	*mat = &model->materials[mesh->material_index];
+
+					pbr_descriptor_set_count += 1;
+					pbr_descriptor_sets[2] = mat->descriptor_set;
+
+					push_constants_mat.roughness_factor = mat->roughness_factor;
+					push_constants_mat.metallic_factor = mat->metallic_factor;
+					push_constants_mat.alpha_mask_cut_off = mat->alpha_cutoff;
+					push_constants_mat.basecolor_texture_set = 0;
+					push_constants_mat.physical_descriptor_texture_set = 1;
+					push_constants_mat.normal_texture_set = 2;
+					push_constants_mat.occlusion_texture_set = 3;
+					push_constants_mat.emissive_texture_set = 4;
+					push_constants_mat.alpha_mask = 0.0f;
+					glm_vec4_copy(mat->base_color_factor, push_constants_mat.base_color_factor);
+				}
+				vkCmdPushConstants(resource->cmd_buf, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
+				vkCmdBindDescriptorSets(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.layout, 0, pbr_descriptor_set_count, pbr_descriptor_sets, 0, NULL);
+				vkCmdBindVertexBuffers(resource->cmd_buf, 0, 1, &mesh->gpu_vertex_data, &offset);
+				vkCmdBindIndexBuffer(resource->cmd_buf, mesh->gpu_index_data, 0, mesh->index_type);
+				vkCmdDrawIndexed(resource->cmd_buf, mesh->index_count, run_count, 0, 0, first_instance);
+
 			}
-
-			VkDescriptorSet		pbr_descriptor_sets[] = { ubo_descriptor_set, instance_descriptor_set, VK_NULL_HANDLE };
-
-			MaterialProperties	push_constants_mat = {
-				.basecolor_texture_set = -1,
-				.physical_descriptor_texture_set = -1,
-				.normal_texture_set = -1,
-				.occlusion_texture_set = -1,
-				.emissive_texture_set = -1,
-			};
-			u32		pbr_descriptor_set_count = 2;
-			if (mesh->material_index >= 0) {
-				Material	*mat = &model->materials[mesh->material_index];
-
-				pbr_descriptor_set_count += 1;
-				pbr_descriptor_sets[2] = mat->descriptor_set;
-
-				push_constants_mat.roughness_factor = mat->roughness_factor;
-				push_constants_mat.metallic_factor = mat->metallic_factor;
-				push_constants_mat.alpha_mask_cut_off = mat->alpha_cutoff;
-				push_constants_mat.basecolor_texture_set = 0;
-				push_constants_mat.physical_descriptor_texture_set = 1;
-				push_constants_mat.normal_texture_set = 2;
-				push_constants_mat.occlusion_texture_set = 3;
-				push_constants_mat.emissive_texture_set = 4;
-				push_constants_mat.alpha_mask = 0.0f;
-				glm_vec4_copy(mat->base_color_factor, push_constants_mat.base_color_factor);
-			}
-			vkCmdPushConstants(resource->cmd_buf, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
-			vkCmdBindDescriptorSets(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.layout, 0, pbr_descriptor_set_count, pbr_descriptor_sets, 0, NULL);
-			vkCmdBindVertexBuffers(resource->cmd_buf, 0, 1, &mesh->gpu_vertex_data, &offset);
-			vkCmdBindIndexBuffer(resource->cmd_buf, mesh->gpu_index_data, 0, mesh->index_type);
-			vkCmdDrawIndexed(resource->cmd_buf, mesh->index_count, run_count, 0, 0, first_instance);
-
 		}
 
 		e_idx = run_end;
@@ -1730,7 +1749,8 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, 
 		vkCmdSetScissor(resource->cmd_buf, 0, 1, &scissor);
 
 		// ---- GRID Pass ------------------ //
-		// GRIDPass(ctx, resource, frame_res_index);
+		if (gameStateQuery(game_state, ShowGrid))
+			GRIDPass(ctx, resource, frame_res_index);
 
 		// ---- PBR Pass --------------- //
 		PBRPass(ctx, entity_info, resource, frame_res_index);

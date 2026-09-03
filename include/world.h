@@ -24,11 +24,29 @@ typedef struct Entity
 	
 	float	spin;
 }	Entity;
+void	spawnCommand(int argc, String *argv);
 void	unloadEntity(Entity *e, Allocator *a);
 Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a);
 void	updateEntities(Vector *entities, double dt);
 
 EntityRenderInfo	buildEntityRenderInfo(Vector *entity_vector, u32 model_count, Allocator *a);
+
+typedef u32	GameState;
+enum GameStateField {
+	Running = 0,
+	ShowFps,
+	ShowConsole,
+	ShowGrid,
+
+	StateMax = 31,
+};
+
+static inline void	gameStateToggle(GameState *state, enum GameStateField field) {
+	*state = *state ^ (1 << field);
+}
+static inline bool	gameStateQuery(GameState state, enum GameStateField field) {
+	return (state & (1 << field));
+}
 
 typedef struct World
 {
@@ -76,10 +94,19 @@ typedef enum {
 	ACTION_MAX_ENUM,
 }	Action;
 
+typedef u8	EngineMode;
+enum {
+	ENGINE_MODE_GAME,
+	ENGINE_MODE_CONSOLE,
+	ENGINE_MODE_MENU,
+};
+
 void	inputBeginFrame(void);
 void	inputEndFrame(void);
 void	inputProccessEvent(const SDL_Event *e);
 
+extern GameState	game_state;
+extern EngineMode	g_engine_mode;
 extern InputState	g_input_state;
 extern SDL_Scancode	g_keybinds[ACTION_MAX_ENUM];
 

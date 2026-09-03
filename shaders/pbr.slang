@@ -15,7 +15,7 @@ struct MaterialProperties {
 };
 
 struct InstanceData {
-     float4x4	model_mat;
+     column_major float4x4	model_mat;
 };
 
 [[vk::binding(0, 2)]] Sampler2D baseColorMap;
@@ -47,184 +47,159 @@ struct VSOutput {
     float4 Tangent : TANGENT;      // World space tangent (interpolated)
 };
 
-// Normal Distribution Function (D) - GGX/Trowbridge-Reitz Distribution
-// Describes the statistical distribution of microfacet orientations
-float DistributionGGX(float NdotH, float roughness) {
-    float a = roughness * roughness;        // Remapping for more perceptual linearity
+[[shader("vertex")]]
+VSOutput	vertMain(VSInput input, uint instanceID: SV_InstanceID)
+{
+	VSOutput	out;
+	float4x4	model_mat = instances[instanceID].model_mat;
+
+
+	// --- POSITION CALCULATIONS ---
+	// local space -> world space
+	float4	world_pos = mul(model_mat, float4(input.Position, 1.0));
+	// world space -> camera space
+	float4	camera_pos = mul(ubo.view, world_pos);
+	out.Position = mul(ubo.proj, camera_pos);
+
+
+	// --- NORMAL CALCULATIONS ---
+	// Get the normals from each model
+	out.Normal = normalize(mul((float3x3)model_mat, input.Normal));
+
+	// --- PASSTROUGH ---
+	out.UV = input.UV;
+	out.WorldPos = world_pos.xyz;
+
+	return out;
+}
+
+// 1. Normal Distribution Function (GGX)
+// Approximates the amount of microfacets that are aligned to the halfway vector.
+// Higher roughness = more scattered microfacets = wider, blurrier highlights.
+float distributionGGX(float3 N, float3 H, float roughness)
+{
+    float a = roughness * roughness;
     float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
     float NdotH2 = NdotH * NdotH;
 
-    float nom = a2;                         // Numerator: concentration factor
+    float num = a2;
     float denom = (NdotH2 * (a2 - 1.0) + 1.0);
-    denom = PI * denom * denom;             // Normalization factor
+    denom = PI * denom * denom;
 
-    return nom / denom;                     // Normalized distribution
+    return num / denom;
 }
 
-// Geometry Function (G) - Smith's method with Schlick-GGX approximation
-// Models self-shadowing and masking between microfacets
-float GeometrySmith(float NdotV, float NdotL, float roughness) {
-    float r = roughness + 1.0;
-    float k = (r * r) / 8.0;               // Direct lighting remapping
-
-    // Geometry obstruction from view direction (masking)
-    float ggx1 = NdotV / (NdotV * (1.0 - k) + k);
-    // Geometry obstruction from light direction (shadowing)
-    float ggx2 = NdotL / (NdotL * (1.0 - k) + k);
-
-    return ggx1 * ggx2;                     // Combined masking-shadowing
-}
-
-// Fresnel Reflectance (F) - Schlick's approximation
-// Models how reflectance changes with viewing angle
-float3 FresnelSchlick(float cosTheta, float3 F0) {
-    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
-}
-
-// Vertex shader entry point - Executes once per vertex
-[[shader("vertex")]]
-VSOutput vertMain(VSInput input, uint instanceID: SV_InstanceID)
+// 2. Geometry Function (Schlick-GGX)
+// Approximates self-shadowing of the microfacets.
+// Evaluates a single direction (either view direction or light direction).
+float geometrySchlickGGX(float NdotV, float roughness)
 {
-    VSOutput output;
+    // For direct lighting, k is calculated this way. 
+    // (Note: Image Based Lighting uses a different k calculation).
+    float r = (roughness + 1.0);
+    float k = (r * r) / 8.0;
 
-    float4x4	model_mat = instances[instanceID].model_mat;
+    float num = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
 
-    // Transform vertex position through the rendering pipeline
-    // Model -> World -> Camera -> Clip space transformation chain
-    float4 worldPos = mul(model_mat, float4(input.Position, 1.0));
-    output.Position = mul(ubo.proj, mul(ubo.view, worldPos));
-
-    // Pass world position for fragment lighting calculations
-    // Fragment shader needs world space position to calculate light vectors
-    output.WorldPos = worldPos.xyz;
-
-    // Transform normal from model space to world space
-    // Use only rotation/scale part of model matrix (upper-left 3x3)
-    // Normalize to ensure unit length after transformation
-    output.Normal = normalize(mul((float3x3)model_mat, input.Normal));
-
-    // Pass through texture coordinates unchanged
-    // UV coordinates are typically in [0,1] range and don't need transformation
-    output.UV = input.UV;
-
-    // Pass tangent vector for normal mapping
-    // Will be used in fragment shader to construct tangent-space basis
-    output.Tangent = input.Tangent;
-
-    return output;
+    return num / denom;
 }
 
-// Fragment shader entry point - Executes once per pixel
+// 2b. Geometry Smith
+// Combines the geometry approximation for both the View and Light vectors.
+float geometrySmith(float3 N, float3 V, float3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    
+    float ggx1 = geometrySchlickGGX(NdotL, roughness);
+    float ggx2 = geometrySchlickGGX(NdotV, roughness);
+
+    return ggx1 * ggx2;
+}
+
+// 3. Fresnel Equation (Schlick's Approximation)
+// Calculates the ratio of light that gets reflected vs. refracted.
+// At grazing angles (edges), surfaces become highly reflective.
+float3 fresnelSchlick(float cosTheta, float3 F0)
+{
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
 [[shader("fragment")]]
-float4 fragMain(VSOutput input) : SV_TARGET
+float4	fragMain(VSOutput input) : SV_TARGET
 {
-    // === MATERIAL PROPERTY SAMPLING ===
-    // Sample base color texture and apply material color factor
-    float4 baseColor = baseColorMap.Sample(input.UV) * material.baseColorFactor;
+	// --- TEXTURE OBJECT ---
+	// 1. Sample the texture:
+	// look up the pixel color and multiply it by the material's tint.
+	float4 baseColor = baseColorMap.Sample(input.UV) * material.baseColorFactor;
 
-    // Sample metallic-roughness texture (metallic=B channel, roughness=G channel)
-    // glTF standard: metallic stored in blue, roughness in green
-    float2 metallicRoughness = metallicRoughnessMap.Sample(input.UV).bg;
-    float metallic = metallicRoughness.x * material.metallicFactor;
-    float roughness = metallicRoughness.y * material.roughnessFactor;
+	// Get roughness and metallicness data
+	float4 physicalDesc = metallicRoughnessMap.Sample(input.UV);
+	float  roughness = physicalDesc.g * material.roughnessFactor;
+	// Clamp roughness to prevent divide by 0
+	roughness = max(roughness, 0.01);
+	float  metallic = physicalDesc.b * material.metallicFactor;
 
-    // Sample ambient occlusion (typically stored in red channel)
-    float ao = occlusionMap.Sample(input.UV).r;
+	// --- 2. VECTOR SETUP ---
+	float3 N = normalize(input.Normal);
+	float3 V = normalize(ubo.cam_pos.xyz - input.WorldPos);
+	float3 L = normalize(-ubo.sun_direction.xyz);
+	float3 H = normalize(V + L); // Halfway vector
 
-    // Sample emissive texture for self-illuminating materials
-    float3 emissive = emissiveMap.Sample(input.UV).rgb;
+	// --- 3. BASE REFLECTIVITY (F0) ---
+	float3 F0 = float3(0.04, 0.04, 0.04);
+	F0 = lerp(F0, baseColor.rgb, metallic);
 
-    // === NORMAL CALCULATION ===
-    // Start with interpolated surface normal
-    float3 N = normalize(input.Normal);
+	// --- 4. COOK-TORRANCE BRDF ---
+	float NdotL = max(dot(N, L), 0.0);
+	float NdotV = max(dot(N, V), 0.0);
 
-    // Apply normal mapping if texture is available
-    if (material.normalTextureSet >= 0) {
-        // Sample normal map and convert from [0,1] to [-1,1] range
-        float3 tangentNormal = normalMap.Sample(input.UV).xyz * 2.0 - 1.0;
+	// Calculate the three BRDF components
+	float  NDF = distributionGGX(N, H, roughness);   
+	float  G   = geometrySmith(N, V, L, roughness);    
+	float3 F   = fresnelSchlick(max(dot(H, V), 0.0), F0);
 
-        // Construct tangent-space to world-space transformation matrix (TBN)
-        float3 T = normalize(input.Tangent.xyz);              // Tangent
-        float3 B = normalize(cross(N, T)) * input.Tangent.w;  // Bitangent (w = handedness)
-        float3x3 TBN = float3x3(T, B, N);                     // Tangent-Bitangent-Normal matrix
+	// Combine for specular output
+	float3 numerator = NDF * G * F;
+	float denominator = 4.0 * NdotV * NdotL + 0.0001; 
+	float3 specular = numerator / denominator;
 
-        // Transform normal from tangent space to world space
-        N = normalize(mul(tangentNormal, TBN));
-    }
+	// --- 5. ENERGY CONSERVATION ---
+	float3 kS = F; // Specular contribution
+	float3 kD = float3(1.0, 1.0, 1.0) - kS; // Diffuse contribution
+	kD *= 1.0 - metallic; // Metals have no diffuse color
 
-    // === LIGHTING SETUP ===
-    // Calculate view direction (fragment to camera)
-    float3 V = normalize(ubo.camPos.xyz - input.WorldPos);
+	// --- 6. FINAL LIGHTING ---
+	// (Diffuse + Specular) * LightColor * Angle
+	float3 Lo = (kD * baseColor.rgb / PI + specular) * ubo.sun_color.rgb * NdotL;
 
-    // Calculate reflection vector for environment mapping
-    float3 R = reflect(-V, N);
+	// --- 7. AMBIENT & POST-PROCESSING ---
+	float ao = 1.0;
+	float3 ambient = float3(0.03, 0.03, 0.03) * baseColor.rgb * ao;
+	float3 color = ambient + Lo;
 
-    // === PBR MATERIAL SETUP ===
-    // Calculate F0 (reflectance at normal incidence)
-    // Non-metals: low reflectance (~0.04), Metals: colored reflectance from base color
-    float3 F0 = float3(0.04, 0.04, 0.04);  // Dielectric default
-    F0 = lerp(F0, baseColor.rgb, metallic); // Lerp to metallic behavior
+	// Tonemapping (Exposure)
+	color = float3(1.0, 1.0, 1.0) - exp(-color * ubo.exposure);
+	// Gamma correction
+	// Not needed since im using sRGB
+	// color = pow(color, float3(1.0 / ubo.gamma, 1.0 / ubo.gamma, 1.0 / ubo.gamma));
 
-    // Initialize outgoing radiance accumulator
-    float3 Lo = float3(0.0, 0.0, 0.0);
-
-    // === DIRECT LIGHTING LOOP ===
-    // Calculate contribution from each light source
-    for (int i = 0; i < 4; i++) {
-        float3 lightPos = ubo.lightPositions[i].xyz;
-        float3 lightColor = ubo.lightColors[i].rgb;
-
-        // Calculate light direction and attenuation
-        float3 L = normalize(lightPos - input.WorldPos);      // Light direction
-        float distance = length(lightPos - input.WorldPos);   // Distance for falloff
-        float attenuation = 1.0 / (distance * distance);     // Inverse square falloff
-        float3 radiance = lightColor * attenuation;           // Attenuated light color
-
-        // Calculate half vector (between view and light directions)
-        float3 H = normalize(V + L);
-
-        // === BRDF EVALUATION ===
-        // Calculate all necessary dot products for BRDF terms
-        float NdotL = max(dot(N, L), 0.0);  // Lambertian falloff
-        float NdotV = max(dot(N, V), 0.0);  // View angle
-        float NdotH = max(dot(N, H), 0.0);  // Half vector for specular
-        float HdotV = max(dot(H, V), 0.0);  // For Fresnel calculation
-
-        // Evaluate Cook-Torrance BRDF components
-        float D = DistributionGGX(NdotH, roughness);    // Normal distribution
-        float G = GeometrySmith(NdotV, NdotL, roughness); // Geometry function
-        float3 F = FresnelSchlick(HdotV, F0);           // Fresnel reflectance
-
-        // Calculate specular BRDF
-        float3 numerator = D * G * F;
-        float denominator = 4.0 * NdotV * NdotL + 0.0001; // Prevent division by zero
-        float3 specular = numerator / denominator;
-
-        // === ENERGY CONSERVATION ===
-        // Fresnel term represents specular reflection ratio
-        float3 kS = F;                          // Specular contribution
-        float3 kD = float3(1.0, 1.0, 1.0) - kS; // Diffuse contribution (energy conservation)
-        kD *= 1.0 - metallic;                   // Metals have no diffuse reflection
-
-        // === RADIANCE ACCUMULATION ===
-        // Combine diffuse (Lambertian) and specular (Cook-Torrance) terms
-        // Multiply by incident radiance and cosine foreshortening
-        Lo += (kD * baseColor.rgb / PI + specular) * radiance * NdotL;
-    }
-
-    // === AMBIENT AND EMISSIVE ===
-    // Add simple ambient lighting (should be replaced with IBL in production)
-    float3 ambient = float3(0.03, 0.03, 0.03) * baseColor.rgb * ao;
-
-    // Combine all lighting contributions
-    float3 color = ambient + Lo + emissive;
-
-    // === HDR TONE MAPPING AND GAMMA CORRECTION ===
-    // Apply Reinhard tone mapping to compress HDR values to [0,1] range
-    color = color / (color + float3(1.0, 1.0, 1.0));
-
-    // Apply gamma correction for sRGB display (inverse gamma)
-    color = pow(color, float3(1.0 / ubo.gamma, 1.0 / ubo.gamma, 1.0 / ubo.gamma));
-    // Output final color with original alpha
-    return float4(color, baseColor.a);
+	return float4(color, baseColor.a);
 }
+
+// Prev lignting
+//
+	// // 2. Basic Diffuse Lighting (Lambertian):
+	// // We need to know the angle between the light and the surface.
+	// float3 N = normalize(input.Normal);
+	// // Invert the sun direction so it points from the surface TO the sun
+	// float3 L = normalize(-ubo.sun_direction.xyz); 
+	// // The dot product returns 1.0 if they face exactly the same way, 
+	// // 0.0 if perpendicular, and negative if facing away.
+	// // We use max() to prevent negative light.
+	// float light_intensity = max(dot(N, L), 0.0);
+	// // Add a tiny bit of ambient light (0.1) so shadows aren't pitch black
+	// float ambient = 0.1;
+	// float final_light = light_intensity + ambient;
