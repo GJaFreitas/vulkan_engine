@@ -841,7 +841,7 @@ void	createSHADOWPipeline(GraphicsContext *ctx)
 
 	VkPipelineViewportStateCreateInfo	viewport = viewportCreate();
 
-	VkPipelineRasterizationStateCreateInfo	raster_info = rasterizationCreate(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+	VkPipelineRasterizationStateCreateInfo	raster_info = rasterizationCreate(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
 	raster_info.depthBiasEnable = VK_TRUE;
 
 	VkPipelineMultisampleStateCreateInfo    multisample_info = {
@@ -1718,6 +1718,10 @@ static void	calculateShadowCascades(vec3 light_dir, mat4 cam_view, float cam_fov
 
 		// 3. Create the Light View Matrix looking at the frustum center
 		vec3 light_up = {0.0f, 1.0f, 0.0f};
+		if (fabs(light_dir[0]) < 0.001f && fabs(light_dir[2]) < 0.001f) {
+			light_up[0] = 1.0f;
+			light_up[1] = 0.0f;
+		}
 		vec3 light_pos;
 		// Move the light backwards along its direction vector
 		glm_vec3_scale(light_dir, -100.0f, light_pos); 
@@ -1739,17 +1743,23 @@ static void	calculateShadowCascades(vec3 light_dir, mat4 cam_view, float cam_fov
 			minZ = glm_min(minZ, trf[2]); maxZ = glm_max(maxZ, trf[2]);
 		}
 
-		// Z-multiplier to pull the near plane further back (captures casters behind the camera)
-		float z_mult = 10.0f;
-		if (minZ < 0) minZ *= z_mult; else minZ /= z_mult;
-		if (maxZ < 0) maxZ /= z_mult; else maxZ *= z_mult;
+		// // Z-multiplier to pull the near plane further back (captures casters behind the camera)
+		// float z_mult = 10.0f;
+		// if (minZ < 0) minZ *= z_mult; else minZ /= z_mult;
+		// if (maxZ < 0) maxZ /= z_mult; else maxZ *= z_mult;
 
+		minZ = -200; 
+		maxZ = 200;
 		// 5. Create Orthographic Projection for this cascade
 		mat4 light_ortho;
 		glm_ortho(minX, maxX, minY, maxY, minZ, maxZ, light_ortho);
 
-		// Fix Vulkan's inverted Y-axis for projections
+		// Fix Vulkan's inverted Y-axis
 		light_ortho[1][1] *= -1.0f;
+
+		// Manually convert Z from [-1, 1] (OpenGL) to [0, 1] (Vulkan)
+		light_ortho[2][2] = light_ortho[2][2] * 0.5f;
+		light_ortho[3][2] = light_ortho[3][2] * 0.5f + 0.5f;
 
 		// 6. Final Light Space Matrix (Proj * View)
 		glm_mat4_mul(light_ortho, light_view, ubo->light_space_matrices[i]);
@@ -1789,14 +1799,14 @@ static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 
 	// --- Setup Global Sun ---
 	// Pointing slightly down and to the side
-	vec3 sun_dir = { -0.2f, -1.0f, -0.3f };
+	vec3 sun_dir = { 0.0f, -0.2f, -1.0f };
 	glm_vec3_normalize(sun_dir);
 	glm_vec4_copy((vec4){sun_dir[0], sun_dir[1], sun_dir[2], 0.0f}, ubo.sun_direction);
 
 	// Warm sunlight, intensity 5.0
 	glm_vec4_copy((vec4){1.0f, 0.95f, 0.8f, 5.0f}, ubo.sun_color);
 
-	ubo.exposure = 4.5f;
+	ubo.exposure = 1.0f;
 	ubo.gamma = 2.2f;
 
 	calculateShadowCascades(sun_dir, ubo.view, glm_rad(cam->zoom), aspect_ratio, 0.1f, 100.0f, &ubo);

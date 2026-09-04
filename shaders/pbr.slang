@@ -174,7 +174,7 @@ float calculateShadow(float3 worldPos, float viewDepth)
 			
 			// Note: Because you enabled depthBias and Front-Face culling in the C code, 
 			// shadow acne is already physically mitigated. A tiny epsilon prevents floating-point errors.
-			shadow += currentDepth - 0.0005 > pcfDepth ? 1.0 : 0.0;
+			shadow += currentDepth - 0.0001 > pcfDepth ? 1.0 : 0.0;
 		}
 	}
 	shadow /= 9.0;
