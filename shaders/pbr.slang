@@ -182,83 +182,85 @@ float calculateShadow(float3 worldPos, float viewDepth)
 	return shadow;
 }
 
-[[shader("fragment")]]
-float4	fragMain(VSOutput input) : SV_TARGET
+// Calculates the lighting contribution for a single light source
+float3 calculateMicrofacetLighting(float3 N, float3 V, float3 L, float3 F0, float3 albedo, float roughness, float metallic, float3 radiance)
 {
-	// --- TEXTURE OBJECT ---
-	// 1. Sample the texture:
-	// look up the pixel color and multiply it by the material's tint.
-	float4 baseColor = baseColorMap.Sample(input.UV) * material.baseColorFactor;
+    float3 H = normalize(V + L);
+    float NdotL = max(dot(N, L), 0.0);
+    float NdotV = max(dot(N, V), 0.0);
 
-	// Get roughness and metallicness data
-	float4 physicalDesc = metallicRoughnessMap.Sample(input.UV);
-	float  roughness = physicalDesc.g * material.roughnessFactor;
-	// Clamp roughness to prevent divide by 0
-	roughness = max(roughness, 0.01);
-	float  metallic = physicalDesc.b * material.metallicFactor;
+    float NDF = distributionGGX(N, H, roughness);   
+    float G   = geometrySmith(N, V, L, roughness);      
+    float3 F  = fresnelSchlick(max(dot(H, V), 0.0), F0);
 
-	// --- 2. VECTOR SETUP ---
-	float3 N = normalize(input.Normal);
-	float3 V = normalize(ubo.cam_pos.xyz - input.WorldPos);
-	float3 L = normalize(-ubo.sun_direction.xyz);
-	float3 H = normalize(V + L); // Halfway vector
+    float3 numerator = NDF * G * F;
+    float denominator = 4.0 * NdotV * NdotL + 0.0001; 
+    float3 specular = numerator / denominator;
 
-	// --- 3. BASE REFLECTIVITY (F0) ---
-	float3 F0 = float3(0.04, 0.04, 0.04);
-	F0 = lerp(F0, baseColor.rgb, metallic);
+    float3 kS = F; 
+    float3 kD = float3(1.0, 1.0, 1.0) - kS; 
+    kD *= 1.0 - metallic;
 
-	// --- 4. COOK-TORRANCE BRDF ---
-	float NdotL = max(dot(N, L), 0.0);
-	float NdotV = max(dot(N, V), 0.0);
-
-	// Calculate the three BRDF components
-	float  NDF = distributionGGX(N, H, roughness);   
-	float  G   = geometrySmith(N, V, L, roughness);    
-	float3 F   = fresnelSchlick(max(dot(H, V), 0.0), F0);
-
-	// Combine for specular output
-	float3 numerator = NDF * G * F;
-	float denominator = 4.0 * NdotV * NdotL + 0.0001; 
-	float3 specular = numerator / denominator;
-
-	// --- 5. ENERGY CONSERVATION ---
-	float3 kS = F; // Specular contribution
-	float3 kD = float3(1.0, 1.0, 1.0) - kS; // Diffuse contribution
-	kD *= 1.0 - metallic; // Metals have no diffuse color
-
-	// --- 6. SHADOW FACTOR ---
-	float shadowFactor = calculateShadow(input.WorldPos, input.ViewDepth);
-
-	// --- 7. FINAL LIGHTING ---
-	// (Diffuse + Specular) * LightColor * Angle
-	float3 Lo = (kD * baseColor.rgb / PI + specular) * ubo.sun_color.rgb * NdotL;
-	Lo *= (1.0 - shadowFactor);
-
-	// --- 8. AMBIENT & POST-PROCESSING ---
-	float ao = 1.0;
-	float3 ambient = float3(0.03, 0.03, 0.03) * baseColor.rgb * ao;
-	float3 color = ambient + Lo;
-
-	// Tonemapping (Exposure)
-	color = float3(1.0, 1.0, 1.0) - exp(-color * ubo.exposure);
-	// Gamma correction
-	// Not needed since im using sRGB
-	// color = pow(color, float3(1.0 / ubo.gamma, 1.0 / ubo.gamma, 1.0 / ubo.gamma));
-
-	return float4(color, baseColor.a);
+    return (kD * albedo / PI + specular) * radiance * NdotL;
 }
 
-// Prev lignting
-//
-	// // 2. Basic Diffuse Lighting (Lambertian):
-	// // We need to know the angle between the light and the surface.
-	// float3 N = normalize(input.Normal);
-	// // Invert the sun direction so it points from the surface TO the sun
-	// float3 L = normalize(-ubo.sun_direction.xyz); 
-	// // The dot product returns 1.0 if they face exactly the same way, 
-	// // 0.0 if perpendicular, and negative if facing away.
-	// // We use max() to prevent negative light.
-	// float light_intensity = max(dot(N, L), 0.0);
-	// // Add a tiny bit of ambient light (0.1) so shadows aren't pitch black
-	// float ambient = 0.1;
-	// float final_light = light_intensity + ambient;
+[[shader("fragment")]]
+float4 fragMain(VSOutput input) : SV_TARGET
+{
+    // 1. Material Properties
+    float4 baseColor = baseColorMap.Sample(input.UV) * material.baseColorFactor;
+    float4 physicalDesc = metallicRoughnessMap.Sample(input.UV);
+    
+    float roughness = max(physicalDesc.g * material.roughnessFactor, 0.01);
+    float metallic = physicalDesc.b * material.metallicFactor;
+
+    // 2. Base Vectors
+    float3 N = normalize(input.Normal);
+    float3 V = normalize(ubo.cam_pos.xyz - input.WorldPos);
+
+    // 3. F0 (Base reflectivity)
+    float3 F0 = float3(0.04, 0.04, 0.04);
+    F0 = lerp(F0, baseColor.rgb, metallic);
+
+    // 4. ACCUMULATE LIGHTING
+    // Start with 0 light, and add each source
+    float3 Lo = float3(0.0, 0.0, 0.0);
+
+    // --- A. DIRECTIONAL SUN ---
+    float3 sunL = normalize(-ubo.sun_direction.xyz);
+    float3 sunRadiance = ubo.sun_color.rgb * ubo.sun_color.a;
+    float shadowFactor = calculateShadow(input.WorldPos, input.ViewDepth);
+    
+    // Add sun contribution (multiplied by shadow)
+    Lo += calculateMicrofacetLighting(N, V, sunL, F0, baseColor.rgb, roughness, metallic, sunRadiance) * (1.0 - shadowFactor);
+
+    // --- B. POINT LIGHTS ---
+    for (int i = 0; i < ubo.pointLightCount; ++i) 
+    {
+        float3 lightPos = ubo.pointLights[i].position.xyz;
+        float radius = ubo.pointLights[i].position.w; // w stores the light's radius
+        float3 lightColor = ubo.pointLights[i].color.rgb;
+        float intensity = ubo.pointLights[i].color.a; // a stores the light's intensity
+
+        float3 L = lightPos - input.WorldPos;
+        float distance = length(L);
+        L = normalize(L);
+        
+        // Attenuation: Physical inverse square law with a smooth cutoff at the light's maximum radius
+        float attenuation = pow(clamp(1.0 - pow(distance / radius, 4.0), 0.0, 1.0), 2.0) / (distance * distance + 1.0);
+        float3 radiance = lightColor * intensity * attenuation;
+        
+        // Add point light contribution
+        Lo += calculateMicrofacetLighting(N, V, L, F0, baseColor.rgb, roughness, metallic, radiance);
+    }
+
+    // 5. Ambient & Post
+    float ao = 1.0;
+    float3 ambient = float3(0.03, 0.03, 0.03) * baseColor.rgb * ao;
+    float3 color = ambient + Lo;
+
+    // Tonemapping
+    color = float3(1.0, 1.0, 1.0) - exp(-color * ubo.exposure);
+
+    return float4(color, baseColor.a);
+}

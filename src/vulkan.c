@@ -1769,6 +1769,13 @@ static void	calculateShadowCascades(vec3 light_dir, mat4 cam_view, float cam_fov
 	}
 }
 
+static inline void	addPointLight(UniformBufferObject *ubo, vec4 p_light_pos, vec4 p_light_color)
+{
+	glm_vec4_copy(p_light_pos, ubo->point_lights[ubo->point_light_count].position);
+	glm_vec4_copy(p_light_color, ubo->point_lights[ubo->point_light_count].color);
+	ubo->point_light_count += 1;
+}
+
 static inline void	getProjectionMatrix(mat4 dst, Camera *c, float aspect_ratio)
 {
 	glm_perspective(glm_rad(c->zoom), aspect_ratio, 0.1f, 100.0f, dst);
@@ -1804,12 +1811,15 @@ static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 	glm_vec4_copy((vec4){sun_dir[0], sun_dir[1], sun_dir[2], 0.0f}, ubo.sun_direction);
 
 	// Warm sunlight, intensity 5.0
-	glm_vec4_copy((vec4){1.0f, 0.95f, 0.8f, 5.0f}, ubo.sun_color);
+	glm_vec4_copy((vec4){1.0f, 0.95f, 0.8f, 0.0f}, ubo.sun_color);
 
 	ubo.exposure = 1.0f;
 	ubo.gamma = 2.2f;
 
 	calculateShadowCascades(sun_dir, ubo.view, glm_rad(cam->zoom), aspect_ratio, 0.1f, 100.0f, &ubo);
+	vec4	p_light_pos = { 1, 1, 0.5, 10 };
+	vec4	p_light_color = { 1, 1, 1, 5.0f };
+	addPointLight(&ubo, p_light_pos, p_light_color);
 
 	memcpy(resource->uniform_buffer.mapped, &ubo, sizeof(UniformBufferObject));
 }

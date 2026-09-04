@@ -52,10 +52,10 @@ typedef struct TextPushConstants
 	float	px_range;
 }	TextPushConstants;
 
-typedef struct
-{
-	vec4	position;
-	vec4	color;
+#define MAX_POINT_LIGHTS 16
+typedef struct PointLight {
+	vec4 position; // xyz = position, w = radius (for attenuation cutoff)
+	vec4 color;    // rgb = color, a = intensity
 }	PointLight;
 
 typedef struct UniformBufferObject
@@ -70,12 +70,12 @@ typedef struct UniformBufferObject
 
 	vec4	sun_direction;
 	vec4	sun_color;
+	PointLight	point_lights[MAX_POINT_LIGHTS];
+	u32	point_light_count;
 
 	vec4	cam_pos;			// For view dependent effects
 	float	exposure;			// for HDR rendering
 	float	gamma;				// gamma correction
-	float	prefiltered_cube_miplevels;	// for image based lighting
-	float	scale_ibl_ambient;		// Scale factor for ambient light
 }	UniformBufferObject;
 
 typedef struct ImageObject
