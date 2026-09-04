@@ -58,7 +58,8 @@ MSDF_BAKER := tools/msdf_baker.out
 #### THIS HAS TO BE HERE BECAUSE IT NEEDS THE REST OF THE STUFF ####
 
 CXXFLAGS := -g
-CFLAGS := -Wall -Wextra -g
+#                           ↓ Force recompilation when .h changes
+CFLAGS := -Wall -Wextra -g -MMD -MP
 CPPFLAGS := -I$(INC_DIR) -I$(DEP_DIR) -I$(MYLIB_INC) -I$(VKPKG_INC)
 
 LDFLAGS := -L$(MYLIB_DIR) -l:mylib.a -L$(VKPKG_LIB) -Wl,-rpath,$(VKPKG_LIB)

@@ -1,5 +1,8 @@
 import common;
 
+
+[[vk::binding(1, 0)]] Sampler2DArray shadowMap;
+
 // Push constants - Fast, small data updated frequently per material/object
 struct MaterialProperties {
     float4 baseColorFactor;             // Base color tint/multiplier
@@ -45,6 +48,7 @@ struct VSOutput {
     float3 Normal : NORMAL;        // World space normal (interpolated)
     float2 UV : TEXCOORD0;         // Texture coordinates (interpolated)
     float4 Tangent : TANGENT;      // World space tangent (interpolated)
+    float ViewDepth : TEXCOORD1;   // Needed to determine which shadow cascade to sample
 };
 
 [[shader("vertex")]]
@@ -67,6 +71,7 @@ VSOutput	vertMain(VSInput input, uint instanceID: SV_InstanceID)
 	out.Normal = normalize(mul((float3x3)model_mat, input.Normal));
 
 	// --- PASSTROUGH ---
+	out.ViewDepth = abs(camera_pos.z);
 	out.UV = input.UV;
 	out.WorldPos = world_pos.xyz;
 
@@ -127,6 +132,56 @@ float3 fresnelSchlick(float cosTheta, float3 F0)
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
+float calculateShadow(float3 worldPos, float viewDepth)
+{
+	// 1. Determine which cascade to use based on fragment's distance from camera
+	uint cascadeIndex = 0;
+	for(uint i = 0; i < 3; ++i) {
+		if(viewDepth > ubo.cascadeSplitDepths[i]) {
+			cascadeIndex = i + 1;
+		}
+	}
+
+	// 2. Transform world position to light space for this specific cascade
+	float4 lightSpacePos = mul(ubo.lightSpaceMatrices[cascadeIndex], float4(worldPos, 1.0));
+	float3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
+
+	// Map XY from Vulkan clip space [-1, 1] to texture UV space [0, 1]
+	projCoords.xy = projCoords.xy * 0.5 + 0.5;
+
+	// If outside the light's frustum, do not shadow
+	if (projCoords.z > 1.0 || projCoords.z < 0.0 || 
+		projCoords.x > 1.0 || projCoords.x < 0.0 || 
+		projCoords.y > 1.0 || projCoords.y < 0.0) {
+		return 0.0;
+	}
+
+	// 3. Percentage-Closer Filtering (PCF) for soft shadow edges
+	uint width, height, elements;
+	shadowMap.GetDimensions(width, height, elements);
+	float2 texelSize = 1.0 / float2(width, height);
+
+	float currentDepth = projCoords.z;
+	float shadow = 0.0;
+
+	// 3x3 PCF Kernel
+	for(int x = -1; x <= 1; ++x)
+	{
+		for(int y = -1; y <= 1; ++y)
+		{
+			// Sample the specific layer of the Texture2DArray
+			float pcfDepth = shadowMap.Sample(float3(projCoords.xy + float2(x, y) * texelSize, cascadeIndex)).r; 
+			
+			// Note: Because you enabled depthBias and Front-Face culling in the C code, 
+			// shadow acne is already physically mitigated. A tiny epsilon prevents floating-point errors.
+			shadow += currentDepth - 0.0005 > pcfDepth ? 1.0 : 0.0;
+		}
+	}
+	shadow /= 9.0;
+
+	return shadow;
+}
+
 [[shader("fragment")]]
 float4	fragMain(VSOutput input) : SV_TARGET
 {
@@ -171,11 +226,15 @@ float4	fragMain(VSOutput input) : SV_TARGET
 	float3 kD = float3(1.0, 1.0, 1.0) - kS; // Diffuse contribution
 	kD *= 1.0 - metallic; // Metals have no diffuse color
 
-	// --- 6. FINAL LIGHTING ---
+	// --- 6. SHADOW FACTOR ---
+	float shadowFactor = calculateShadow(input.WorldPos, input.ViewDepth);
+
+	// --- 7. FINAL LIGHTING ---
 	// (Diffuse + Specular) * LightColor * Angle
 	float3 Lo = (kD * baseColor.rgb / PI + specular) * ubo.sun_color.rgb * NdotL;
+	Lo *= (1.0 - shadowFactor);
 
-	// --- 7. AMBIENT & POST-PROCESSING ---
+	// --- 8. AMBIENT & POST-PROCESSING ---
 	float ao = 1.0;
 	float3 ambient = float3(0.03, 0.03, 0.03) * baseColor.rgb * ao;
 	float3 color = ambient + Lo;

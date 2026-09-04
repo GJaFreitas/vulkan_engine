@@ -688,6 +688,212 @@ static VkPipelineColorBlendAttachmentState	colorBlend(bool blend)
 	return color_blend_attach;
 }
 
+static void    createShadowResources(GraphicsContext *ctx)
+{
+	// 1. Single Sampler for shadow lookup
+	VkSamplerCreateInfo    sampler_info = {
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.magFilter = VK_FILTER_LINEAR,
+		.minFilter = VK_FILTER_LINEAR,
+		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+		.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE,
+	};
+
+	if (vkCreateSampler(ctx->device, &sampler_info, NULL, &ctx->shadow_sampler) != VK_SUCCESS) {
+		engine_error(LOG_FILE, "Failed to create shadow sampler\n");
+		exit(1);
+	}
+
+	// 2. Per-frame Cascaded Shadow Maps
+	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+		CascadedShadowMap    *csm = &ctx->shadow_maps[i];
+
+		VkImageCreateInfo    image_info = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = ctx->swapchain_depth_format,
+			.extent = { .width = SHADOW_MAP_RESOLUTION, .height = SHADOW_MAP_RESOLUTION, .depth = 1 },
+			.mipLevels = 1,
+			.arrayLayers = SHADOW_MAP_CASCADE_COUNT,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.tiling = VK_IMAGE_TILING_OPTIMAL,
+			.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		};
+
+		if (wrapperVMAcreateImage(ctx->vma_allocator, &image_info, &csm->image.image, &csm->image.allocation) != VK_SUCCESS) {
+			engine_error(LOG_FILE, "Failed to allocate shadow map image\n");
+			exit(1);
+		}
+
+		// Create 2D Array View (Sampled by PBR shader across all cascades)
+		VkImageViewCreateInfo    array_view_info = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = csm->image.image,
+			.viewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY,
+			.format = ctx->swapchain_depth_format,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = SHADOW_MAP_CASCADE_COUNT
+			}
+		};
+
+		if (vkCreateImageView(ctx->device, &array_view_info, NULL, &csm->image.view) != VK_SUCCESS) {
+			engine_error(LOG_FILE, "Failed to create shadow map array view\n");
+			exit(1);
+		}
+
+		// Create individual 2D Layer Views (Used as depth targets during shadow render passes)
+		for (u32 j = 0; j < SHADOW_MAP_CASCADE_COUNT; j++) {
+			VkImageViewCreateInfo    layer_view_info = {
+				.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+				.image = csm->image.image,
+				.viewType = VK_IMAGE_VIEW_TYPE_2D,
+				.format = ctx->swapchain_depth_format,
+				.subresourceRange = {
+					.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+					.baseMipLevel = 0,
+					.levelCount = 1,
+					.baseArrayLayer = j,
+					.layerCount = 1
+				}
+			};
+
+			if (vkCreateImageView(ctx->device, &layer_view_info, NULL, &csm->cascade_views[j]) != VK_SUCCESS) {
+				engine_error(LOG_FILE, "Failed to create shadow map cascade layer view\n");
+				exit(1);
+			}
+		}
+	}
+
+	engine_log(LOG_FILE, "Successfully created shadow resources");
+}
+
+void	createSHADOWPipeline(GraphicsContext *ctx)
+{
+	// Push the cascade index (0 to 3) to the vertex shader
+	VkPushConstantRange    push_constant_ranges[] = {
+		{
+			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+			.offset = 0,
+			.size = sizeof(u32), 
+		},
+	};
+
+	VkDescriptorSetLayout    layouts[] = {
+		ctx->ubo_descriptor_layout,
+		ctx->instance_descriptor_layout,
+	};
+
+	VkPipelineLayoutCreateInfo    layout_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		.setLayoutCount = sizeofarray(layouts),
+		.pSetLayouts = layouts,
+		.pushConstantRangeCount = sizeofarray(push_constant_ranges),
+		.pPushConstantRanges = push_constant_ranges,
+	};
+
+	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &ctx->pipeline_shadow.layout) != VK_SUCCESS) {
+		engine_error(LOG_FILE, "Failed to create shadow pipeline layout\n");
+		exit(1);
+	}
+
+	u32				stage_count;
+	VkPipelineShaderStageCreateInfo	shader_info[2] = {0};
+	pipelineShaderCreate(ctx, STRING_LIT("shadows"), &ctx->pipeline_shadow, VK_SHADER_STAGE_VERTEX_BIT, &stage_count, shader_info);
+
+	VkVertexInputBindingDescription    bind_desc = {
+		.binding = 0,
+		.stride = sizeof(Vertex), 
+		.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+	};
+
+	VkVertexInputAttributeDescription    attribute_desc[] = {
+		{.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, pos)},
+	};
+
+	VkPipelineVertexInputStateCreateInfo    vertex_input_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		.pVertexBindingDescriptions = &bind_desc,
+		.vertexBindingDescriptionCount = 1,
+		.pVertexAttributeDescriptions = attribute_desc,
+		.vertexAttributeDescriptionCount = sizeofarray(attribute_desc),
+	};
+
+	VkPipelineInputAssemblyStateCreateInfo    imput_assembly_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+	};
+
+	VkPipelineDepthStencilStateCreateInfo    depth_stencil_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		.depthTestEnable = VK_TRUE,
+		.depthWriteEnable = VK_TRUE,
+		.depthCompareOp = VK_COMPARE_OP_LESS,
+		.stencilTestEnable = VK_FALSE
+	};
+
+	VkPipelineViewportStateCreateInfo	viewport = viewportCreate();
+
+	VkPipelineRasterizationStateCreateInfo	raster_info = rasterizationCreate(VK_CULL_MODE_FRONT_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+	raster_info.depthBiasEnable = VK_TRUE;
+
+	VkPipelineMultisampleStateCreateInfo    multisample_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
+	};
+
+	VkDynamicState    dynamic_states[] = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR,
+		VK_DYNAMIC_STATE_DEPTH_BIAS 
+	};
+
+	VkPipelineDynamicStateCreateInfo    dynamic_state_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+		.dynamicStateCount = sizeofarray(dynamic_states),
+		.pDynamicStates = dynamic_states
+	};
+
+	// No color attachments, just the depth format
+	VkPipelineRenderingCreateInfo    render_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+		.colorAttachmentCount = 0,
+		.pColorAttachmentFormats = NULL,
+		.depthAttachmentFormat = ctx->swapchain_depth_format
+	};
+
+	VkGraphicsPipelineCreateInfo    pipeline_info = {
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext = &render_info,
+		.stageCount = 1, 
+		.pStages = shader_info,
+		.pVertexInputState = &vertex_input_info,
+		.pInputAssemblyState = &imput_assembly_info,
+		.pViewportState = &viewport,
+		.pRasterizationState = &raster_info,
+		.pMultisampleState = &multisample_info,
+		.pDepthStencilState = &depth_stencil_info,
+		.pColorBlendState = NULL,
+		.pDynamicState = &dynamic_state_info,
+		.layout = ctx->pipeline_shadow.layout,
+		.renderPass = VK_NULL_HANDLE
+	};
+
+	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_shadow.handle) != VK_SUCCESS) {
+		engine_error(LOG_FILE, "Failed to create shadow graphics pipeline\n");
+		exit(1);
+	}
+
+	engine_log(LOG_FILE, "Successfully created shadow graphics pipeline");
+}
+
 void	createPBRPipeline(GraphicsContext *ctx)
 {
 	VkPushConstantRange	push_constant_ranges[] = {
@@ -1202,11 +1408,21 @@ static void	destroySyncResources(GraphicsContext *ctx)
 
 static void	createDescriptorSetLayouts(GraphicsContext *ctx)
 {
-	VkDescriptorSetLayoutBinding	ubo_layout_binding = {
-		.binding = 0,
-		.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+	VkDescriptorSetLayoutBinding    ubo_layout_bindings[] = {
+		// UBO
+		{
+			.binding = 0,
+			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			.descriptorCount = 1,
+			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		},
+		// Cascaded Shadow Map Array
+		{
+			.binding = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.descriptorCount = 1,
+			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		}
 	};
 	VkDescriptorSetLayoutBinding	instance_layout_binding = {
 		.binding = 0,
@@ -1223,8 +1439,8 @@ static void	createDescriptorSetLayouts(GraphicsContext *ctx)
 
 	VkDescriptorSetLayoutCreateInfo	ubo_create_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = 1,
-		.pBindings = &ubo_layout_binding,
+		.bindingCount = sizeofarray(ubo_layout_bindings),
+		.pBindings = ubo_layout_bindings,
 	};
 
 	VkDescriptorSetLayoutCreateInfo	instance_create_info = {
@@ -1250,11 +1466,11 @@ static void	createDescriptorSetLayouts(GraphicsContext *ctx)
 	}
 }
 
-static void	createDescriptorPoolSets(GraphicsContext *ctx)
+static void    createDescriptorPoolSets(GraphicsContext *ctx)
 {
-	const	u32	material_descriptor_count = 1000;
-	const	u32	atlas_count = 1;
-	VkDescriptorPoolSize	pool_sizes[] = {
+	const    u32    material_descriptor_count = 1000;
+	const    u32    atlas_count = 1;
+	VkDescriptorPoolSize    pool_sizes[] = {
 		// ubo
 		{
 			.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -1275,14 +1491,19 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 			.descriptorCount = atlas_count,
 		},
+		// shadow map
+		{
+			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.descriptorCount = MAX_FRAMES_IN_FLIGHT,
+		}
 	};
 
-	u64	total_sets = 0;
+	u64    total_sets = 0;
 	for (u32 i = 0; i < sizeofarray(pool_sizes); i++) {
 		total_sets += pool_sizes[i].descriptorCount;
 	}
 
-	VkDescriptorPoolCreateInfo	create_info = {
+	VkDescriptorPoolCreateInfo    create_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
 		.maxSets = total_sets,
@@ -1301,19 +1522,19 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 		instance_layouts[i] = ctx->instance_descriptor_layout;
 	}
 
-	VkDescriptorSetAllocateInfo	ubo_alloc_info = {
+	VkDescriptorSetAllocateInfo    ubo_alloc_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		.descriptorPool = ctx->descriptor_pool,
 		.descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
 		.pSetLayouts = ubo_layouts,
 	};
-	VkDescriptorSetAllocateInfo	instance_alloc_info = {
+	VkDescriptorSetAllocateInfo    instance_alloc_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		.descriptorPool = ctx->descriptor_pool,
 		.descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
 		.pSetLayouts = instance_layouts,
 	};
-	VkDescriptorSetAllocateInfo	atlas_alloc_info = {
+	VkDescriptorSetAllocateInfo    atlas_alloc_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		.descriptorPool = ctx->descriptor_pool,
 		.descriptorSetCount = atlas_count,
@@ -1334,15 +1555,15 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 	}
 
 	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		FrameResources	*resource = &ctx->frame_resources[i];
+		FrameResources    *resource = &ctx->frame_resources[i];
 
-		VkDescriptorBufferInfo	instance_buf_info = {
+		VkDescriptorBufferInfo    instance_buf_info = {
 			.buffer = resource->instance_buffer.handle,
 			.offset = 0,
 			.range = sizeof(EntityInstanceData) * MAX_INSTANCES,
 		};
 
-		VkWriteDescriptorSet	instance_descriptor_write = {
+		VkWriteDescriptorSet    instance_descriptor_write = {
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.dstSet = ctx->instance_descriptor_sets[i],
 			.dstBinding = 0,
@@ -1352,14 +1573,13 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 			.pBufferInfo = &instance_buf_info,
 		};
 
-
-		VkDescriptorBufferInfo	ubo_buf_info = {
+		VkDescriptorBufferInfo    ubo_buf_info = {
 			.buffer = resource->uniform_buffer.handle,
 			.offset = 0,
 			.range = sizeof(UniformBufferObject),
 		};
 
-		VkWriteDescriptorSet	ubo_descriptor_write = {
+		VkWriteDescriptorSet    ubo_descriptor_write = {
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.dstSet = ctx->ubo_descriptor_sets[i],
 			.dstBinding = 0,
@@ -1369,7 +1589,23 @@ static void	createDescriptorPoolSets(GraphicsContext *ctx)
 			.pBufferInfo = &ubo_buf_info,
 		};
 
-		VkWriteDescriptorSet	writes[] = { ubo_descriptor_write, instance_descriptor_write };
+		VkDescriptorImageInfo    shadow_map_info = {
+			.sampler = ctx->shadow_sampler,
+			.imageView = ctx->shadow_maps[i].image.view,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		};
+
+		VkWriteDescriptorSet    shadow_descriptor_write = {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = ctx->ubo_descriptor_sets[i],
+			.dstBinding = 1,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.pImageInfo = &shadow_map_info,
+		};
+
+		VkWriteDescriptorSet    writes[] = { ubo_descriptor_write, instance_descriptor_write, shadow_descriptor_write };
 		vkUpdateDescriptorSets(ctx->device, sizeofarray(writes), writes, 0, NULL);
 	}
 
@@ -1389,14 +1625,26 @@ static void	initVulkan(GraphicsContext *ctx)
 		exit(1);
 	}
 	createSwapchain(ctx, ctx->window_width, ctx->window_height);
+	// End of vulkan boilerplate -------
+	// The order of these calls is important
+
 	createDescriptorSetLayouts(ctx);
+
+	createShadowResources(ctx);
 	createFrameResources(ctx);
+
 	createDescriptorPoolSets(ctx);
+
 	createDefaultTextures(ctx);
+
 	createMaterialDescriptorSetLayout(ctx);
+
+	// --- Pipelines --- //
+	createSHADOWPipeline(ctx);
 	createPBRPipeline(ctx);
 	createGRIDPipeline(ctx);
 	createTEXTPipeline(ctx);
+
 	ctx->frame_index = 0;
 	ctx->next_signal_value = ctx->frames_in_flight_count + 1;
 }
@@ -1427,6 +1675,90 @@ static void	initSdl(GraphicsContext *ctx)
 	}
 }
 
+static void	calculateShadowCascades(vec3 light_dir, mat4 cam_view, float cam_fov, float aspect_ratio, float near_z, float far_z, UniformBufferObject *ubo)
+{
+	float cascade_splits[SHADOW_MAP_CASCADE_COUNT];
+
+	// 1. Calculate split depths using a practical logarithmic/linear mix
+	float lambda = 0.95f; // Adjust between 0 (pure linear) and 1 (pure logarithmic)
+	for (u32 i = 0; i < SHADOW_MAP_CASCADE_COUNT; i++) {
+		float p = (i + 1) / (float)SHADOW_MAP_CASCADE_COUNT;
+		float log_split = near_z * powf(far_z / near_z, p);
+		float lin_split = near_z + (far_z - near_z) * p;
+		cascade_splits[i] = log_split * lambda + lin_split * (1.0f - lambda);
+	}
+
+	float last_split_dist = near_z;
+
+	for (u32 i = 0; i < SHADOW_MAP_CASCADE_COUNT; i++) {
+		float split_dist = cascade_splits[i];
+
+		// 2. Get frustum corners for this cascade slice in view space
+		vec3 frustum_corners[8] = {
+			{-1.0f,  1.0f, -1.0f}, { 1.0f,  1.0f, -1.0f}, { 1.0f, -1.0f, -1.0f}, {-1.0f, -1.0f, -1.0f},
+			{-1.0f,  1.0f,  1.0f}, { 1.0f,  1.0f,  1.0f}, { 1.0f, -1.0f,  1.0f}, {-1.0f, -1.0f,  1.0f}
+		};
+
+		mat4 cam_proj;
+		glm_perspective(cam_fov, aspect_ratio, last_split_dist, split_dist, cam_proj);
+
+		mat4 inv_cam;
+		glm_mat4_mul(cam_proj, cam_view, inv_cam);
+		glm_mat4_inv(inv_cam, inv_cam);
+
+		// Transform corners to world space and find the center
+		vec3 frustum_center = {0.0f, 0.0f, 0.0f};
+		for (u32 j = 0; j < 8; j++) {
+			vec4 inv_corner;
+			glm_mat4_mulv(inv_cam, (vec4){frustum_corners[j][0], frustum_corners[j][1], frustum_corners[j][2], 1.0f}, inv_corner);
+			glm_vec3_scale(inv_corner, 1.0f / inv_corner[3], frustum_corners[j]);
+			glm_vec3_add(frustum_center, frustum_corners[j], frustum_center);
+		}
+		glm_vec3_scale(frustum_center, 1.0f / 8.0f, frustum_center);
+
+		// 3. Create the Light View Matrix looking at the frustum center
+		vec3 light_up = {0.0f, 1.0f, 0.0f};
+		vec3 light_pos;
+		// Move the light backwards along its direction vector
+		glm_vec3_scale(light_dir, -100.0f, light_pos); 
+		glm_vec3_add(frustum_center, light_pos, light_pos);
+
+		mat4 light_view;
+		glm_lookat(light_pos, frustum_center, light_up, light_view);
+
+		// 4. Find the bounding box of the frustum in Light View space
+		float minX =  INFINITY, maxX = -INFINITY;
+		float minY =  INFINITY, maxY = -INFINITY;
+		float minZ =  INFINITY, maxZ = -INFINITY;
+
+		for (u32 j = 0; j < 8; j++) {
+			vec4 trf;
+			glm_mat4_mulv(light_view, (vec4){frustum_corners[j][0], frustum_corners[j][1], frustum_corners[j][2], 1.0f}, trf);
+			minX = glm_min(minX, trf[0]); maxX = glm_max(maxX, trf[0]);
+			minY = glm_min(minY, trf[1]); maxY = glm_max(maxY, trf[1]);
+			minZ = glm_min(minZ, trf[2]); maxZ = glm_max(maxZ, trf[2]);
+		}
+
+		// Z-multiplier to pull the near plane further back (captures casters behind the camera)
+		float z_mult = 10.0f;
+		if (minZ < 0) minZ *= z_mult; else minZ /= z_mult;
+		if (maxZ < 0) maxZ /= z_mult; else maxZ *= z_mult;
+
+		// 5. Create Orthographic Projection for this cascade
+		mat4 light_ortho;
+		glm_ortho(minX, maxX, minY, maxY, minZ, maxZ, light_ortho);
+
+		// Fix Vulkan's inverted Y-axis for projections
+		light_ortho[1][1] *= -1.0f;
+
+		// 6. Final Light Space Matrix (Proj * View)
+		glm_mat4_mul(light_ortho, light_view, ubo->light_space_matrices[i]);
+		ubo->cascade_split_depths[i] = split_dist;
+
+		last_split_dist = split_dist;
+	}
+}
+
 static inline void	getProjectionMatrix(mat4 dst, Camera *c, float aspect_ratio)
 {
 	glm_perspective(glm_rad(c->zoom), aspect_ratio, 0.1f, 100.0f, dst);
@@ -1443,8 +1775,10 @@ static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 {
 	UniformBufferObject ubo = {0}; // Ensure zero initialization
 
+	f32	aspect_ratio = (float)ctx->swapchain_width / (float)ctx->swapchain_height;
+
 	getViewMatrix(ubo.view, cam);
-	getProjectionMatrix(ubo.proj, cam, (float)ctx->swapchain_width / (float)ctx->swapchain_height);
+	getProjectionMatrix(ubo.proj, cam, aspect_ratio);
 
 	// Vulkan y shift
 	ubo.proj[1][1] *= -1;
@@ -1465,7 +1799,127 @@ static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 	ubo.exposure = 4.5f;
 	ubo.gamma = 2.2f;
 
+	calculateShadowCascades(sun_dir, ubo.view, glm_rad(cam->zoom), aspect_ratio, 0.1f, 100.0f, &ubo);
+
 	memcpy(resource->uniform_buffer.mapped, &ubo, sizeof(UniformBufferObject));
+}
+
+// »speed
+// Cache instance data instead of recalculating in pbr pass
+void    SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources *resource, u8 frame_idx)
+{
+	// --- 1. PRE-PASS PIPELINE BARRIER ---
+	// Transition all cascade layers from UNDEFINED to DEPTH_ATTACHMENT_OPTIMAL
+	ImageTransitionInfo pre_transition = {
+		.image = ctx->shadow_maps[frame_idx].image.image,
+		.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		.newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+		.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+		.srcAccessMask = VK_ACCESS_2_NONE,
+		.dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+		.dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		.pRange = NULL
+	};
+	cmdTransitionImage(resource->cmd_buf, &pre_transition);
+
+	// --- 2. RENDER SETUP ---
+	const u32        total_entity_count = entity_info.entity_count;
+	const VkDescriptorSet    ubo_descriptor_set = ctx->ubo_descriptor_sets[frame_idx];
+	const VkDescriptorSet    instance_descriptor_set = ctx->instance_descriptor_sets[frame_idx];
+	EntityInstanceData        *instance_data_buf = (EntityInstanceData *)resource->instance_buffer.mapped;
+
+	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_shadow.handle);
+
+	VkViewport viewport = {0.0f, 0.0f, (float)SHADOW_MAP_RESOLUTION, (float)SHADOW_MAP_RESOLUTION, 0.0f, 1.0f};
+	VkRect2D scissor = {{0, 0}, {SHADOW_MAP_RESOLUTION, SHADOW_MAP_RESOLUTION}};
+	vkCmdSetViewport(resource->cmd_buf, 0, 1, &viewport);
+	vkCmdSetScissor(resource->cmd_buf, 0, 1, &scissor);
+	vkCmdSetDepthBias(resource->cmd_buf, 1.25f, 0.0f, 1.75f);
+
+	VkDescriptorSet        shadow_descriptor_sets[] = { ubo_descriptor_set, instance_descriptor_set };
+
+
+	// --- 3. CASCADE DRAW LOOP ---
+	for (u32 c = 0; c < SHADOW_MAP_CASCADE_COUNT; c++) {
+
+		VkRenderingAttachmentInfo    depth_attachment = {
+			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+			.imageView = ctx->shadow_maps[frame_idx].cascade_views[c],
+			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+			.clearValue.depthStencil = {1.0f, 0}
+		};
+
+		VkRenderingInfo    render_info = {
+			.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+			.renderArea = scissor,
+			.layerCount = 1,
+			.colorAttachmentCount = 0,
+			.pDepthAttachment = &depth_attachment,
+		};
+
+		vkCmdBeginRendering(resource->cmd_buf, &render_info);
+
+		vkCmdPushConstants(resource->cmd_buf, ctx->pipeline_shadow.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(u32), &c);
+
+		VkDeviceSize        offset = 0;
+		u32            instance_cursor = 0;
+		u32            e_idx = 0;
+
+		while (e_idx < total_entity_count) {
+			u16        model_idx = entity_info.data[e_idx].model_idx;
+			const Model    *model = entity_info.models[model_idx];
+
+			u32    run_start = e_idx;
+			u32    run_end = e_idx + 1;
+			while (run_end < total_entity_count && model_idx == entity_info.data[run_end].model_idx) run_end++;
+			u32    run_count = run_end - run_start;
+
+			for (u32 n = 0; n < model->node_count; n++) {
+				Node        *node = &model->linear_nodes[n];
+				for (u32 m = 0; m < node->mesh_count; m++) {
+					const Mesh    *mesh = &node->meshes[m];
+
+					if (mesh->vertex_count == 0) continue;
+
+					u32    first_instance = instance_cursor;
+
+					for (u32 r = 0; r < run_count; r++) {
+						EntityRenderData    *e_data = &entity_info.data[run_start + r];
+						glm_mat4_mul(e_data->instance_data.model_mat, node->world_transform, instance_data_buf[instance_cursor].model_mat);
+						instance_cursor++;
+					}
+
+					vkCmdBindDescriptorSets(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_shadow.layout, 0, 2, shadow_descriptor_sets, 0, NULL);
+					vkCmdBindVertexBuffers(resource->cmd_buf, 0, 1, &mesh->gpu_vertex_data, &offset);
+					vkCmdBindIndexBuffer(resource->cmd_buf, mesh->gpu_index_data, 0, mesh->index_type);
+					vkCmdDrawIndexed(resource->cmd_buf, mesh->index_count, run_count, 0, 0, first_instance);
+				}
+			}
+
+			e_idx = run_end;
+		}
+
+		vkCmdEndRendering(resource->cmd_buf);
+	}
+
+	// --- 4. POST-PASS PIPELINE BARRIER ---
+	// Transition all cascade layers to SHADER_READ_ONLY_OPTIMAL for the PBR pass
+
+	ImageTransitionInfo post_transition = {
+		.image = ctx->shadow_maps[frame_idx].image.image,
+		.oldLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+		.srcStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+		.srcAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, // PBR shader reads it
+		.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+		.pRange = NULL
+	};
+	cmdTransitionImage(resource->cmd_buf, &post_transition);
 }
 
 void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, UiRenderInfo info)
@@ -1713,8 +2167,11 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, 
 	};
 
 
+	// ---- Shadow Pass ------------------ //
+	SHADOWPass(ctx, entity_info, resource, frame_res_index);
 	vkCmdBeginRendering(resource->cmd_buf, &render_info);
 	{
+
 		VkViewport	viewport = {
 			.x = 0, .y = 0,
 			.width = ctx->swapchain_width,

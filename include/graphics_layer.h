@@ -21,6 +21,7 @@
 #define TINYGLTF3_ENABLE_FS
 #include "tiny_gltf_v3.h"
 
+
 // Optional struct for specific mip/layer ranges
 typedef struct TransitionRange
 {
@@ -63,6 +64,9 @@ typedef struct UniformBufferObject
 	mat4	proj;
 	mat4	inv_view;
 	mat4	inv_proj;
+
+	mat4	light_space_matrices[4];
+	vec4	cascade_split_depths;
 
 	vec4	sun_direction;
 	vec4	sun_color;
@@ -289,6 +293,14 @@ typedef struct FrameResources
 
 }	FrameResources;
 
+#define SHADOW_MAP_CASCADE_COUNT	4
+#define SHADOW_MAP_RESOLUTION		2048
+typedef struct CascadedShadowMap
+{
+	ImageObject	image;
+	VkImageView	cascade_views[SHADOW_MAP_CASCADE_COUNT]; // Individual layer views
+}	CascadedShadowMap;
+
 typedef struct GraphicsContext
 {
 	i32			window_width;
@@ -335,6 +347,11 @@ typedef struct GraphicsContext
 	VkDescriptorSet		instance_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
 	VkDescriptorSet		atlas_descriptor_set;
 	// ------------------------
+
+	// Shadow Pipeline ------------
+	CascadedShadowMap    shadow_maps[MAX_FRAMES_IN_FLIGHT];
+	VkSampler            shadow_sampler;
+	PipelineObject       pipeline_shadow;
 
 	// PBR Pipeline ------------
 	PipelineObject		pipeline_pbr;

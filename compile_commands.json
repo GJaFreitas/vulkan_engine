@@ -10,12 +10,14 @@
       "-Wall",
       "-Wextra",
       "-g",
+      "-MMD",
+      "-MP",
       "-c",
       "src/console.c",
       "-o",
       "obj/c/console.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/lighting_implementation",
     "output": "obj/c/console.o"
   },
   {
@@ -29,12 +31,14 @@
       "-Wall",
       "-Wextra",
       "-g",
+      "-MMD",
+      "-MP",
       "-c",
       "src/ui.c",
       "-o",
       "obj/c/ui.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/lighting_implementation",
     "output": "obj/c/ui.o"
   },
   {
@@ -48,12 +52,14 @@
       "-Wall",
       "-Wextra",
       "-g",
+      "-MMD",
+      "-MP",
       "-c",
       "src/input.c",
       "-o",
       "obj/c/input.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/lighting_implementation",
     "output": "obj/c/input.o"
   },
   {
@@ -67,12 +73,14 @@
       "-Wall",
       "-Wextra",
       "-g",
+      "-MMD",
+      "-MP",
       "-c",
       "src/hotload_callbacks.c",
       "-o",
       "obj/c/hotload_callbacks.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/lighting_implementation",
     "output": "obj/c/hotload_callbacks.o"
   },
   {
@@ -86,12 +94,14 @@
       "-Wall",
       "-Wextra",
       "-g",
+      "-MMD",
+      "-MP",
       "-c",
       "src/main.c",
       "-o",
       "obj/c/main.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/lighting_implementation",
     "output": "obj/c/main.o"
   },
   {
@@ -105,12 +115,14 @@
       "-Wall",
       "-Wextra",
       "-g",
+      "-MMD",
+      "-MP",
       "-c",
       "src/vulkan.c",
       "-o",
       "obj/c/vulkan.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/lighting_implementation",
     "output": "obj/c/vulkan.o"
   },
   {
@@ -124,12 +136,14 @@
       "-Wall",
       "-Wextra",
       "-g",
+      "-MMD",
+      "-MP",
       "-c",
       "src/entities.c",
       "-o",
       "obj/c/entities.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/lighting_implementation",
     "output": "obj/c/entities.o"
   },
   {
@@ -143,12 +157,14 @@
       "-Wall",
       "-Wextra",
       "-g",
+      "-MMD",
+      "-MP",
       "-c",
       "src/base_layer.c",
       "-o",
       "obj/c/base_layer.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/lighting_implementation",
     "output": "obj/c/base_layer.o"
   },
   {
@@ -162,12 +178,14 @@
       "-Wall",
       "-Wextra",
       "-g",
+      "-MMD",
+      "-MP",
       "-c",
       "src/fonts.c",
       "-o",
       "obj/c/fonts.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/lighting_implementation",
     "output": "obj/c/fonts.o"
   },
   {
@@ -181,12 +199,14 @@
       "-Wall",
       "-Wextra",
       "-g",
+      "-MMD",
+      "-MP",
       "-c",
       "src/variables.c",
       "-o",
       "obj/c/variables.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/lighting_implementation",
     "output": "obj/c/variables.o"
   },
   {
@@ -200,12 +220,14 @@
       "-Wall",
       "-Wextra",
       "-g",
+      "-MMD",
+      "-MP",
       "-c",
       "src/gltf_loading.c",
       "-o",
       "obj/c/gltf_loading.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/lighting_implementation",
     "output": "obj/c/gltf_loading.o"
   },
   {
@@ -222,7 +244,7 @@
       "-o",
       "obj/cpp/vma.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/lighting_implementation",
     "output": "obj/cpp/vma.o"
   },
   {
@@ -233,7 +255,7 @@
       "-o",
       "engine.out"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/lighting_implementation",
     "output": "engine.out"
   }
 ]

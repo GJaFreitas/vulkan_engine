@@ -9,6 +9,9 @@ public struct UniformBufferObject
     public float4x4 inv_view;
     public float4x4 inv_proj;
 
+    public float4x4 lightSpaceMatrices[4];
+    public float4 cascadeSplitDepths; // z-depths where the cascades split
+
     public float4 sun_direction;
     public float4 sun_color;
 
