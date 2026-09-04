@@ -71,7 +71,7 @@ float4 fragMain(VSOutput input) : SV_TARGET
     color.a = max(minorGrid.a, majorGrid.a * 0.8);
 
     // Distance-based fade so the grid doesn't tile harshly to the horizon
-    float dist = length(worldPos.xz - ubo.camPos.xz);
+    float dist = length(worldPos.xz - ubo.cam_pos.xz);
     float fade = 1.0 - smoothstep(0.0, grid.fadeDistance, dist);
     color.a *= fade;
 

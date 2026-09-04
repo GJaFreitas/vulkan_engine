@@ -15,7 +15,7 @@
       "-o",
       "obj/c/console.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/input_handling_changes",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
     "output": "obj/c/console.o"
   },
   {
@@ -34,7 +34,7 @@
       "-o",
       "obj/c/ui.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/input_handling_changes",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
     "output": "obj/c/ui.o"
   },
   {
@@ -53,7 +53,7 @@
       "-o",
       "obj/c/input.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/input_handling_changes",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
     "output": "obj/c/input.o"
   },
   {
@@ -72,7 +72,7 @@
       "-o",
       "obj/c/hotload_callbacks.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/input_handling_changes",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
     "output": "obj/c/hotload_callbacks.o"
   },
   {
@@ -91,7 +91,7 @@
       "-o",
       "obj/c/main.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/input_handling_changes",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
     "output": "obj/c/main.o"
   },
   {
@@ -110,7 +110,7 @@
       "-o",
       "obj/c/vulkan.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/input_handling_changes",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
     "output": "obj/c/vulkan.o"
   },
   {
@@ -129,7 +129,7 @@
       "-o",
       "obj/c/entities.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/input_handling_changes",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
     "output": "obj/c/entities.o"
   },
   {
@@ -148,7 +148,7 @@
       "-o",
       "obj/c/base_layer.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/input_handling_changes",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
     "output": "obj/c/base_layer.o"
   },
   {
@@ -167,7 +167,7 @@
       "-o",
       "obj/c/fonts.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/input_handling_changes",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
     "output": "obj/c/fonts.o"
   },
   {
@@ -186,7 +186,7 @@
       "-o",
       "obj/c/variables.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/input_handling_changes",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
     "output": "obj/c/variables.o"
   },
   {
@@ -205,7 +205,7 @@
       "-o",
       "obj/c/gltf_loading.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/input_handling_changes",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
     "output": "obj/c/gltf_loading.o"
   },
   {
@@ -222,7 +222,7 @@
       "-o",
       "obj/cpp/vma.o"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/input_handling_changes",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
     "output": "obj/cpp/vma.o"
   },
   {
@@ -233,7 +233,7 @@
       "-o",
       "engine.out"
     ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/input_handling_changes",
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/code_refactor",
     "output": "engine.out"
   }
 ]

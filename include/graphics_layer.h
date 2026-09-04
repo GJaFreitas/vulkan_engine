@@ -21,6 +21,29 @@
 #define TINYGLTF3_ENABLE_FS
 #include "tiny_gltf_v3.h"
 
+// Optional struct for specific mip/layer ranges
+typedef struct TransitionRange
+{
+	u32	baseMipLevel;
+	u32	levelCount;
+	u32	baseArrayLayer;
+	u32	layerCount;
+}	TransitionRange;
+
+typedef struct ImageTransitionInfo
+{
+	VkImage			image;
+	VkImageLayout		oldLayout;
+	VkImageLayout		newLayout;
+	VkPipelineStageFlags2	srcStageMask;
+	VkAccessFlags2		srcAccessMask;
+	VkPipelineStageFlags2	dstStageMask;
+	VkAccessFlags2		dstAccessMask;
+	VkImageAspectFlags	aspectMask;
+    
+	const TransitionRange* pRange; // Set to NULL to transition the entire image
+}	ImageTransitionInfo;
+
 typedef struct TextPushConstants
 {
 	vec2	screen_size;

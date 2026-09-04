@@ -39,7 +39,7 @@ extern "C" void	destroyVMA(void *vma_allocator)
 	vmaDestroyAllocator(vma);
 }
 
-extern "C" VkResult	wrapperVMAcreateImage(void *_allocator, VkImageCreateInfo *img_info, VkImage *img, void *img_allocation)
+extern "C" VkResult	wrapperVMAcreateImage(void *_allocator, VkImageCreateInfo *img_info, VkImage *img, void **img_allocation)
 {
 	VkResult	result;
 	VmaAllocator	allocator = (VmaAllocator)_allocator;
@@ -57,7 +57,7 @@ extern "C" void		wrapperVMAdestroyImage(void *_allocator, VkImage img, void *all
 	vmaDestroyImage((VmaAllocator)_allocator, img, (VmaAllocation)allocation);
 }
 
-extern "C" VkResult wrapperVMAcreateBuffer(void *_allocator, VkBufferCreateInfo *buf_info, VkBuffer *buffer, void *allocation, bool cpu_accessible)
+extern "C" VkResult wrapperVMAcreateBuffer(void *_allocator, VkBufferCreateInfo *buf_info, VkBuffer *buffer, void **allocation, bool cpu_accessible)
 {
 	VmaAllocator allocator = (VmaAllocator)_allocator;
 	VmaAllocationCreateInfo alloc_info = {

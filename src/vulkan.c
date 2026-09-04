@@ -3,20 +3,50 @@
 #include "ui.h"
 #include "graphics_layer.h"
 #include "fonts.h"
+#include <stdint.h>
 
-VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
-	VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
-	VkDebugUtilsMessageTypeFlagsEXT message_type,
-	const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
-	void *user_data)
+// --- VULKAN API --- //
+
+void	cmdTransitionImage(VkCommandBuffer cmd, const ImageTransitionInfo *info)
 {
-	(void)user_data;
-	(void)message_type;
-	if (message_severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
-	{
-		engine_error(LOG_FILE, "%i - %s: %s\n", callback_data->messageIdNumber, callback_data->pMessageIdName, callback_data->pMessage);
+	// Default to the entire image
+	VkImageSubresourceRange subresource = {
+		.aspectMask = info->aspectMask,
+		.baseMipLevel = 0,
+		.levelCount = VK_REMAINING_MIP_LEVELS,
+		.baseArrayLayer = 0,
+		.layerCount = VK_REMAINING_ARRAY_LAYERS
+	};
+
+	// Override if a specific range was provided
+	if (info->pRange != NULL) {
+		subresource.baseMipLevel = info->pRange->baseMipLevel;
+		subresource.levelCount = info->pRange->levelCount;
+		subresource.baseArrayLayer = info->pRange->baseArrayLayer;
+		subresource.layerCount = info->pRange->layerCount;
 	}
-	return VK_FALSE;
+
+	VkImageMemoryBarrier2 barrier = {
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.oldLayout = info->oldLayout,
+		.newLayout = info->newLayout,
+		.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		.image = info->image,
+		.subresourceRange = subresource,
+		.srcStageMask = info->srcStageMask,
+		.srcAccessMask = info->srcAccessMask,
+		.dstStageMask = info->dstStageMask,
+		.dstAccessMask = info->dstAccessMask
+	};
+
+	VkDependencyInfo dep_info = {
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.imageMemoryBarrierCount = 1,
+		.pImageMemoryBarriers = &barrier
+	};
+
+	vkCmdPipelineBarrier2(cmd, &dep_info);
 }
 
 static inline void	createMappedBuffer(void *allocator, VkBufferCreateInfo *buf_info, BufferObject *buf)
@@ -49,33 +79,18 @@ void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, u32 data_si
 		VkCommandBuffer	cmd;
 		beginSingleTimeCommand(ctx, &cmd);
 
-		VkImageMemoryBarrier2 undefined_transfer = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		ImageTransitionInfo	img_undef_transf = {
+			.image = gpu_image->image,
 			.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 			.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.image = gpu_image->image,
-			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			},
-			.srcAccessMask = 0,
-			.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
 			.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-			.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT
+			.srcAccessMask = 0,
+			.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+			.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.pRange = NULL,
 		};
-
-		VkDependencyInfo	dep_info = {
-			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			.imageMemoryBarrierCount = 1,
-			.pImageMemoryBarriers = &undefined_transfer
-		};
-
-		vkCmdPipelineBarrier2(cmd, &dep_info);
+		cmdTransitionImage(cmd, &img_undef_transf);
 
 		VkBufferImageCopy2	region = {
 			.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2,
@@ -102,32 +117,18 @@ void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, u32 data_si
 		};
 		vkCmdCopyBufferToImage2(cmd, &copy_info);
 
-		VkImageMemoryBarrier2 transfer_shaderronly = {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		ImageTransitionInfo	img_transf_shader = {
+			.image = gpu_image->image,
 			.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
 			.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.image = gpu_image->image,
-			.subresourceRange = {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.baseMipLevel = 0,
-				.levelCount = 1,
-				.baseArrayLayer = 0,
-				.layerCount = 1
-			},
-			.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-			.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
 			.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+			.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
 			.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.pRange = NULL,
 		};
-
-		VkDependencyInfo	dep_info_2 = {
-			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			.imageMemoryBarrierCount = 1,
-			.pImageMemoryBarriers = &transfer_shaderronly
-		};
-		vkCmdPipelineBarrier2(cmd, &dep_info_2);
+		cmdTransitionImage(cmd, &img_transf_shader);
 
 		vkEndCommandBuffer(cmd);
 
@@ -140,7 +141,6 @@ void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, u32 data_si
 			.commandBufferInfoCount = 1,
 			.pCommandBufferInfos = &cmd_submit_info
 		};
-		// TODO: Make these uploads record everything first before submiting
 		vkQueueSubmit2(ctx->queue, 1, &submit_info, VK_NULL_HANDLE);
 		vkQueueWaitIdle(ctx->queue);
 		wrapperVMAdestroyBuffer(ctx->vma_allocator, staging_buffer, buf_allocation);
@@ -166,6 +166,25 @@ void	beginSingleTimeCommand(GraphicsContext *ctx, VkCommandBuffer *cmd_buffer)
 		.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
 	};
 	vkBeginCommandBuffer(*cmd_buffer, &cmd_begin_info);
+}
+
+
+// --- VULKAN CODE --- //
+
+
+VKAPI_ATTR VkBool32 VKAPI_CALL debug_utils_messenger_callback(
+	VkDebugUtilsMessageSeverityFlagBitsEXT message_severity,
+	VkDebugUtilsMessageTypeFlagsEXT message_type,
+	const VkDebugUtilsMessengerCallbackDataEXT *callback_data,
+	void *user_data)
+{
+	(void)user_data;
+	(void)message_type;
+	if (message_severity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+	{
+		engine_error(LOG_FILE, "%i - %s: %s\n", callback_data->messageIdNumber, callback_data->pMessageIdName, callback_data->pMessage);
+	}
+	return VK_FALSE;
 }
 
 static void	createInstance(GraphicsContext *ctx)
@@ -598,6 +617,77 @@ static void	createShaders(GraphicsContext *ctx, StringView shader_name, Pipeline
 	pipeline->frag_shader = pipeline->vertex_shader;
 }
 
+
+// --- PIPELINE CREATION --- //
+
+static void	pipelineShaderCreate(GraphicsContext *ctx, String shader_name, PipelineObject *pipeline, VkShaderStageFlagBits shader_stages, u32 *_stage_count, VkPipelineShaderStageCreateInfo shader_info[2])
+{
+	createShaders(ctx, shader_name, pipeline);
+	u32	stage_count = __builtin_popcount(shader_stages);
+	*_stage_count = stage_count;
+
+	shader_info[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shader_info[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+	shader_info[0].module = pipeline->vertex_shader;
+	shader_info[0].pName = "vertMain";
+
+	stage_count--;
+	if (stage_count) {
+		shader_info[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		shader_info[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+		shader_info[1].module = pipeline->frag_shader;
+		shader_info[1].pName = "fragMain";
+	}
+}
+
+static VkPipelineViewportStateCreateInfo	viewportCreate(void)
+{
+	VkPipelineViewportStateCreateInfo	viewport_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+		.viewportCount = 1,
+		.pViewports = NULL,
+		.scissorCount = 1,
+		.pScissors = NULL
+	};
+
+	return viewport_info;
+}
+
+static VkPipelineRasterizationStateCreateInfo	rasterizationCreate(VkCullModeFlags cull_mode, VkFrontFace front_face)
+{
+	VkPipelineRasterizationStateCreateInfo	rasterization_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		.polygonMode = VK_POLYGON_MODE_FILL,
+		.cullMode = cull_mode,
+		.frontFace = front_face,
+		.lineWidth = 1.0f
+	};
+	return rasterization_info;
+}
+
+static VkPipelineColorBlendAttachmentState	colorBlend(bool blend)
+{
+	VkBool32	blend_enable;
+	if (blend)	blend_enable = VK_TRUE;
+	else		blend_enable = VK_FALSE;
+
+	VkPipelineColorBlendAttachmentState	color_blend_attach = {
+		.blendEnable = blend_enable,
+		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+		.colorBlendOp = VK_BLEND_OP_ADD,
+		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+		.alphaBlendOp = VK_BLEND_OP_ADD,
+		.colorWriteMask =\
+		VK_COLOR_COMPONENT_R_BIT
+		| VK_COLOR_COMPONENT_G_BIT
+		| VK_COLOR_COMPONENT_B_BIT
+		| VK_COLOR_COMPONENT_A_BIT,
+	};
+	return color_blend_attach;
+}
+
 void	createPBRPipeline(GraphicsContext *ctx)
 {
 	VkPushConstantRange	push_constant_ranges[] = {
@@ -629,22 +719,9 @@ void	createPBRPipeline(GraphicsContext *ctx)
 		exit(1);
 	}
 
-	createShaders(ctx, STRING_LIT("pbr"), &ctx->pipeline_pbr);
-	VkPipelineShaderStageCreateInfo	shader_stages[] = {
-		{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.stage = VK_SHADER_STAGE_VERTEX_BIT,
-			.module = ctx->pipeline_pbr.vertex_shader,
-			.pName = "vertMain"
-		},
-		{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-			.module = ctx->pipeline_pbr.frag_shader,
-			.pName = "fragMain"
-		}
-	};
-
+	u32	shader_stage_count;
+	VkPipelineShaderStageCreateInfo	shader_stages[2] = {0};
+	pipelineShaderCreate(ctx, STRING_LIT("pbr"), &ctx->pipeline_pbr, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, &shader_stage_count, shader_stages);
 
 	VkVertexInputBindingDescription	bind_desc = {
 		.binding = 0,
@@ -680,41 +757,17 @@ void	createPBRPipeline(GraphicsContext *ctx)
 		.stencilTestEnable = VK_FALSE
 	};
 
-	VkPipelineViewportStateCreateInfo	viewport_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-		.viewportCount = 1,
-		.pViewports = NULL,
-		.scissorCount = 1,
-		.pScissors = NULL
-	};
+	VkPipelineViewportStateCreateInfo	viewport_info = viewportCreate();
 
-	VkPipelineRasterizationStateCreateInfo	rasterization_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		.polygonMode = VK_POLYGON_MODE_FILL,
-		.cullMode = VK_CULL_MODE_BACK_BIT,
-		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-		.lineWidth = 1.0f
-	};
+	VkPipelineRasterizationStateCreateInfo	rasterization_info = rasterizationCreate(
+		VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
 
 	VkPipelineMultisampleStateCreateInfo	multisample_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
 	};
 
-	VkPipelineColorBlendAttachmentState	color_blend_attach = {
-		.blendEnable = VK_TRUE,
-		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-		.colorBlendOp = VK_BLEND_OP_ADD,
-		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-		.alphaBlendOp = VK_BLEND_OP_ADD,
-		.colorWriteMask =\
-		VK_COLOR_COMPONENT_R_BIT
-		| VK_COLOR_COMPONENT_G_BIT
-		| VK_COLOR_COMPONENT_B_BIT
-		| VK_COLOR_COMPONENT_A_BIT,
-	};
+	VkPipelineColorBlendAttachmentState	color_blend_attach = colorBlend(true);
 
 	VkPipelineColorBlendStateCreateInfo	blend_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
@@ -743,7 +796,7 @@ void	createPBRPipeline(GraphicsContext *ctx)
 	VkGraphicsPipelineCreateInfo	pipeline_info = {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &render_info,
-		.stageCount = sizeofarray(shader_stages),
+		.stageCount = shader_stage_count,
 		.pStages = shader_stages,
 		.pVertexInputState = &vertex_input_info,
 		.pInputAssemblyState = &imput_assembly_info,
@@ -793,21 +846,9 @@ static void	createTEXTPipeline(GraphicsContext *ctx)
 		exit(1);
 	}
 
-	createShaders(ctx, STRING_LIT("text"), &ctx->pipeline_text);
-	VkPipelineShaderStageCreateInfo	shader_stages[] = {
-		{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.stage = VK_SHADER_STAGE_VERTEX_BIT,
-			.module = ctx->pipeline_text.vertex_shader,
-			.pName = "vertMain"
-		},
-		{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-			.module = ctx->pipeline_text.frag_shader,
-			.pName = "fragMain"
-		}
-	};
+	u32	shader_stage_count;
+	VkPipelineShaderStageCreateInfo	shader_stages[2] = {0};
+	pipelineShaderCreate(ctx, STRING_LIT("text"), &ctx->pipeline_text, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, &shader_stage_count, shader_stages);
 
 	VkVertexInputBindingDescription	bind_desc = {
 		.binding = 0,
@@ -850,38 +891,16 @@ static void	createTEXTPipeline(GraphicsContext *ctx)
 		.stencilTestEnable = VK_FALSE
 	};
 
-	VkPipelineViewportStateCreateInfo	viewport_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-		.viewportCount = 1,
-		.pViewports = NULL,
-		.scissorCount = 1,
-		.pScissors = NULL
-	};
+	VkPipelineViewportStateCreateInfo	viewport_info = viewportCreate();
 
-	VkPipelineRasterizationStateCreateInfo	rasterization_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		.polygonMode = VK_POLYGON_MODE_FILL,
-		.cullMode = VK_CULL_MODE_NONE,
-		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-		.lineWidth = 1.0f
-	};
+	VkPipelineRasterizationStateCreateInfo	rasterization_info = rasterizationCreate(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
 
 	VkPipelineMultisampleStateCreateInfo	multisample_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
 	};
 
-	VkPipelineColorBlendAttachmentState color_blend_attach = {
-		.blendEnable = VK_TRUE,
-		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-		.colorBlendOp = VK_BLEND_OP_ADD,
-		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-		.alphaBlendOp = VK_BLEND_OP_ADD,
-		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-		VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-	};
+	VkPipelineColorBlendAttachmentState color_blend_attach = colorBlend(true);
 
 	VkPipelineColorBlendStateCreateInfo	blend_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
@@ -910,7 +929,7 @@ static void	createTEXTPipeline(GraphicsContext *ctx)
 	VkGraphicsPipelineCreateInfo	pipeline_info = {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &render_info,
-		.stageCount = sizeofarray(shader_stages),
+		.stageCount = shader_stage_count,
 		.pStages = shader_stages,
 		.pVertexInputState = &vertex_input_info,
 		.pInputAssemblyState = &imput_assembly_info,
@@ -961,21 +980,9 @@ static void	createGRIDPipeline(GraphicsContext *ctx)
 		exit(1);
 	}
 
-	createShaders(ctx, STRING_LIT("grid"), &ctx->pipeline_grid);
-	VkPipelineShaderStageCreateInfo	shader_stages[] = {
-		{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.stage = VK_SHADER_STAGE_VERTEX_BIT,
-			.module = ctx->pipeline_grid.vertex_shader,
-			.pName = "vertMain"
-		},
-		{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-			.module = ctx->pipeline_grid.frag_shader,
-			.pName = "fragMain"
-		}
-	};
+	u32				shader_stage_count;
+	VkPipelineShaderStageCreateInfo	shader_stages[2] = {0};
+	pipelineShaderCreate(ctx, STRING_LIT("grid"), &ctx->pipeline_grid, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, &shader_stage_count, shader_stages);
 
 
 	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
@@ -999,41 +1006,16 @@ static void	createGRIDPipeline(GraphicsContext *ctx)
 		.stencilTestEnable = VK_FALSE
 	};
 
-	VkPipelineViewportStateCreateInfo	viewport_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-		.viewportCount = 1,
-		.pViewports = NULL,
-		.scissorCount = 1,
-		.pScissors = NULL
-	};
+	VkPipelineViewportStateCreateInfo	viewport_info = viewportCreate();
 
-	VkPipelineRasterizationStateCreateInfo	rasterization_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		.polygonMode = VK_POLYGON_MODE_FILL,
-		.cullMode = VK_CULL_MODE_NONE,
-		.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-		.lineWidth = 1.0f
-	};
+	VkPipelineRasterizationStateCreateInfo	rasterization_info = rasterizationCreate(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
 
 	VkPipelineMultisampleStateCreateInfo	multisample_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
 	};
 
-	VkPipelineColorBlendAttachmentState	color_blend_attach = {
-		.blendEnable = VK_TRUE,
-		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-		.colorBlendOp = VK_BLEND_OP_ADD,
-		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-		.alphaBlendOp = VK_BLEND_OP_ADD,
-		.colorWriteMask =\
-		VK_COLOR_COMPONENT_R_BIT
-		| VK_COLOR_COMPONENT_G_BIT
-		| VK_COLOR_COMPONENT_B_BIT
-		| VK_COLOR_COMPONENT_A_BIT,
-	};
+	VkPipelineColorBlendAttachmentState	color_blend_attach = colorBlend(true);
 
 	VkPipelineColorBlendStateCreateInfo	blend_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
@@ -1062,7 +1044,7 @@ static void	createGRIDPipeline(GraphicsContext *ctx)
 	VkGraphicsPipelineCreateInfo	pipeline_info = {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &render_info,
-		.stageCount = sizeofarray(shader_stages),
+		.stageCount = shader_stage_count,
 		.pStages = shader_stages,
 		.pVertexInputState = &vertex_input_info,
 		.pInputAssemblyState = &imput_assembly_info,
@@ -1486,7 +1468,7 @@ static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 	memcpy(resource->uniform_buffer.mapped, &ubo, sizeof(UniformBufferObject));
 }
 
-void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, u32 frame_idx, UiRenderInfo info)
+void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, UiRenderInfo info)
 {
 	const VkCommandBuffer	cmd = resource->cmd_buf;
 	const PipelineObject	pipeline = ctx->pipeline_text;
@@ -1756,12 +1738,11 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, 
 		PBRPass(ctx, entity_info, resource, frame_res_index);
 
 		// ---- TEXT Pass --------------- //
-		TEXTPass(ctx, resource, frame_res_index, text_info);
+		TEXTPass(ctx, resource, text_info);
 	}
 	vkCmdEndRendering(resource->cmd_buf);
 
-	VkImageMemoryBarrier2	present_layout_barrier = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+	ImageTransitionInfo	img_colorattach_present = {
 		.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 		.srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
 		.dstStageMask = VK_PIPELINE_STAGE_2_NONE,
@@ -1769,20 +1750,10 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, 
 		.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 		.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 		.image = ctx->swapchain_images[img_idx],
-		.subresourceRange = {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.baseMipLevel = 0,
-			.levelCount = 1,
-			.baseArrayLayer = 0,
-			.layerCount = 1
-		}
+		.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		.pRange = NULL,
 	};
-	VkDependencyInfo	present_dep_info = {
-		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		.imageMemoryBarrierCount = 1,
-		.pImageMemoryBarriers = &present_layout_barrier
-	};
-	vkCmdPipelineBarrier2(resource->cmd_buf, &present_dep_info);
+	cmdTransitionImage(resource->cmd_buf, &img_colorattach_present);
 
 	vkEndCommandBuffer(resource->cmd_buf);
 
