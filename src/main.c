@@ -135,11 +135,12 @@ static inline void beginFrame(World *world) {
 							SDL_StopTextInput(world->graphics_ctx->window);
 							consumed = true; 
 							break;
-						case SDL_SCANCODE_BACKSPACE: consoleBackspace(); consumed = true; break;
+						case SDL_SCANCODE_BACKSPACE:	consoleBackspace(); consumed = true; break;
 						case SDL_SCANCODE_RETURN:
-						case SDL_SCANCODE_KP_ENTER:  consoleEnter(&world->frame_allocator); consumed = true; break;
-						case SDL_SCANCODE_LEFT:      consoleLeftArrow(); consumed = true; break;
-						case SDL_SCANCODE_RIGHT:     consoleRightArrow(); consumed = true; break;
+						case SDL_SCANCODE_KP_ENTER:	consoleEnter(&world->frame_allocator); consumed = true; break;
+						case SDL_SCANCODE_LEFT:		consoleLeftArrow(); consumed = true; break;
+						case SDL_SCANCODE_RIGHT:	consoleRightArrow(); consumed = true; break;
+						case SDL_SCANCODE_TAB:		consoleTab(); consumed = true; break;
 						default: break;
 					}
 				}
@@ -283,6 +284,7 @@ int	main(void)
 
 	startGraphics(world.graphics_ctx);
 	initUi(&ui, gctx.window_width, gctx.window_height, &world.perm_allocator);
+	consoleInit(&world.perm_allocator);
 
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);
 	initPlayer(world.player);

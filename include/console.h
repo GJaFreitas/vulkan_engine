@@ -18,7 +18,9 @@ void	consoleBackspace(void);
 void	consoleEnter(Allocator *frame_allocator);
 void	consoleLeftArrow(void);
 void	consoleRightArrow(void);
+void	consoleTab(void);
 
+void	consoleInit(Allocator *perm_arena);
 
 ConsoleCommand	*consoleHist(u16 *start);
 String	consoleInput(void);
