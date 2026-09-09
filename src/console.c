@@ -372,9 +372,16 @@ static void	validateAndDispatch(InputBuffer ibuf, Allocator *frame_allocator)
 void	consoleBackspace(void)
 {
 	if (input.cursor_pos > 0) {
-		input.cursor_pos--;
-		input.strlen--;
-		input.input_buf[input.cursor_pos] = '\0'; 
+		// Hold everything after 'cursor_pos'
+		u8		front[CONSOLE_MAX_INPUT_LEN];
+		const u32	front_size = input.strlen - input.cursor_pos;
+		memcpy(front, input.input_buf + input.cursor_pos, front_size);
+
+		if (input.cursor_pos != 0)
+			input.cursor_pos--;
+		if (input.strlen != 0)
+			input.strlen--;
+		memcpy(input.input_buf + input.cursor_pos, front, front_size);
 	}
 }
 
@@ -401,9 +408,15 @@ void	consoleEnter(Allocator *frame_allocator)
 
 void	consoleInputInsert(const char *text, u64 len)
 {
-	if (input.cursor_pos + len < CONSOLE_MAX_INPUT_LEN - 1) {
-		memcpy(&input.input_buf[input.cursor_pos], text, len);
+	if (input.strlen + len < CONSOLE_MAX_INPUT_LEN - 1) {
+		// Hold everything after 'cursor_pos'
+		u8		front[CONSOLE_MAX_INPUT_LEN];
+		const u32	front_size = input.strlen - input.cursor_pos;
+		memcpy(front, input.input_buf + input.cursor_pos, front_size);
+
+		memcpy(input.input_buf + input.cursor_pos, text, len);
 		input.cursor_pos += len;
+		memcpy(input.input_buf + input.cursor_pos, front, front_size);
 		input.strlen += len;
 	}
 }
@@ -447,12 +460,14 @@ String	consoleInput(void)
 
 void	consoleLeftArrow(void)
 {
-
+	if (input.cursor_pos != 0)
+		input.cursor_pos -= 1;
 }
 
 void	consoleRightArrow(void)
 {
-	
+	if (input.cursor_pos < input.strlen)
+		input.cursor_pos += 1;
 }
 
 void	consoleTab(void)
@@ -469,4 +484,10 @@ void	consoleTab(void)
 	input.cursor_pos = completion.count + 1;
 	input.input_buf[input.cursor_pos - 1] = ' ';
 	input.strlen = completion.count + 1;
+}
+
+i32	consoleCursor(bool cursor)
+{
+	if (cursor)	return input.cursor_pos;
+	else		return -1;
 }

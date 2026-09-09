@@ -215,7 +215,8 @@ void	imguiText(TextSpec spec, Allocator *frame_arena, const char *fmt, ...)
 	text->size_mode[X] = UI_SIZE_AUTO;
 	text->size_mode[Y] = UI_SIZE_AUTO;
 	glm_vec4_copy(spec.text_color, text->text_color);
-	text->is_text_dirty = true;
+	setFlag32(&text->text_flags, TEXT_IS_DIRTY);
+	setFlag32(&text->text_flags, spec.flags);
 	text->offset[X] = spec.nudge_x;
 	text->offset[Y] = spec.nudge_y;
 
@@ -346,7 +347,8 @@ static void pushShapeInstance(UiComponent *node, UiRenderInstance *instances, u3
 	(*count)++;
 }
 
-static void pushTextInstances(UiComponent *node, UiRenderInstance *instances, u32 *count)
+// -1 cursor pos for text that wont render a cursor
+static void pushTextInstances(UiComponent *node, UiRenderInstance *instances, u32 *count, i32 cursor_pos)
 {
 	const TextAtlas *atlas = &node->font->atlas;
 	const f32 px_per_em = node->font_size;
@@ -355,10 +357,19 @@ static void pushTextInstances(UiComponent *node, UiRenderInstance *instances, u3
 	// Font size so that the baseline of the text aligns with the box its in
 	f32 cursor_y = node->final_screen_pos[Y] + node->font_size;
 
+	// The console string starts with '> ' as such we need to advance the cursor
+	if (cursor_pos != -1)
+		cursor_pos += 2;
+	f32	text_cursor_x = -1;
+
 	// Loop over our cached glyphs instead of calling HarfBuzz!
 	for (u32 i = 0; i < node->shaped_glyph_count; i++) {
 		UiShapedGlyph *cached = &node->shaped_glyphs[i];
 		const GlyphInfo *g = atlasFindGlyph(atlas, cached->atlas_index);
+
+		if (cursor_pos != -1 && (i32)i == cursor_pos) {
+			text_cursor_x = cursor_x;
+		}
 
 		if (g) {
 			const f32 glyph_width = g->plane_max[X] - g->plane_min[X];
@@ -397,6 +408,31 @@ static void pushTextInstances(UiComponent *node, UiRenderInstance *instances, u3
 		cursor_x += cached->x_advance;
 		cursor_y += cached->y_advance;
 	}
+	if (cursor_pos == -1) return ;
+
+	// The cursor is at end of string
+	if (text_cursor_x == -1)
+		text_cursor_x = cursor_x;
+
+	const u32 idx = *count;
+	UiRenderInstance *inst = &instances[idx];
+	memset(inst, 0, sizeof(UiRenderInstance));
+
+	glm_vec4_copy(node->clip_rect, inst->clip_rect);
+	inst->primitive_type = UI_PRIMITIVE_RECTANGLE; // Render as a solid shape
+	inst->stroke_width   = 2.0f;
+	inst->corner_radius  = 0.0f;
+
+	// Draw a line 2 pixels thick, resting exactly on the text baseline
+	inst->pos[X] = text_cursor_x;
+	inst->pos[Y] = node->final_screen_pos[Y] + node->font_size + 2.0f; 
+
+	// Width of the cursor (half an EM width looks standard for console text)
+	inst->size[X] = node->font_size * 0.5f; 
+	inst->size[Y] = 2.0f; 
+
+	glm_vec4_copy(node->text_color, inst->color);
+	(*count)++;
 }
 
 static void traverseForRender(u16 node_idx, UiRenderInstance *instances, u32 *count)
@@ -415,7 +451,12 @@ static void traverseForRender(u16 node_idx, UiRenderInstance *instances, u32 *co
 
 	if (has_size && has_color) {
 		if (node->primitive_type == UI_PRIMITIVE_TEXT_GLYPH) {
-			pushTextInstances(node, instances, count);
+			pushTextInstances(
+				node,
+				instances,
+				count,
+				consoleCursor(queryFlag32(node->text_flags, TEXT_HAS_CURSOR))
+			);
 		} else {
 			pushShapeInstance(node, instances, count);
 		}
@@ -448,7 +489,7 @@ void uiCalculateSizes(u16 node_idx, Allocator *arena)
 			
 			// === TEXT CACHING & MEASUREMENT ===
 			if (node->primitive_type == UI_PRIMITIVE_TEXT_GLYPH) {
-				if (node->is_text_dirty == false) break ;
+				if (queryFlag32(node->text_flags, TEXT_IS_DIRTY) == false) break ;
 
 				// 1. Run HarfBuzz
 				static hb_buffer_t *buf = NULL;
@@ -486,7 +527,7 @@ void uiCalculateSizes(u16 node_idx, Allocator *arena)
 				node->final_screen_size[Y] = node->font_size;
 
 				hb_buffer_reset(buf);
-				node->is_text_dirty = false;
+				unsetFlag32(&node->text_flags, TEXT_IS_DIRTY);
 			} else {
 
 				// If it's a container, size is based on children
@@ -709,6 +750,7 @@ void	openConsole(u32 screen_w, u32 screen_h, Font *font, u8 console_font_size, A
 		.text_color = {1, 1, 1, 1},
 		.nudge_x = 0,
 		.nudge_y = 0,
+		.flags = TEXT_HAS_CURSOR,
 	};
 	imguiText(text_input_spec, frame_arena, "> %S", consoleInput());
 

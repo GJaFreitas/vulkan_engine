@@ -69,10 +69,8 @@ typedef struct UiShapedGlyph
 	f32	y_advance;
 }	UiShapedGlyph;
 
-// Add these to your UiComponent struct:
-// UiShapedGlyph *shaped_glyphs;
-// u32 shaped_glyph_count;
-// bool is_text_dirty;
+#define TEXT_IS_DIRTY	(1 << 0)
+#define TEXT_HAS_CURSOR	(1 << 1)
 
 // TODO: Pack this struct... a lot
 typedef struct UiComponent
@@ -101,7 +99,7 @@ typedef struct UiComponent
 	vec4		text_color;
 	UiShapedGlyph	*shaped_glyphs;
 	u32		shaped_glyph_count;
-	bool		is_text_dirty;
+	u32		text_flags;
 
 	// --- SHAPE ---
 	vec4		outer_color;
@@ -145,6 +143,7 @@ typedef struct TextSpec
 	vec4		text_color;
 	f32		nudge_x;
 	f32		nudge_y;
+	u32		flags;
 }	TextSpec;
 
 void	initUi(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm);

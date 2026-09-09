@@ -24,4 +24,5 @@ void	consoleInit(Allocator *perm_arena);
 
 ConsoleCommand	*consoleHist(u16 *start);
 String	consoleInput(void);
+i32	consoleCursor(bool cursor);
 void	consoleAppend(const char *fmt, ...);

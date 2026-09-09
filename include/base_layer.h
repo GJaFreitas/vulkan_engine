@@ -19,6 +19,16 @@
 
 #include "all.h"
 
+static inline void	setFlag32(u32 *bitset, u32 flag) {
+	*bitset = *bitset | flag;
+}
+static inline void	unsetFlag32(u32 *bitset, u32 flag) {
+	*bitset = *bitset & ~flag;
+}
+static inline bool	queryFlag32(u32 bitset, u32 flag) {
+	return (bitset & flag) == flag;
+}
+
 // For cglm
 #define X 0
 #define Y 1
