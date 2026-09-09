@@ -140,6 +140,8 @@ static inline void beginFrame(World *world) {
 						case SDL_SCANCODE_KP_ENTER:	consoleEnter(&world->frame_allocator); consumed = true; break;
 						case SDL_SCANCODE_LEFT:		consoleLeftArrow(); consumed = true; break;
 						case SDL_SCANCODE_RIGHT:	consoleRightArrow(); consumed = true; break;
+						case SDL_SCANCODE_UP:		consoleUpArrow(); consumed = true; break;
+						case SDL_SCANCODE_DOWN:		consoleDownArrow(); consumed = true; break;
 						case SDL_SCANCODE_TAB:		consoleTab(); consumed = true; break;
 						default: break;
 					}

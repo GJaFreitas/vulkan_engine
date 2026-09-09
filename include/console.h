@@ -9,6 +9,7 @@
 #define MAX_HISTORY	200
 typedef struct ConsoleHistory
 {
+	bool	is_appended;
 	u8	command[CONSOLE_MAX_INPUT_LEN];
 	u16	command_len;
 }	ConsoleCommand;
@@ -19,6 +20,8 @@ void	consoleEnter(Allocator *frame_allocator);
 void	consoleLeftArrow(void);
 void	consoleRightArrow(void);
 void	consoleTab(void);
+void	consoleUpArrow(void);
+void	consoleDownArrow(void);
 
 void	consoleInit(Allocator *perm_arena);
 

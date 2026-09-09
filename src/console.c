@@ -279,6 +279,9 @@ void	_trie_test(int argc, String *argv)
 
 // --- COMMAND DISPATCH --- //
 
+ConsoleCommand	storage;
+i16		current_history_view = -1;
+
 ConsoleCommand	commands[MAX_HISTORY];
 u16		current_history_idx = 0;
 
@@ -402,6 +405,7 @@ void	consoleEnter(Allocator *frame_allocator)
 		memset(input.input_buf, 0, CONSOLE_MAX_INPUT_LEN);
 		input.cursor_pos = 0;
 		input.strlen = 0;
+		current_history_view = -1;
 		// --- //
 	}
 }
@@ -438,6 +442,7 @@ void	consoleAppend(const char *fmt, ...)
 	if (text.count >= CONSOLE_MAX_INPUT_LEN) text.count = CONSOLE_MAX_INPUT_LEN - 1;
 	memcpy(new_command.command, text.data, text.count);
 	new_command.command_len = text.count;
+	new_command.is_appended = true;
 	if (current_history_idx >= MAX_HISTORY) {
 		current_history_idx = 0;
 	}
@@ -490,4 +495,102 @@ i32	consoleCursor(bool cursor)
 {
 	if (cursor)	return input.cursor_pos;
 	else		return -1;
+}
+
+void    consoleUpArrow(void)
+{
+	i16 search_idx;
+
+	// 1. Setup the starting index for our backwards search
+	if (current_history_view == -1) {
+		// Save what the user is currently typing before moving away
+		memcpy(storage.command, input.input_buf, input.strlen);
+		storage.command_len = input.strlen;
+
+		search_idx = current_history_idx - 1;
+	} else {
+		search_idx = current_history_view - 1;
+	}
+
+	// 2. Scan backwards until we find a user-typed command
+	bool found = false;
+	for (u16 i = 0; i < MAX_HISTORY; i++) {
+		if (search_idx < 0) {
+			search_idx = MAX_HISTORY - 1;
+		}
+
+		// If we wrapped all the way back around to the write head, stop searching
+		if (i > 0 && search_idx == current_history_idx) {
+			break;
+		}
+
+		// Check if it's a valid, user-typed command
+		if (!commands[search_idx].is_appended && commands[search_idx].command_len > 0) {
+			found = true;
+			break;
+		}
+
+		search_idx--;
+	}
+
+	// 3. If we found one, apply it to the console
+	if (found) {
+		current_history_view = search_idx;
+
+		memset(input.input_buf, 0, CONSOLE_MAX_INPUT_LEN);
+		memcpy(input.input_buf, commands[current_history_view].command, commands[current_history_view].command_len);
+		input.strlen = commands[current_history_view].command_len;
+		input.cursor_pos = input.strlen;
+	}
+}
+
+void    consoleDownArrow(void)
+{
+	// If we are already at the present prompt, do nothing
+	if (current_history_view == -1) {
+		return; 
+	}
+
+	// 1. Scan forwards until we find a user-typed command OR hit the present
+	i16 search_idx = current_history_view + 1;
+	bool found = false;
+	bool reached_present = false;
+
+	for (u16 i = 0; i < MAX_HISTORY; i++) {
+		if (search_idx >= MAX_HISTORY) {
+			search_idx = 0;
+		}
+
+		// If we reach the write head, we are back to the present time
+		if (search_idx == current_history_idx) {
+			reached_present = true;
+			break;
+		}
+
+		// Check if it's a valid, user-typed command
+		if (!commands[search_idx].is_appended && commands[search_idx].command_len > 0) {
+			found = true;
+			break;
+		}
+
+		search_idx++;
+	}
+
+	// 2. Apply the result
+	memset(input.input_buf, 0, CONSOLE_MAX_INPUT_LEN);
+
+	if (reached_present) {
+		current_history_view = -1;
+
+		// Restore what the user was originally typing
+		memcpy(input.input_buf, storage.command, storage.command_len);
+		input.strlen = storage.command_len;
+	} else if (found) {
+		// Show the next valid user command in history
+		current_history_view = search_idx;
+		memcpy(input.input_buf, commands[current_history_view].command, commands[current_history_view].command_len);
+		input.strlen = commands[current_history_view].command_len;
+	}
+
+	input.cursor_pos = input.strlen;
 }
