@@ -22,6 +22,8 @@
 
 [ ] Fix antialiasing in font rendering
 
+[ ] Implement indirect drawing
+
 ### --- STUFF THAT DOESNT WORK ---
 
 Change strViewChr() to strViewUpToChar()

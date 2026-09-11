@@ -80,22 +80,44 @@ void	uploadAtlasToGpu(GraphicsContext *ctx, TextAtlas *atlas, u8 *atlas_data)
 	};
 	vkCreateSampler(ctx->device, &sampler_info, NULL, &atlas->sampler);
 
-	VkDescriptorImageInfo	atlas_image_info = {
-		.sampler = atlas->sampler,
+	// 1. Allocate an index in the global heap and save it to the context
+	ctx->font_atlas_global_index = ctx->next_free_texture_index++;
+
+	// 2. Write the Texture (Binding 0)
+	VkDescriptorImageInfo atlas_image_info = {
+		.sampler = VK_NULL_HANDLE, // Separated in bindless
 		.imageView = atlas->gpu_image.view,
 		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 	};
-
-	VkWriteDescriptorSet	atlas_descriptor_write = {
+	VkWriteDescriptorSet atlas_tex_write = {
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.dstSet = ctx->atlas_descriptor_set,
+		.dstSet = ctx->global_descriptor_set,
 		.dstBinding = 0,
-		.dstArrayElement = 0,
+		.dstArrayElement = ctx->font_atlas_global_index,
 		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
 		.pImageInfo = &atlas_image_info,
 	};
-	vkUpdateDescriptorSets(ctx->device, 1, &atlas_descriptor_write, 0, NULL);
+
+	// 3. Write the Sampler (Binding 1)
+	VkDescriptorImageInfo atlas_sampler_info = {
+		.sampler = atlas->sampler,
+		.imageView = VK_NULL_HANDLE,
+		.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+	};
+	VkWriteDescriptorSet atlas_samp_write = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = ctx->global_descriptor_set,
+		.dstBinding = 1,
+		.dstArrayElement = ctx->font_atlas_global_index,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+		.pImageInfo = &atlas_sampler_info,
+	};
+
+	// 4. Update the global descriptor set
+	VkWriteDescriptorSet writes[] = {atlas_tex_write, atlas_samp_write};
+	vkUpdateDescriptorSets(ctx->device, 2, writes, 0, NULL);
 
 }
 

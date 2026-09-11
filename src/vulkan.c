@@ -7,6 +7,31 @@
 
 // --- VULKAN API --- //
 
+void	createVkBuffer(GraphicsContext *ctx, const BufferInfo *info, BufferObject *out_buffer)
+{
+	VkBufferCreateInfo buf_info = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = info->size,
+		// CRITICAL: Automatically inject the BDA flag into ALL buffers
+		.usage = info->usage | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
+	};
+
+	wrapperVMAcreateBuffer(ctx->vma_allocator, &buf_info, &out_buffer->handle, &out_buffer->allocation, info->cpu_accessible);
+
+	if (info->cpu_accessible) {
+		wrapperVMAmapMemory(ctx->vma_allocator, out_buffer->allocation, &out_buffer->mapped);
+	} else {
+		out_buffer->mapped = NULL;
+	}
+
+	VkBufferDeviceAddressInfo bda_info = {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+		.buffer = out_buffer->handle
+	};
+	out_buffer->device_address = vkGetBufferDeviceAddress(ctx->device, &bda_info);
+}
+
 void	cmdTransitionImage(VkCommandBuffer cmd, const ImageTransitionInfo *info)
 {
 	// Default to the entire image
@@ -47,12 +72,6 @@ void	cmdTransitionImage(VkCommandBuffer cmd, const ImageTransitionInfo *info)
 	};
 
 	vkCmdPipelineBarrier2(cmd, &dep_info);
-}
-
-static inline void	createMappedBuffer(void *allocator, VkBufferCreateInfo *buf_info, BufferObject *buf)
-{
-	wrapperVMAcreateBuffer(allocator, buf_info, &buf->handle, &buf->allocation, 1);
-	wrapperVMAmapMemory(allocator, buf->allocation, &buf->mapped);
 }
 
 void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, u32 data_size, void *data_for_upload, ImageObject *gpu_image)
@@ -379,11 +398,30 @@ static void	createDevice(GraphicsContext *ctx)
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
 		.synchronization2 = VK_TRUE,
 		.dynamicRendering = VK_TRUE,
+		.shaderDemoteToHelperInvocation = VK_TRUE,
 		.pNext = &features14,
 	};
 	VkPhysicalDeviceVulkan12Features	features12 = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
 		.timelineSemaphore = VK_TRUE,
+		// -- Buffer Device Address (BDA) --
+		// Allows us to get 64-bit pointers to GPU memory
+		.bufferDeviceAddress = VK_TRUE,
+
+		// -- Descriptor Indexing (Global Texture Heap) --
+		// Allows us to leave slots in our 10,000 texture array empty
+		.descriptorBindingPartiallyBound = VK_TRUE,
+		// Allows us to add textures to the array even while the GPU is rendering
+		.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE,
+
+		// Allows shaders to index the array using non-constant integers (like from push constants)
+		.shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
+
+		// Allows the array to have a dynamic size (unbounded arrays in shaders)
+		.runtimeDescriptorArray = VK_TRUE,
+
+		// Enable unpadded structs to be passed to GPU
+		.scalarBlockLayout = VK_TRUE,
 		.pNext = &features13,
 	};
 	VkPhysicalDeviceVulkan11Features	features11 = {
@@ -394,6 +432,9 @@ static void	createDevice(GraphicsContext *ctx)
 	VkPhysicalDeviceFeatures2	features = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
 		.pNext = &features11,
+		.features = {
+			.multiDrawIndirect = VK_TRUE,
+		},
 	};
 
 	float	q_priorities = 1.0f;
@@ -599,7 +640,9 @@ static VkShaderModule	createShaderModule(String filename, shaderc_shader_kind ki
 	return module;
 }
 
-static void	createShaders(GraphicsContext *ctx, StringView shader_name, PipelineObject *pipeline)
+// --- PIPELINE CREATION --- //
+
+static void	createShaders(GraphicsContext *ctx, StringView shader_name, VkShaderStageFlagBits shader_stage, VkShaderModule *module)
 {
 	u8	buf[128] = "shaders/compiled/";
 	String	shader = { .data = buf, .count = 17 };
@@ -613,31 +656,20 @@ static void	createShaders(GraphicsContext *ctx, StringView shader_name, Pipeline
 	shader.count += 4;
 	// full shader path: shaders/compiled/{shader_name}.spv
 
-	pipeline->vertex_shader = createShaderModule(shader, shaderc_vertex_shader, ctx);
-	pipeline->frag_shader = pipeline->vertex_shader;
+	if (shader_stage == VK_SHADER_STAGE_VERTEX_BIT)
+		*module = createShaderModule(shader, shaderc_vertex_shader, ctx);
+	else if (shader_stage == VK_SHADER_STAGE_FRAGMENT_BIT)
+		*module = createShaderModule(shader, shaderc_fragment_shader, ctx);
 }
 
-
-// --- PIPELINE CREATION --- //
-
-static void	pipelineShaderCreate(GraphicsContext *ctx, String shader_name, PipelineObject *pipeline, VkShaderStageFlagBits shader_stages, u32 *_stage_count, VkPipelineShaderStageCreateInfo shader_info[2])
+static void	pipelineShaderCreate(GraphicsContext *ctx, String shader_name, const char *pName, VkShaderStageFlagBits shader_stage, VkPipelineShaderStageCreateInfo *shader_info, VkShaderModule *module)
 {
-	createShaders(ctx, shader_name, pipeline);
-	u32	stage_count = __builtin_popcount(shader_stages);
-	*_stage_count = stage_count;
+	createShaders(ctx, shader_name, shader_stage, module);
 
-	shader_info[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	shader_info[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-	shader_info[0].module = pipeline->vertex_shader;
-	shader_info[0].pName = "vertMain";
-
-	stage_count--;
-	if (stage_count) {
-		shader_info[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		shader_info[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-		shader_info[1].module = pipeline->frag_shader;
-		shader_info[1].pName = "fragMain";
-	}
+	shader_info->sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shader_info->stage = shader_stage;
+	shader_info->module = *module;
+	shader_info->pName = pName;
 }
 
 static VkPipelineViewportStateCreateInfo	viewportCreate(void)
@@ -687,6 +719,17 @@ static VkPipelineColorBlendAttachmentState	colorBlend(bool blend)
 	};
 	return color_blend_attach;
 }
+
+static VkPipelineMultisampleStateCreateInfo	multisampleCreate(void)
+{
+	VkPipelineMultisampleStateCreateInfo	multisample_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
+	};
+	return multisample_info;
+}
+
+// TODO: Create a helper function for depth stencil
 
 static void    createShadowResources(GraphicsContext *ctx)
 {
@@ -769,7 +812,38 @@ static void    createShadowResources(GraphicsContext *ctx)
 				engine_error(LOG_FILE, "Failed to create shadow map cascade layer view\n");
 				exit(1);
 			}
+
 		}
+
+		VkDescriptorSetAllocateInfo alloc_info = {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			.descriptorPool = ctx->global_descriptor_pool,
+			.descriptorSetCount = 1,
+			.pSetLayouts = &ctx->shadow_descriptor_layout
+		};
+
+		if (vkAllocateDescriptorSets(ctx->device, &alloc_info, &csm->descriptor_set) != VK_SUCCESS) {
+			engine_error(LOG_FILE, "Failed to allocate shadow descriptor set\n");
+			exit(1);
+		}
+
+		VkDescriptorImageInfo s_image_info = {
+			.sampler = ctx->shadow_sampler,
+			.imageView = csm->image.view,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL 
+		};
+
+		VkWriteDescriptorSet descriptor_write = {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = csm->descriptor_set,
+			.dstBinding = 0,
+			.dstArrayElement = 0,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.descriptorCount = 1,
+			.pImageInfo = &s_image_info
+		};
+
+		vkUpdateDescriptorSets(ctx->device, 1, &descriptor_write, 0, NULL);
 	}
 
 	engine_log(LOG_FILE, "Successfully created shadow resources");
@@ -777,60 +851,17 @@ static void    createShadowResources(GraphicsContext *ctx)
 
 void	createSHADOWPipeline(GraphicsContext *ctx)
 {
-	// Push the cascade index (0 to 3) to the vertex shader
-	VkPushConstantRange    push_constant_ranges[] = {
-		{
-			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-			.offset = 0,
-			.size = sizeof(u32), 
-		},
-	};
-
-	VkDescriptorSetLayout    layouts[] = {
-		ctx->ubo_descriptor_layout,
-		ctx->instance_descriptor_layout,
-	};
-
-	VkPipelineLayoutCreateInfo    layout_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = sizeofarray(layouts),
-		.pSetLayouts = layouts,
-		.pushConstantRangeCount = sizeofarray(push_constant_ranges),
-		.pPushConstantRanges = push_constant_ranges,
-	};
-
-	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &ctx->pipeline_shadow.layout) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create shadow pipeline layout\n");
-		exit(1);
-	}
-
-	u32				stage_count;
-	VkPipelineShaderStageCreateInfo	shader_info[2] = {0};
-	pipelineShaderCreate(ctx, STRING_LIT("shadows"), &ctx->pipeline_shadow, VK_SHADER_STAGE_VERTEX_BIT, &stage_count, shader_info);
-
-	VkVertexInputBindingDescription    bind_desc = {
-		.binding = 0,
-		.stride = sizeof(Vertex), 
-		.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
-	};
-
-	VkVertexInputAttributeDescription    attribute_desc[] = {
-		{.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, pos)},
-	};
+	VkPipelineShaderStageCreateInfo	shader_stages[1] = {0};
+	VkShaderModule	vertex;
+	pipelineShaderCreate(ctx, STRING_LIT("shadows"), "vertMain", VK_SHADER_STAGE_VERTEX_BIT, &shader_stages[0], &vertex);
 
 	VkPipelineVertexInputStateCreateInfo    vertex_input_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		.pVertexBindingDescriptions = &bind_desc,
-		.vertexBindingDescriptionCount = 1,
-		.pVertexAttributeDescriptions = attribute_desc,
-		.vertexAttributeDescriptionCount = sizeofarray(attribute_desc),
 	};
-
 	VkPipelineInputAssemblyStateCreateInfo    imput_assembly_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
 	};
-
 	VkPipelineDepthStencilStateCreateInfo    depth_stencil_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		.depthTestEnable = VK_TRUE,
@@ -838,42 +869,31 @@ void	createSHADOWPipeline(GraphicsContext *ctx)
 		.depthCompareOp = VK_COMPARE_OP_LESS,
 		.stencilTestEnable = VK_FALSE
 	};
-
 	VkPipelineViewportStateCreateInfo	viewport = viewportCreate();
-
 	VkPipelineRasterizationStateCreateInfo	raster_info = rasterizationCreate(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
 	raster_info.depthBiasEnable = VK_TRUE;
-
-	VkPipelineMultisampleStateCreateInfo    multisample_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
-	};
-
+	VkPipelineMultisampleStateCreateInfo	multisample_info = multisampleCreate();
 	VkDynamicState    dynamic_states[] = {
 		VK_DYNAMIC_STATE_VIEWPORT,
 		VK_DYNAMIC_STATE_SCISSOR,
 		VK_DYNAMIC_STATE_DEPTH_BIAS 
 	};
-
 	VkPipelineDynamicStateCreateInfo    dynamic_state_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
 		.dynamicStateCount = sizeofarray(dynamic_states),
 		.pDynamicStates = dynamic_states
 	};
-
-	// No color attachments, just the depth format
 	VkPipelineRenderingCreateInfo    render_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.colorAttachmentCount = 0,
 		.pColorAttachmentFormats = NULL,
 		.depthAttachmentFormat = ctx->swapchain_depth_format
 	};
-
 	VkGraphicsPipelineCreateInfo    pipeline_info = {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &render_info,
-		.stageCount = 1, 
-		.pStages = shader_info,
+		.stageCount = sizeofarray(shader_stages), 
+		.pStages = shader_stages,
 		.pVertexInputState = &vertex_input_info,
 		.pInputAssemblyState = &imput_assembly_info,
 		.pViewportState = &viewport,
@@ -882,74 +902,31 @@ void	createSHADOWPipeline(GraphicsContext *ctx)
 		.pDepthStencilState = &depth_stencil_info,
 		.pColorBlendState = NULL,
 		.pDynamicState = &dynamic_state_info,
-		.layout = ctx->pipeline_shadow.layout,
+		.layout = ctx->global_pipeline_layout,
 		.renderPass = VK_NULL_HANDLE
 	};
 
-	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_shadow.handle) != VK_SUCCESS) {
+	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_shadow) != VK_SUCCESS) {
 		engine_error(LOG_FILE, "Failed to create shadow graphics pipeline\n");
 		exit(1);
 	}
+
+	vkDestroyShaderModule(ctx->device, vertex, NULL);
 
 	engine_log(LOG_FILE, "Successfully created shadow graphics pipeline");
 }
 
 void	createPBRPipeline(GraphicsContext *ctx)
 {
-	VkPushConstantRange	push_constant_ranges[] = {
-		// Mat push constant
-		{
-			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-			.offset = 0,
-			.size = sizeof(MaterialProperties),
-		},
-	};
-
-	VkDescriptorSetLayout	layouts[] = {
-		ctx->ubo_descriptor_layout,
-		ctx->instance_descriptor_layout,
-		ctx->material_descriptor_layout
-	};
-
-	VkPipelineLayoutCreateInfo	layout_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = sizeofarray(layouts),
-		.pSetLayouts = layouts,
-		.pushConstantRangeCount = sizeofarray(push_constant_ranges),
-		.pPushConstantRanges = push_constant_ranges,
-	};
-
-
-	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &ctx->pipeline_pbr.layout) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create pipeline layout\n");
-		exit(1);
-	}
-
-	u32	shader_stage_count;
 	VkPipelineShaderStageCreateInfo	shader_stages[2] = {0};
-	pipelineShaderCreate(ctx, STRING_LIT("pbr"), &ctx->pipeline_pbr, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, &shader_stage_count, shader_stages);
-
-	VkVertexInputBindingDescription	bind_desc = {
-		.binding = 0,
-		.stride = sizeof(Vertex),
-		.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
-	};
-
-	VkVertexInputAttributeDescription	attribute_desc[] = {
-		{.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, pos)},
-		{.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)},
-		{.location = 2, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, uv)},
-		{.location = 3, .binding = 0, .format = VK_FORMAT_R32G32B32A32_SFLOAT, .offset = offsetof(Vertex, tangent)},
-	};
+	VkShaderModule	vertex;
+	VkShaderModule	frag;
+	pipelineShaderCreate(ctx, STRING_LIT("pbr"), "vertMain", VK_SHADER_STAGE_VERTEX_BIT, &shader_stages[0], &vertex);
+	pipelineShaderCreate(ctx, STRING_LIT("pbr"), "fragMain", VK_SHADER_STAGE_FRAGMENT_BIT, &shader_stages[1], &frag);
 
 	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		.pVertexBindingDescriptions = &bind_desc,
-		.vertexBindingDescriptionCount = 1,
-		.pVertexAttributeDescriptions = attribute_desc,
-		.vertexAttributeDescriptionCount = sizeofarray(attribute_desc),
 	};
-
 	VkPipelineInputAssemblyStateCreateInfo	imput_assembly_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
@@ -963,46 +940,33 @@ void	createPBRPipeline(GraphicsContext *ctx)
 		.stencilTestEnable = VK_FALSE
 	};
 
-	VkPipelineViewportStateCreateInfo	viewport_info = viewportCreate();
-
 	VkPipelineRasterizationStateCreateInfo	rasterization_info = rasterizationCreate(
 		VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
 
-	VkPipelineMultisampleStateCreateInfo	multisample_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
-	};
-
+	VkPipelineViewportStateCreateInfo	viewport_info = viewportCreate();
+	VkPipelineMultisampleStateCreateInfo	multisample_info = multisampleCreate();
 	VkPipelineColorBlendAttachmentState	color_blend_attach = colorBlend(true);
-
 	VkPipelineColorBlendStateCreateInfo	blend_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 		.attachmentCount = 1,
 		.pAttachments = &color_blend_attach
 	};
-
-	VkDynamicState	dynamic_states[] = {
-		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_SCISSOR
-	};
-
+	VkDynamicState	dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
 	VkPipelineDynamicStateCreateInfo	dynamic_state_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
 		.dynamicStateCount = sizeofarray(dynamic_states),
 		.pDynamicStates = dynamic_states
 	};
-
 	VkPipelineRenderingCreateInfo	render_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.colorAttachmentCount = 1,
 		.pColorAttachmentFormats = &ctx->swapchain_format.format,
 		.depthAttachmentFormat = ctx->swapchain_depth_format
 	};
-
 	VkGraphicsPipelineCreateInfo	pipeline_info = {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &render_info,
-		.stageCount = shader_stage_count,
+		.stageCount = sizeofarray(shader_stages),
 		.pStages = shader_stages,
 		.pVertexInputState = &vertex_input_info,
 		.pInputAssemblyState = &imput_assembly_info,
@@ -1012,82 +976,36 @@ void	createPBRPipeline(GraphicsContext *ctx)
 		.pDepthStencilState = &depth_stencil_info,
 		.pColorBlendState = &blend_info,
 		.pDynamicState = &dynamic_state_info,
-		.layout = ctx->pipeline_pbr.layout,
+		.layout = ctx->global_pipeline_layout,
 		.renderPass = VK_NULL_HANDLE
 	};
 
-	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_pbr.handle) != VK_SUCCESS) {
+	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_pbr) != VK_SUCCESS) {
 		engine_error(LOG_FILE, "Failed to create graphics pipeline\n");
 		exit(1);
 	}
+
+	vkDestroyShaderModule(ctx->device, vertex, NULL);
+	vkDestroyShaderModule(ctx->device, frag, NULL);
 
 	engine_log(LOG_FILE, "Successfully created graphics pipeline");
 }
 
 static void	createTEXTPipeline(GraphicsContext *ctx)
 {
-	VkPushConstantRange	push_constant_ranges[] = {
-		// Screen size
-		{
-			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-			.offset = 0,
-			.size = sizeof(TextPushConstants),
-		},
-	};
-
-	VkDescriptorSetLayout	layouts[] = {
-		ctx->atlas_descriptor_layout,
-	};
-
-	VkPipelineLayoutCreateInfo	layout_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = sizeofarray(layouts),
-		.pSetLayouts = layouts,
-		.pushConstantRangeCount = sizeofarray(push_constant_ranges),
-		.pPushConstantRanges = push_constant_ranges,
-	};
-
-	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &ctx->pipeline_text.layout) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create pipeline layout\n");
-		exit(1);
-	}
-
-	u32	shader_stage_count;
 	VkPipelineShaderStageCreateInfo	shader_stages[2] = {0};
-	pipelineShaderCreate(ctx, STRING_LIT("text"), &ctx->pipeline_text, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, &shader_stage_count, shader_stages);
-
-	VkVertexInputBindingDescription	bind_desc = {
-		.binding = 0,
-		.stride = sizeof(UiRenderInstance),
-		.inputRate = VK_VERTEX_INPUT_RATE_INSTANCE,
-	};
-
-	VkVertexInputAttributeDescription	attribute_desc[] = {
-		{0, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(UiRenderInstance, pos)},
-		{1, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(UiRenderInstance, size)},
-		{2, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(UiRenderInstance, uv_offset)},
-		{3, 0, VK_FORMAT_R32G32_SFLOAT, offsetof(UiRenderInstance, uv_size)},
-		{4, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(UiRenderInstance, color)},
-		{5, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(UiRenderInstance, inner_color)},
-		{6, 0, VK_FORMAT_R32_UINT, offsetof(UiRenderInstance, primitive_type)},
-		{7, 0, VK_FORMAT_R32_SFLOAT, offsetof(UiRenderInstance, corner_radius)},
-		{8, 0, VK_FORMAT_R32_SFLOAT, offsetof(UiRenderInstance, stroke_width)},
-		{9, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(UiRenderInstance, clip_rect)},
-	};
+	VkShaderModule	vertex;
+	VkShaderModule	frag;
+	pipelineShaderCreate(ctx, STRING_LIT("text"), "vertMain", VK_SHADER_STAGE_VERTEX_BIT, &shader_stages[0], &vertex);
+	pipelineShaderCreate(ctx, STRING_LIT("text"), "fragMain", VK_SHADER_STAGE_FRAGMENT_BIT, &shader_stages[1], &frag);
 
 	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		.pVertexBindingDescriptions = &bind_desc,
-		.vertexBindingDescriptionCount = 1,
-		.pVertexAttributeDescriptions = attribute_desc,
-		.vertexAttributeDescriptionCount = sizeofarray(attribute_desc),
 	};
-
 	VkPipelineInputAssemblyStateCreateInfo	imput_assembly_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
 	};
-
 	// For now no depth testing need since this a ui only pipeline
 	VkPipelineDepthStencilStateCreateInfo	depth_stencil_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
@@ -1096,46 +1014,34 @@ static void	createTEXTPipeline(GraphicsContext *ctx)
 		.depthCompareOp = VK_COMPARE_OP_LESS,
 		.stencilTestEnable = VK_FALSE
 	};
-
 	VkPipelineViewportStateCreateInfo	viewport_info = viewportCreate();
-
 	VkPipelineRasterizationStateCreateInfo	rasterization_info = rasterizationCreate(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
-
-	VkPipelineMultisampleStateCreateInfo	multisample_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
-	};
-
+	VkPipelineMultisampleStateCreateInfo	multisample_info = multisampleCreate();
 	VkPipelineColorBlendAttachmentState color_blend_attach = colorBlend(true);
-
 	VkPipelineColorBlendStateCreateInfo	blend_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 		.attachmentCount = 1,
 		.pAttachments = &color_blend_attach
 	};
-
 	VkDynamicState	dynamic_states[] = {
 		VK_DYNAMIC_STATE_VIEWPORT,
 		VK_DYNAMIC_STATE_SCISSOR
 	};
-
 	VkPipelineDynamicStateCreateInfo	dynamic_state_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
 		.dynamicStateCount = sizeofarray(dynamic_states),
 		.pDynamicStates = dynamic_states
 	};
-
 	VkPipelineRenderingCreateInfo	render_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.colorAttachmentCount = 1,
 		.pColorAttachmentFormats = &ctx->swapchain_format.format,
 		.depthAttachmentFormat = ctx->swapchain_depth_format
 	};
-
 	VkGraphicsPipelineCreateInfo	pipeline_info = {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &render_info,
-		.stageCount = shader_stage_count,
+		.stageCount = sizeofarray(shader_stages),
 		.pStages = shader_stages,
 		.pVertexInputState = &vertex_input_info,
 		.pInputAssemblyState = &imput_assembly_info,
@@ -1145,65 +1051,37 @@ static void	createTEXTPipeline(GraphicsContext *ctx)
 		.pDepthStencilState = &depth_stencil_info,
 		.pColorBlendState = &blend_info,
 		.pDynamicState = &dynamic_state_info,
-		.layout = ctx->pipeline_text.layout,
+		.layout = ctx->global_pipeline_layout,
 		.renderPass = VK_NULL_HANDLE
 	};
 
-	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_text.handle) != VK_SUCCESS) {
+	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_text) != VK_SUCCESS) {
 		engine_error(LOG_FILE, "Failed to create text pipeline\n");
 		exit(1);
 	}
+
+	vkDestroyShaderModule(ctx->device, vertex, NULL);
+	vkDestroyShaderModule(ctx->device, frag, NULL);
 
 	engine_log(LOG_FILE, "Successfully created text pipeline");
 }
 
 static void	createGRIDPipeline(GraphicsContext *ctx)
 {
-	VkPushConstantRange	push_constant_ranges[] = {
-		// Grid Properties
-		{
-			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-			.offset = 0,
-			.size = sizeof(GridProperties),
-		},
-	};
-
-	VkDescriptorSetLayout	layouts[] = {
-		ctx->ubo_descriptor_layout,
-	};
-
-	VkPipelineLayoutCreateInfo	layout_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = sizeofarray(layouts),
-		.pSetLayouts = layouts,
-		.pushConstantRangeCount = sizeofarray(push_constant_ranges),
-		.pPushConstantRanges = push_constant_ranges,
-	};
-
-
-	if (vkCreatePipelineLayout(ctx->device, &layout_info, NULL, &ctx->pipeline_grid.layout) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create pipeline layout\n");
-		exit(1);
-	}
-
-	u32				shader_stage_count;
 	VkPipelineShaderStageCreateInfo	shader_stages[2] = {0};
-	pipelineShaderCreate(ctx, STRING_LIT("grid"), &ctx->pipeline_grid, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, &shader_stage_count, shader_stages);
+	VkShaderModule	vertex;
+	VkShaderModule	frag;
+	pipelineShaderCreate(ctx, STRING_LIT("grid"), "vertMain", VK_SHADER_STAGE_VERTEX_BIT, &shader_stages[0], &vertex);
+	pipelineShaderCreate(ctx, STRING_LIT("grid"), "fragMain", VK_SHADER_STAGE_FRAGMENT_BIT, &shader_stages[1], &frag);
 
 
 	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		.pVertexBindingDescriptions = NULL,
-		.vertexBindingDescriptionCount = 0,
-		.pVertexAttributeDescriptions = NULL,
-		.vertexAttributeDescriptionCount = 0,
 	};
-
 	VkPipelineInputAssemblyStateCreateInfo	imput_assembly_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
 	};
-
 	VkPipelineDepthStencilStateCreateInfo	depth_stencil_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		.depthTestEnable = VK_TRUE,
@@ -1211,46 +1089,34 @@ static void	createGRIDPipeline(GraphicsContext *ctx)
 		.depthCompareOp = VK_COMPARE_OP_LESS,
 		.stencilTestEnable = VK_FALSE
 	};
-
 	VkPipelineViewportStateCreateInfo	viewport_info = viewportCreate();
-
 	VkPipelineRasterizationStateCreateInfo	rasterization_info = rasterizationCreate(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
-
-	VkPipelineMultisampleStateCreateInfo	multisample_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
-	};
-
+	VkPipelineMultisampleStateCreateInfo	multisample_info = multisampleCreate();
 	VkPipelineColorBlendAttachmentState	color_blend_attach = colorBlend(true);
-
 	VkPipelineColorBlendStateCreateInfo	blend_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 		.attachmentCount = 1,
 		.pAttachments = &color_blend_attach
 	};
-
 	VkDynamicState	dynamic_states[] = {
 		VK_DYNAMIC_STATE_VIEWPORT,
 		VK_DYNAMIC_STATE_SCISSOR
 	};
-
 	VkPipelineDynamicStateCreateInfo	dynamic_state_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
 		.dynamicStateCount = sizeofarray(dynamic_states),
 		.pDynamicStates = dynamic_states
 	};
-
 	VkPipelineRenderingCreateInfo	render_info = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		.colorAttachmentCount = 1,
 		.pColorAttachmentFormats = &ctx->swapchain_format.format,
 		.depthAttachmentFormat = ctx->swapchain_depth_format
 	};
-
 	VkGraphicsPipelineCreateInfo	pipeline_info = {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext = &render_info,
-		.stageCount = shader_stage_count,
+		.stageCount = sizeofarray(shader_stages),
 		.pStages = shader_stages,
 		.pVertexInputState = &vertex_input_info,
 		.pInputAssemblyState = &imput_assembly_info,
@@ -1260,14 +1126,17 @@ static void	createGRIDPipeline(GraphicsContext *ctx)
 		.pDepthStencilState = &depth_stencil_info,
 		.pColorBlendState = &blend_info,
 		.pDynamicState = &dynamic_state_info,
-		.layout = ctx->pipeline_grid.layout,
+		.layout = ctx->global_pipeline_layout,
 		.renderPass = VK_NULL_HANDLE
 	};
 
-	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_grid.handle) != VK_SUCCESS) {
+	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_grid) != VK_SUCCESS) {
 		engine_error(LOG_FILE, "Failed to create graphics pipeline\n");
 		exit(1);
 	}
+
+	vkDestroyShaderModule(ctx->device, vertex, NULL);
+	vkDestroyShaderModule(ctx->device, frag, NULL);
 
 	engine_log(LOG_FILE, "Successfully created graphics pipeline");
 }
@@ -1278,13 +1147,13 @@ static void	createFrameResources(GraphicsContext *ctx)
 	// TODO: Change allocation?
 	ctx->frame_resources = calloc(ctx->frames_in_flight_count, sizeof(FrameResources));
 
-	VkSemaphoreTypeCreateInfo	semaphore_type_info = {
+	VkSemaphoreTypeCreateInfo semaphore_type_info = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
 		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
 		.initialValue = ctx->frames_in_flight_count
 	};
 
-	VkSemaphoreCreateInfo	timeline_semaphore_info = {
+	VkSemaphoreCreateInfo timeline_semaphore_info = {
 		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
 		.pNext = &semaphore_type_info
 	};
@@ -1295,18 +1164,18 @@ static void	createFrameResources(GraphicsContext *ctx)
 	}
 
 	// Single time commands
-	VkCommandPoolCreateInfo pool_info = {
+	VkCommandPoolCreateInfo single_time_pool_info = {
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.queueFamilyIndex = ctx->queue_family_index,
 	};
 
-	if (vkCreateCommandPool(ctx->device, &pool_info, NULL, &ctx->single_time_pool) != VK_SUCCESS) {
+	if (vkCreateCommandPool(ctx->device, &single_time_pool_info, NULL, &ctx->single_time_pool) != VK_SUCCESS) {
 		engine_error(LOG_FILE, "Failed to create single time command pool");
 		exit(1);
 	}
 
 	for(u32 i = 0; i < ctx->frames_in_flight_count; i++) {
-		FrameResources	*resource = &ctx->frame_resources[i];
+		FrameResources *resource = &ctx->frame_resources[i];
 
 		VkSemaphoreCreateInfo semaphore_info = {
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
@@ -1339,41 +1208,30 @@ static void	createFrameResources(GraphicsContext *ctx)
 			exit(1);
 		}
 
-		VkBufferCreateInfo	instance_buffer_info = {
-			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		BufferInfo instance_buffer_info = {
 			.size = sizeof(EntityInstanceData) * MAX_INSTANCES,
 			.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+			.cpu_accessible = true
 		};
+		createVkBuffer(ctx, &instance_buffer_info, &resource->instance_buffer);
 
-		createMappedBuffer(ctx->vma_allocator, &instance_buffer_info, &resource->instance_buffer);
-
-		VkBufferCreateInfo	text_buffer_info = {
-			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		BufferInfo text_buffer_info = {
 			.size = sizeof(UiRenderInstance) * MAX_COMPONENTS,
-			.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+			// Treat as storage since we read it via raw pointer in the shader
+			.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, 
+			.cpu_accessible = true
 		};
+		createVkBuffer(ctx, &text_buffer_info, &resource->text_instance_buffer);
 
-		createMappedBuffer(ctx->vma_allocator, &text_buffer_info, &resource->text_instance_buffer);
-
-		VkBufferCreateInfo	ubo_info = {
-			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		BufferInfo ubo_info = {
 			.size = sizeof(UniformBufferObject),
+			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			.cpu_accessible = true
 		};
-
-		createMappedBuffer(ctx->vma_allocator, &ubo_info, &resource->uniform_buffer);
+		createVkBuffer(ctx, &ubo_info, &resource->uniform_buffer);
 	}
 
 	engine_log(LOG_FILE, "Successfully created frame resources");
-}
-
-static void	destroyShaders(GraphicsContext *ctx)
-{
-	vkDestroyShaderModule(ctx->device, ctx->pipeline_pbr.vertex_shader, NULL);
-	vkDestroyShaderModule(ctx->device, ctx->pipeline_pbr.frag_shader, NULL);
 }
 
 static void	destroySwapchain(GraphicsContext *ctx)
@@ -1406,210 +1264,143 @@ static void	destroySyncResources(GraphicsContext *ctx)
 	vkDestroySemaphore(ctx->device, ctx->timeline_semaphore, NULL);
 }
 
-static void	createDescriptorSetLayouts(GraphicsContext *ctx)
+static void	createGlobalDescriptorLayout(GraphicsContext *ctx)
 {
-	VkDescriptorSetLayoutBinding    ubo_layout_bindings[] = {
-		// UBO
-		{
-			.binding = 0,
-			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-		},
-		// Cascaded Shadow Map Array
-		{
-			.binding = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-		}
-	};
-	VkDescriptorSetLayoutBinding	instance_layout_binding = {
-		.binding = 0,
-		.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-	};
-	VkDescriptorSetLayoutBinding	altas_layout_binding = {
-		.binding = 0,
-		.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-		.descriptorCount = 1,
-		.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+	VkDescriptorSetLayoutBinding	bindings[2] = {0};
+
+	// Binding 0: Textures
+	bindings[0].binding = 0;
+	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+	bindings[0].descriptorCount = BINDLESS_TEXTURE_COUNT;
+	bindings[0].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS; // Accessible everywhere
+
+	// Binding 1: Samplers
+	bindings[1].binding = 1;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+	bindings[1].descriptorCount = BINDLESS_TEXTURE_COUNT; 
+	bindings[1].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
+
+	// The magic flags that make bindless work
+	VkDescriptorBindingFlags bindlessFlags = 
+		VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | 
+		VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+
+	VkDescriptorBindingFlags bindingFlags[2] = { bindlessFlags, bindlessFlags };
+
+	VkDescriptorSetLayoutBindingFlagsCreateInfo flagsInfo = {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+		.bindingCount = 2,
+		.pBindingFlags = bindingFlags
 	};
 
-	VkDescriptorSetLayoutCreateInfo	ubo_create_info = {
+	VkDescriptorSetLayoutCreateInfo layoutInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = sizeofarray(ubo_layout_bindings),
-		.pBindings = ubo_layout_bindings,
+		.pNext = &flagsInfo,
+		// CRITICAL: Tells Vulkan we will update this set while the GPU is running
+		.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+		.bindingCount = 2,
+		.pBindings = bindings
 	};
 
-	VkDescriptorSetLayoutCreateInfo	instance_create_info = {
+	vkCreateDescriptorSetLayout(ctx->device, &layoutInfo, NULL, &ctx->global_descriptor_layout);
+
+	VkDescriptorSetLayoutBinding	shadow_binding = {0};
+	shadow_binding.binding = 0;
+	shadow_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	shadow_binding.descriptorCount = 1; 
+	shadow_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+	VkDescriptorSetLayoutCreateInfo shadow_layout_info = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 		.bindingCount = 1,
-		.pBindings = &instance_layout_binding,
+		.pBindings = &shadow_binding
+	};
+	vkCreateDescriptorSetLayout(ctx->device, &shadow_layout_info, NULL, &ctx->shadow_descriptor_layout);
+
+	VkDescriptorSetLayout	layouts[] = {
+		ctx->global_descriptor_layout,
+		ctx->shadow_descriptor_layout,
 	};
 
-	VkDescriptorSetLayoutCreateInfo	altas_create_info = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.bindingCount = 1,
-		.pBindings = &altas_layout_binding,
+	// Optional: Create the Pipeline Layout here too!
+	// Every pipeline will use a push constant struct (max 128 bytes usually) + this one layout.
+	VkPushConstantRange pushConstant = {
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		.offset = 0,
+		.size = 128 // Adjust to size of your largest RootConstants struct
 	};
 
-	if (vkCreateDescriptorSetLayout(ctx->device, &ubo_create_info, NULL, &ctx->ubo_descriptor_layout) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create ubo layout");
-	}
-	if (vkCreateDescriptorSetLayout(ctx->device, &instance_create_info, NULL, &ctx->instance_descriptor_layout) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create ubo layout");
-	}
-	if (vkCreateDescriptorSetLayout(ctx->device, &altas_create_info, NULL, &ctx->atlas_descriptor_layout) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create ubo layout");
-	}
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		.setLayoutCount = sizeofarray(layouts),
+		.pSetLayouts = layouts,
+		.pushConstantRangeCount = 1,
+		.pPushConstantRanges = &pushConstant
+	};
+
+	vkCreatePipelineLayout(ctx->device, &pipelineLayoutInfo, NULL, &ctx->global_pipeline_layout);
 }
 
-static void    createDescriptorPoolSets(GraphicsContext *ctx)
+static void	createGlobalDescriptorPoolAndSet(GraphicsContext *ctx)
 {
-	const    u32    material_descriptor_count = 1000;
-	const    u32    atlas_count = 1;
-	VkDescriptorPoolSize    pool_sizes[] = {
-		// ubo
-		{
-			.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.descriptorCount = MAX_FRAMES_IN_FLIGHT,
-		},
-		// instances
-		{
-			.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-			.descriptorCount = MAX_FRAMES_IN_FLIGHT,
-		},
-		// materials
-		{
-			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = material_descriptor_count,
-		},
-		// text atlas
-		{
-			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = atlas_count,
-		},
-		// shadow map
-		{
-			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = MAX_FRAMES_IN_FLIGHT,
-		}
+	VkDescriptorPoolSize poolSizes[] = {
+		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, BINDLESS_TEXTURE_COUNT },
+		{ VK_DESCRIPTOR_TYPE_SAMPLER, BINDLESS_TEXTURE_COUNT },
+
+		// Shadow maps
+		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_FRAMES_IN_FLIGHT },
 	};
 
-	u64    total_sets = 0;
-	for (u32 i = 0; i < sizeofarray(pool_sizes); i++) {
-		total_sets += pool_sizes[i].descriptorCount;
-	}
-
-	VkDescriptorPoolCreateInfo    create_info = {
+	VkDescriptorPoolCreateInfo poolInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-		.maxSets = total_sets,
-		.poolSizeCount = sizeofarray(pool_sizes),
-		.pPoolSizes = pool_sizes,
+		// Must match the UPDATE_AFTER_BIND flag from the layout
+		.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+		.maxSets = 1 + MAX_FRAMES_IN_FLIGHT,
+		.poolSizeCount = sizeofarray(poolSizes),
+		.pPoolSizes = poolSizes
 	};
 
-	if (vkCreateDescriptorPool(ctx->device, &create_info, NULL, &ctx->descriptor_pool) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create descriptor pool");
-	}
+	vkCreateDescriptorPool(ctx->device, &poolInfo, NULL, &ctx->global_descriptor_pool);
 
-	VkDescriptorSetLayout ubo_layouts[MAX_FRAMES_IN_FLIGHT];
-	VkDescriptorSetLayout instance_layouts[MAX_FRAMES_IN_FLIGHT];
-	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		ubo_layouts[i] = ctx->ubo_descriptor_layout;
-		instance_layouts[i] = ctx->instance_descriptor_layout;
-	}
-
-	VkDescriptorSetAllocateInfo    ubo_alloc_info = {
+	VkDescriptorSetAllocateInfo allocInfo = {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = ctx->descriptor_pool,
-		.descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
-		.pSetLayouts = ubo_layouts,
-	};
-	VkDescriptorSetAllocateInfo    instance_alloc_info = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = ctx->descriptor_pool,
-		.descriptorSetCount = MAX_FRAMES_IN_FLIGHT,
-		.pSetLayouts = instance_layouts,
-	};
-	VkDescriptorSetAllocateInfo    atlas_alloc_info = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = ctx->descriptor_pool,
-		.descriptorSetCount = atlas_count,
-		.pSetLayouts = &ctx->atlas_descriptor_layout,
+		.descriptorPool = ctx->global_descriptor_pool,
+		.descriptorSetCount = 1,
+		.pSetLayouts = &ctx->global_descriptor_layout
 	};
 
-	if (vkAllocateDescriptorSets(ctx->device, &ubo_alloc_info, ctx->ubo_descriptor_sets) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to allocate descriptor sets");
+	vkAllocateDescriptorSets(ctx->device, &allocInfo, &ctx->global_descriptor_set);
+
+	// Initialize an atomic counter for your texture indices
+	ctx->next_free_texture_index = 0;
+	ctx->next_free_sampler_index = 0;
+}
+
+void createGlobalPipelineLayout(GraphicsContext *ctx)
+{
+	// 2. Define the Push Constants
+	// 128 bytes is the guaranteed minimum size across all Vulkan hardware.
+	// This is enough for 16 uint64_t/pointers!
+	VkPushConstantRange push_constant = {
+		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		.offset = 0,
+		.size = 128 
+	};
+
+	VkDescriptorSetLayout	layouts[] = {ctx->global_descriptor_layout, ctx->shadow_descriptor_layout};
+
+	VkPipelineLayoutCreateInfo pipeline_layout_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		.setLayoutCount = sizeofarray(layouts),
+		.pSetLayouts = layouts,
+		.pushConstantRangeCount = 1,
+		.pPushConstantRanges = &push_constant
+	};
+
+	if (vkCreatePipelineLayout(ctx->device, &pipeline_layout_info, NULL, &ctx->global_pipeline_layout) != VK_SUCCESS) {
+		engine_error(LOG_FILE, "Failed to create global pipeline layout!");
 		exit(1);
 	}
-	if (vkAllocateDescriptorSets(ctx->device, &instance_alloc_info, ctx->instance_descriptor_sets) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to allocate descriptor sets");
-		exit(1);
-	}
-	if (vkAllocateDescriptorSets(ctx->device, &atlas_alloc_info, &ctx->atlas_descriptor_set) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to allocate descriptor sets");
-		exit(1);
-	}
-
-	for (u32 i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-		FrameResources    *resource = &ctx->frame_resources[i];
-
-		VkDescriptorBufferInfo    instance_buf_info = {
-			.buffer = resource->instance_buffer.handle,
-			.offset = 0,
-			.range = sizeof(EntityInstanceData) * MAX_INSTANCES,
-		};
-
-		VkWriteDescriptorSet    instance_descriptor_write = {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = ctx->instance_descriptor_sets[i],
-			.dstBinding = 0,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-			.pBufferInfo = &instance_buf_info,
-		};
-
-		VkDescriptorBufferInfo    ubo_buf_info = {
-			.buffer = resource->uniform_buffer.handle,
-			.offset = 0,
-			.range = sizeof(UniformBufferObject),
-		};
-
-		VkWriteDescriptorSet    ubo_descriptor_write = {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = ctx->ubo_descriptor_sets[i],
-			.dstBinding = 0,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.pBufferInfo = &ubo_buf_info,
-		};
-
-		VkDescriptorImageInfo    shadow_map_info = {
-			.sampler = ctx->shadow_sampler,
-			.imageView = ctx->shadow_maps[i].image.view,
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		};
-
-		VkWriteDescriptorSet    shadow_descriptor_write = {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = ctx->ubo_descriptor_sets[i],
-			.dstBinding = 1,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.pImageInfo = &shadow_map_info,
-		};
-
-		VkWriteDescriptorSet    writes[] = { ubo_descriptor_write, instance_descriptor_write, shadow_descriptor_write };
-		vkUpdateDescriptorSets(ctx->device, sizeofarray(writes), writes, 0, NULL);
-	}
-
-	engine_log(LOG_FILE, "Successfully created descriptor pools and sets");
 }
 
 static void	initVulkan(GraphicsContext *ctx)
@@ -1626,18 +1417,14 @@ static void	initVulkan(GraphicsContext *ctx)
 	}
 	createSwapchain(ctx, ctx->window_width, ctx->window_height);
 	// End of vulkan boilerplate -------
-	// The order of these calls is important
 
-	createDescriptorSetLayouts(ctx);
+	createGlobalDescriptorLayout(ctx);
+	createGlobalDescriptorPoolAndSet(ctx);
 
 	createShadowResources(ctx);
 	createFrameResources(ctx);
 
-	createDescriptorPoolSets(ctx);
-
 	createDefaultTextures(ctx);
-
-	createMaterialDescriptorSetLayout(ctx);
 
 	// --- Pipelines --- //
 	createSHADOWPipeline(ctx);
@@ -1652,9 +1439,6 @@ static void	initVulkan(GraphicsContext *ctx)
 static void	destroyVulkan(GraphicsContext *ctx)
 {
 	destroySyncResources(ctx);
-	vkDestroyPipelineLayout(ctx->device, ctx->pipeline_pbr.layout, NULL);
-	vkDestroyPipeline(ctx->device, ctx->pipeline_pbr.handle, NULL);
-	destroyShaders(ctx);
 	destroySwapchain(ctx);
 	destroyVMA(ctx->vma_allocator);
 	vkDestroySurfaceKHR(ctx->vk_instance, ctx->surface, NULL);
@@ -1826,10 +1610,9 @@ static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 
 // »speed
 // Cache instance data instead of recalculating in pbr pass
-void    SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources *resource, u8 frame_idx)
+void SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources *resource, u8 frame_idx)
 {
 	// --- 1. PRE-PASS PIPELINE BARRIER ---
-	// Transition all cascade layers from UNDEFINED to DEPTH_ATTACHMENT_OPTIMAL
 	ImageTransitionInfo pre_transition = {
 		.image = ctx->shadow_maps[frame_idx].image.image,
 		.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
@@ -1844,12 +1627,14 @@ void    SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameReso
 	cmdTransitionImage(resource->cmd_buf, &pre_transition);
 
 	// --- 2. RENDER SETUP ---
-	const u32        total_entity_count = entity_info.entity_count;
-	const VkDescriptorSet    ubo_descriptor_set = ctx->ubo_descriptor_sets[frame_idx];
-	const VkDescriptorSet    instance_descriptor_set = ctx->instance_descriptor_sets[frame_idx];
-	EntityInstanceData        *instance_data_buf = (EntityInstanceData *)resource->instance_buffer.mapped;
+	const u32 total_entity_count = entity_info.entity_count;
+	EntityInstanceData *instance_data_buf = (EntityInstanceData *)resource->instance_buffer.mapped;
 
-	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_shadow.handle);
+	// Fetch BDA Pointers
+	const u64 ubo_addr = resource->uniform_buffer.device_address;
+	const u64 instance_addr = resource->instance_buffer.device_address;
+
+	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_shadow);
 
 	VkViewport viewport = {0.0f, 0.0f, (float)SHADOW_MAP_RESOLUTION, (float)SHADOW_MAP_RESOLUTION, 0.0f, 1.0f};
 	VkRect2D scissor = {{0, 0}, {SHADOW_MAP_RESOLUTION, SHADOW_MAP_RESOLUTION}};
@@ -1857,13 +1642,10 @@ void    SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameReso
 	vkCmdSetScissor(resource->cmd_buf, 0, 1, &scissor);
 	vkCmdSetDepthBias(resource->cmd_buf, 1.25f, 0.0f, 1.75f);
 
-	VkDescriptorSet        shadow_descriptor_sets[] = { ubo_descriptor_set, instance_descriptor_set };
-
-
 	// --- 3. CASCADE DRAW LOOP ---
 	for (u32 c = 0; c < SHADOW_MAP_CASCADE_COUNT; c++) {
 
-		VkRenderingAttachmentInfo    depth_attachment = {
+		VkRenderingAttachmentInfo depth_attachment = {
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.imageView = ctx->shadow_maps[frame_idx].cascade_views[c],
 			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
@@ -1872,7 +1654,7 @@ void    SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameReso
 			.clearValue.depthStencil = {1.0f, 0}
 		};
 
-		VkRenderingInfo    render_info = {
+		VkRenderingInfo render_info = {
 			.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
 			.renderArea = scissor,
 			.layerCount = 1,
@@ -1882,39 +1664,43 @@ void    SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameReso
 
 		vkCmdBeginRendering(resource->cmd_buf, &render_info);
 
-		vkCmdPushConstants(resource->cmd_buf, ctx->pipeline_shadow.layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(u32), &c);
-
-		VkDeviceSize        offset = 0;
-		u32            instance_cursor = 0;
-		u32            e_idx = 0;
+		u32 instance_cursor = 0;
+		u32 e_idx = 0;
 
 		while (e_idx < total_entity_count) {
-			u16        model_idx = entity_info.data[e_idx].model_idx;
-			const Model    *model = entity_info.models[model_idx];
+			u16 model_idx = entity_info.data[e_idx].model_idx;
+			const Model *model = entity_info.models[model_idx];
 
-			u32    run_start = e_idx;
-			u32    run_end = e_idx + 1;
+			u32 run_start = e_idx;
+			u32 run_end = e_idx + 1;
 			while (run_end < total_entity_count && model_idx == entity_info.data[run_end].model_idx) run_end++;
-			u32    run_count = run_end - run_start;
+			u32 run_count = run_end - run_start;
 
 			for (u32 n = 0; n < model->node_count; n++) {
-				Node        *node = &model->linear_nodes[n];
+				Node *node = &model->linear_nodes[n];
 				for (u32 m = 0; m < node->mesh_count; m++) {
-					const Mesh    *mesh = &node->meshes[m];
+					const Mesh *mesh = &node->meshes[m];
 
 					if (mesh->vertex_count == 0) continue;
 
-					u32    first_instance = instance_cursor;
+					u32 first_instance = instance_cursor;
 
 					for (u32 r = 0; r < run_count; r++) {
-						EntityRenderData    *e_data = &entity_info.data[run_start + r];
+						EntityRenderData *e_data = &entity_info.data[run_start + r];
 						glm_mat4_mul(e_data->instance_data.model_mat, node->world_transform, instance_data_buf[instance_cursor].model_mat);
 						instance_cursor++;
 					}
 
-					vkCmdBindDescriptorSets(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_shadow.layout, 0, 2, shadow_descriptor_sets, 0, NULL);
-					vkCmdBindVertexBuffers(resource->cmd_buf, 0, 1, &mesh->gpu_vertex_data, &offset);
-					vkCmdBindIndexBuffer(resource->cmd_buf, mesh->gpu_index_data, 0, mesh->index_type);
+					// Populate BDA Push Constants
+					ShadowRootConstants push_constants = {
+						.ubo_addr = ubo_addr,
+						.instance_addr = instance_addr,
+						.vertex_addr = mesh->gpu_vertex_data.device_address,
+						.cascade_index = c
+					};
+
+					vkCmdPushConstants(resource->cmd_buf, ctx->global_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ShadowRootConstants), &push_constants);
+					vkCmdBindIndexBuffer(resource->cmd_buf, mesh->gpu_index_data.handle, 0, mesh->index_type);
 					vkCmdDrawIndexed(resource->cmd_buf, mesh->index_count, run_count, 0, 0, first_instance);
 				}
 			}
@@ -1926,8 +1712,6 @@ void    SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameReso
 	}
 
 	// --- 4. POST-PASS PIPELINE BARRIER ---
-	// Transition all cascade layers to SHADER_READ_ONLY_OPTIMAL for the PBR pass
-
 	ImageTransitionInfo post_transition = {
 		.image = ctx->shadow_maps[frame_idx].image.image,
 		.oldLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
@@ -1935,7 +1719,7 @@ void    SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameReso
 		.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
 		.srcStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
 		.srcAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-		.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, // PBR shader reads it
+		.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, 
 		.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
 		.pRange = NULL
 	};
@@ -1944,112 +1728,125 @@ void    SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameReso
 
 void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, UiRenderInfo info)
 {
-	const VkCommandBuffer	cmd = resource->cmd_buf;
-	const PipelineObject	pipeline = ctx->pipeline_text;
-	const VkDescriptorSet	atlas_descriptor_set = ctx->atlas_descriptor_set;
+	const VkCommandBuffer cmd = resource->cmd_buf;
 
+	// CPU Upload
 	memcpy(resource->text_instance_buffer.mapped, info.render_instances, info.upload_size);
 
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_text.handle);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_text);
 
-	vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, 1, &atlas_descriptor_set, 0, NULL);
+	// Populate Push Constants
+	TextRootConstants push_constants = {
+		.window_size = {ctx->window_width, ctx->window_height},
+		.atlas_size = {info.atlas_size[0], info.atlas_size[1]},
+		.px_range = info.px_range,
+		.instance_addr = resource->text_instance_buffer.device_address,
+		.atlas_tex_idx = ctx->font_atlas_global_index // Set when you load the font!
+	};
 
-	const TextPushConstants	push_constants = {{ctx->window_width, ctx->window_height}, {info.atlas_size[0], info.atlas_size[1]}, info.px_range};
-	vkCmdPushConstants(cmd, pipeline.layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants), &push_constants);
+	vkCmdPushConstants(cmd, ctx->global_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TextRootConstants), &push_constants);
 
-	VkDeviceSize	offset = 0;
-	vkCmdBindVertexBuffers(cmd, 0, 1, &resource->text_instance_buffer.handle, &offset);
-
+	// Draw without binding vertex buffers or descriptors
 	vkCmdDraw(cmd, 6, info.instance_count, 0, 0);
 }
 
-void	GRIDPass(GraphicsContext *ctx, FrameResources *resource, u32 frame_idx)
+void	GRIDPass(GraphicsContext *ctx, FrameResources *resource)
 {
-	const VkDescriptorSet	ubo_descriptor_set = ctx->ubo_descriptor_sets[frame_idx];
+	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid);
 
-	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.handle);
-	VkDescriptorSet	grid_descriptor_sets[] = { ubo_descriptor_set };
+	// Populate Push Constants
+	GridRootConstants push_constants = {
+		.ubo_addr = resource->uniform_buffer.device_address,
+		.properties = ctx->grid_properties
+	};
 
-	vkCmdPushConstants(resource->cmd_buf, ctx->pipeline_grid.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GridProperties), &ctx->grid_properties);
-	vkCmdBindDescriptorSets(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid.layout, 0, 1, grid_descriptor_sets, 0, NULL);
+	// Need both Vertex (for UBO ptr) and Fragment (for properties) stages
+	vkCmdPushConstants(resource->cmd_buf, ctx->global_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GridRootConstants), &push_constants);
+
+	// Grid is usually drawn as a full-screen quad or large plane without vertex buffers
 	vkCmdDraw(resource->cmd_buf, 3, 1, 0, 0);
 }
 
 void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources *resource, u8 frame_idx)
 {
-	const u32		total_entity_count = entity_info.entity_count;
-	const VkDescriptorSet	ubo_descriptor_set = ctx->ubo_descriptor_sets[frame_idx];
-	const VkDescriptorSet	instance_descriptor_set = ctx->instance_descriptor_sets[frame_idx];
-	EntityInstanceData		*instance_data_buf = (EntityInstanceData *)resource->instance_buffer.mapped;
-	VkDeviceSize		offset = 0;
-	u32			instance_cursor = 0;
+	const u32 total_entity_count = entity_info.entity_count;
+	EntityInstanceData *instance_data_buf = (EntityInstanceData *)resource->instance_buffer.mapped;
+	u32 instance_cursor = 0;
 
-	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.handle);
+	// Fetch the 64-bit pointers for this frame's global buffers
+	const u64 ubo_addr = resource->uniform_buffer.device_address;
+	const u64 instance_addr = resource->instance_buffer.device_address;
 
-	u32	e_idx = 0;
+	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr);
+	vkCmdBindDescriptorSets(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->global_pipeline_layout, 1, 1, &ctx->shadow_maps[frame_idx].descriptor_set, 0, NULL);
+
+	u32 e_idx = 0;
 	while (e_idx < total_entity_count) {
-		u16		model_idx = entity_info.data[e_idx].model_idx;
-		const Model	*model = entity_info.models[model_idx];
+		u16 model_idx = entity_info.data[e_idx].model_idx;
+		const Model *model = entity_info.models[model_idx];
 
 		// Find total number of entities using this model
-		u32	run_start = e_idx;
-		u32	run_end = e_idx + 1;
+		u32 run_start = e_idx;
+		u32 run_end = e_idx + 1;
 		while (run_end < total_entity_count && model_idx == entity_info.data[run_end].model_idx) run_end++;
-		u32	run_count = run_end - run_start;
+		u32 run_count = run_end - run_start;
 
 		for (u32 n = 0; n < model->node_count; n++) {
-			Node		*node = &model->linear_nodes[n];
+			Node *node = &model->linear_nodes[n];
 			for (u32 m = 0; m < node->mesh_count; m++) {
-				const Mesh	*mesh = &node->meshes[m];
-
+				const Mesh *mesh = &node->meshes[m];
 
 				if (mesh->vertex_count == 0) continue;
 
-				u32	first_instance = instance_cursor;
+				u32 first_instance = instance_cursor;
 				for (u32 r = 0; r < run_count; r++) {
-					EntityRenderData	*e_data = &entity_info.data[run_start + r];
+					EntityRenderData *e_data = &entity_info.data[run_start + r];
 					glm_mat4_mul(e_data->instance_data.model_mat, node->world_transform, instance_data_buf[instance_cursor].model_mat);
 					instance_cursor++;
 				}
 
-				VkDescriptorSet		pbr_descriptor_sets[] = { ubo_descriptor_set, instance_descriptor_set, VK_NULL_HANDLE };
+				// 1. Initialize the Root Constants with BDA pointers and default material values
+				PBRRootConstants push_constants = {
+					.ubo_addr = ubo_addr,
+					.instance_addr = instance_addr,
+					.vertex_addr = mesh->gpu_vertex_data.device_address,
 
-				MaterialProperties push_constants_mat = {
+					.base_color_tex = -1,
+					.metallic_roughness_tex = -1,
+					.normal_tex = -1,
+					.occlusion_tex = -1,
+					.emissive_tex = -1,
+
 					.base_color_factor = {1.0f, 1.0f, 1.0f, 1.0f},
 					.metallic_factor = 0.0f,
 					.roughness_factor = 0.8f,
-					.basecolor_texture_set = -1,
-					.physical_descriptor_texture_set = -1,
-					.normal_texture_set = -1,
-					.occlusion_texture_set = -1,
-					.emissive_texture_set = -1,
-					.alpha_mask = 0.0f,
-					.alpha_mask_cut_off = 0.5f
+					.alpha_cutoff = 0.5f
 				};
-				u32		pbr_descriptor_set_count = 2;
+
+				// 2. Populate Bindless Texture Indices and Factors
 				if (mesh->material_index >= 0) {
-					Material	*mat = &model->materials[mesh->material_index];
+					Material *mat = &model->materials[mesh->material_index];
 
-					pbr_descriptor_set_count += 1;
-					pbr_descriptor_sets[2] = mat->descriptor_set;
+					push_constants.base_color_tex = mat->base_color_tex_idx;
+					push_constants.metallic_roughness_tex = mat->metallic_roughness_tex_idx;
+					push_constants.normal_tex = mat->normal_tex_idx;
+					push_constants.occlusion_tex = mat->occlusion_tex_idx;
+					push_constants.emissive_tex = mat->emissive_tex_idx;
 
-					push_constants_mat.roughness_factor = mat->roughness_factor;
-					push_constants_mat.metallic_factor = mat->metallic_factor;
-					push_constants_mat.alpha_mask_cut_off = mat->alpha_cutoff;
-					push_constants_mat.basecolor_texture_set = 0;
-					push_constants_mat.physical_descriptor_texture_set = 1;
-					push_constants_mat.normal_texture_set = 2;
-					push_constants_mat.occlusion_texture_set = 3;
-					push_constants_mat.emissive_texture_set = 4;
-					push_constants_mat.alpha_mask = 0.0f;
-					glm_vec4_copy(mat->base_color_factor, push_constants_mat.base_color_factor);
+					push_constants.roughness_factor = mat->roughness_factor;
+					push_constants.metallic_factor = mat->metallic_factor;
+					push_constants.alpha_cutoff = mat->alpha_cutoff;
+					glm_vec4_copy(mat->base_color_factor, push_constants.base_color_factor);
 				}
-				vkCmdPushConstants(resource->cmd_buf, ctx->pipeline_pbr.layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(MaterialProperties), &push_constants_mat);
-				vkCmdBindDescriptorSets(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr.layout, 0, pbr_descriptor_set_count, pbr_descriptor_sets, 0, NULL);
-				vkCmdBindVertexBuffers(resource->cmd_buf, 0, 1, &mesh->gpu_vertex_data, &offset);
-				vkCmdBindIndexBuffer(resource->cmd_buf, mesh->gpu_index_data, 0, mesh->index_type);
-				vkCmdDrawIndexed(resource->cmd_buf, mesh->index_count, run_count, 0, 0, first_instance);
 
+				// 3. Push to BOTH Vertex (for pointers) and Fragment (for textures/factors) stages
+				vkCmdPushConstants(resource->cmd_buf, ctx->global_pipeline_layout, 
+						VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 
+						0, sizeof(PBRRootConstants), &push_constants);
+
+				// 4. Bind Index Buffer and Draw
+				vkCmdBindIndexBuffer(resource->cmd_buf, mesh->gpu_index_data.handle, 0, mesh->index_type);
+				vkCmdDrawIndexed(resource->cmd_buf, mesh->index_count, run_count, 0, 0, first_instance);
 			}
 		}
 
@@ -2209,7 +2006,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, 
 
 		// ---- GRID Pass ------------------ //
 		if (gameStateQuery(game_state, ShowGrid))
-			GRIDPass(ctx, resource, frame_res_index);
+			GRIDPass(ctx, resource);
 
 		// ---- PBR Pass --------------- //
 		PBRPass(ctx, entity_info, resource, frame_res_index);

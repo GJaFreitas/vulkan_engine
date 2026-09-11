@@ -1,33 +1,24 @@
 module common;
 
 public static const float PI = 3.14159265359;
-public static const uint  MAX_POINT_LIGHTS = 16;
 
-public struct PointLight
+// ============================================================================
+// GLOBAL BINDLESS HEAP
+// ============================================================================
+[[vk::binding(0, 0)]] public Texture2D		g_textures[];
+[[vk::binding(1, 0)]] public SamplerState	g_samplers[];
+
+// Helper to safely sample a texture or return a default white fallback
+public float4 sampleGlobalTexture(uint tex_idx, float2 uv)
 {
-    public float4 position; // xyz = position, w = radius (for attenuation cutoff)
-    public float4 color;    // rgb = color, a = intensity
-};
+    // 0xFFFFFFFF is our fallback for "no texture"
+    if (tex_idx == 0xFFFFFFFF) {
+        return float4(1.0, 1.0, 1.0, 1.0);
+    }
 
-public struct UniformBufferObject
-{
-    public float4x4 view;
-    public float4x4 proj;
-    public float4x4 inv_view;
-    public float4x4 inv_proj;
-
-    public float4x4 lightSpaceMatrices[4];
-    public float4 cascadeSplitDepths; // z-depths where the cascades split
-
-    public float4 sun_direction;
-    public float4 sun_color;
-    public PointLight pointLights[MAX_POINT_LIGHTS];
-    public uint pointLightCount;
-
-    public float4 cam_pos;
-    public float exposure;
-    public float gamma;
-};
-
-[[vk::binding(0, 0)]]
-public ConstantBuffer<UniformBufferObject> ubo;
+    // Wrap in NonUniformResourceIndex since the index changes per-triangle/pixel
+    Texture2D tex = g_textures[NonUniformResourceIndex(tex_idx)];
+    SamplerState samp = g_samplers[NonUniformResourceIndex(tex_idx)];
+    
+    return tex.Sample(samp, uv);
+}

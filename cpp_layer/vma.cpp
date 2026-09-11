@@ -15,11 +15,12 @@ extern "C" void	*initializeVMA(VkPhysicalDevice physical_device, VkDevice device
 	vma_func_info.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
 
 	VmaAllocatorCreateInfo vma_alloc_info {
+			.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT,
 			.physicalDevice = physical_device,
 			.device = device,
 			.pVulkanFunctions = &vma_func_info,
 			.instance = instance,
-			.vulkanApiVersion = VK_API_VERSION_1_4
+			.vulkanApiVersion = VK_API_VERSION_1_4,
 		};
 
 	vmaImportVulkanFunctionsFromVolk(&vma_alloc_info, &vma_func_info);

@@ -1,36 +1,28 @@
 import common;
+#include "shared_structs.h"
 
-struct InstanceData {
-    column_major float4x4 model_mat;
-};
-
-[[vk::binding(0, 1)]] StructuredBuffer<InstanceData> instances;
-
-// Push constant to know which cascade we are drawing
-struct PushData {
-    uint cascadeIndex;
-};
-[[vk::push_constant]]	PushData pushConstants;
-
-struct VSInput {
-    float3 Position : POSITION;
-};
+// --- BINDLESS: Push Constants with BDA ---
+[[vk::push_constant]] ShadowRootConstants root;
 
 struct VSOutput {
     float4 Position : SV_POSITION;
 };
 
 [[shader("vertex")]]
-VSOutput vertMain(VSInput input, uint instanceID: SV_InstanceID)
+VSOutput vertMain(uint vertexID : SV_VertexID, uint instanceID: SV_InstanceID)
 {
+    // --- BINDLESS: Dereference Pointers ---
+    Vertex v = root.vertex_addr[vertexID];
+    EntityInstanceData inst = root.instance_addr[instanceID];
+    UniformBufferObject ubo = root.ubo_addr[0];
+
     VSOutput out;
-    float4x4 model_mat = instances[instanceID].model_mat;
     
     // Transform vertex from local space to world space
-    float4 world_pos = mul(model_mat, float4(input.Position, 1.0));
+    float4 world_pos = mul(inst.model_mat, float4(v.pos, 1.0));
     
     // Project directly from world space to the specific cascade's light space
-    out.Position = mul(ubo.lightSpaceMatrices[pushConstants.cascadeIndex], world_pos);
+    out.Position = mul(ubo.light_space_matrices[root.cascade_index], world_pos);
     
     return out;
 }

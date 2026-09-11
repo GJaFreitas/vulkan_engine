@@ -345,6 +345,43 @@ static void	uploadTexture(GraphicsContext *ctx, VkFormat format, i32 width, i32 
 		.anisotropyEnable = VK_FALSE
 	};
 	vkCreateSampler(ctx->device, &sampler_info, NULL, &tex->sampler);
+
+	// 1. Grab the next available index in the global heap
+	tex->global_index = ctx->next_free_texture_index++;
+
+	// 2. Write the Texture (Binding 0)
+	VkDescriptorImageInfo image_write_info = {
+		.imageView = tex->gpu_image.view,
+		.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		.sampler = VK_NULL_HANDLE // Samplers are separate!
+	};
+	VkWriteDescriptorSet tex_write = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = ctx->global_descriptor_set,
+		.dstBinding = 0,
+		.dstArrayElement = tex->global_index,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+		.pImageInfo = &image_write_info
+	};
+
+	// 3. Write the Sampler (Binding 1)
+	VkDescriptorImageInfo sampler_write_info = {
+		.imageView = VK_NULL_HANDLE,
+		.sampler = tex->sampler
+	};
+	VkWriteDescriptorSet samp_write = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = ctx->global_descriptor_set,
+		.dstBinding = 1,
+		.dstArrayElement = tex->global_index,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+		.pImageInfo = &sampler_write_info
+	};
+
+	VkWriteDescriptorSet writes[] = {tex_write, samp_write};
+	vkUpdateDescriptorSets(ctx->device, 2, writes, 0, NULL);
 }
 
 static void	loadFromPNG(GraphicsContext *ctx, tg3_model model, tg3_image image, Texture *tex)
@@ -408,55 +445,55 @@ static void	gltfLoadMaterials(Model *model, tg3_model gltf_model)
 {
 	model->materials = model->arena.fp_allocation(&model->arena, gltf_model.materials_count * sizeof(Material), DEFAULT_ALIGN);
 	model->material_count = gltf_model.materials_count;
+
 	for (u32 i = 0; i < gltf_model.materials_count; i++) {
-		const tg3_material	gltf_material = gltf_model.materials[i];
+		const tg3_material gltf_material = gltf_model.materials[i];
 
-		Material	mat = {};
+		Material mat = {0};
 
+		// Factors remain identical
 		mat.base_color_factor[0] = gltf_material.pbr_metallic_roughness.base_color_factor[0];
 		mat.base_color_factor[1] = gltf_material.pbr_metallic_roughness.base_color_factor[1];
 		mat.base_color_factor[2] = gltf_material.pbr_metallic_roughness.base_color_factor[2];
 		mat.base_color_factor[3] = gltf_material.pbr_metallic_roughness.base_color_factor[3];
-
 		mat.roughness_factor = gltf_material.pbr_metallic_roughness.roughness_factor;
 		mat.metallic_factor = gltf_material.pbr_metallic_roughness.metallic_factor;
-
 		mat.emissive_factor[0] = gltf_material.emissive_factor[0];
 		mat.emissive_factor[1] = gltf_material.emissive_factor[1];
 		mat.emissive_factor[2] = gltf_material.emissive_factor[2];
-
 		mat.alpha_cutoff = gltf_material.alpha_cutoff;
 
-		// Associate textures with the material
+		// --- NEW: Default all textures to invalid/fallback ---
+		mat.base_color_tex_idx = -1;
+		mat.metallic_roughness_tex_idx = -1;
+		mat.normal_tex_idx = -1;
+		mat.occlusion_tex_idx = -1;
+		mat.emissive_tex_idx = -1;
 
+		// --- NEW: Assign Bindless Indices ---
 		if (gltf_material.pbr_metallic_roughness.base_color_texture.index >= 0) {
-			const tg3_texture	gltf_texture =
-				gltf_model.textures[gltf_material.pbr_metallic_roughness.base_color_texture.index];
-			mat.base_color_texture = model->textures[gltf_texture.source];
+			const tg3_texture gltf_texture = gltf_model.textures[gltf_material.pbr_metallic_roughness.base_color_texture.index];
+			mat.base_color_tex_idx = model->textures[gltf_texture.source].global_index;
 		}
 
 		if (gltf_material.pbr_metallic_roughness.metallic_roughness_texture.index >= 0) {
-			const tg3_texture	gltf_texture =
-				gltf_model.textures[gltf_material.pbr_metallic_roughness.metallic_roughness_texture.index];
-			mat.metallic_roughness_texture = model->textures[gltf_texture.source];
+			const tg3_texture gltf_texture = gltf_model.textures[gltf_material.pbr_metallic_roughness.metallic_roughness_texture.index];
+			mat.metallic_roughness_tex_idx = model->textures[gltf_texture.source].global_index;
 		}
 
 		if (gltf_material.normal_texture.index >= 0) {
-			const tg3_texture	gltf_texture =
-				gltf_model.textures[gltf_material.normal_texture.index];
-			mat.normal_texture = model->textures[gltf_texture.source];
+			const tg3_texture gltf_texture = gltf_model.textures[gltf_material.normal_texture.index];
+			mat.normal_tex_idx = model->textures[gltf_texture.source].global_index;
 		}
 
 		if (gltf_material.occlusion_texture.index >= 0) {
-			const tg3_texture	gltf_texture =
-				gltf_model.textures[gltf_material.occlusion_texture.index];
-			mat.occlusion_texture = model->textures[gltf_texture.source];
+			const tg3_texture gltf_texture = gltf_model.textures[gltf_material.occlusion_texture.index];
+			mat.occlusion_tex_idx = model->textures[gltf_texture.source].global_index;
 		}
 
 		if (gltf_material.emissive_texture.index >= 0) {
-			const tg3_texture	gltf_texture =
-				gltf_model.textures[gltf_material.emissive_texture.index];
-			mat.emissive_texture = model->textures[gltf_texture.source];
+			const tg3_texture gltf_texture = gltf_model.textures[gltf_material.emissive_texture.index];
+			mat.emissive_tex_idx = model->textures[gltf_texture.source].global_index;
 		}
 
 		model->materials[i] = mat;
@@ -795,152 +832,6 @@ static void	gltfLoadAnimations(Model *model, tg3_model gltf_model)
 	}
 }
 
-void	createMaterialDescriptorSetLayout(GraphicsContext *ctx)
-{
-	VkDescriptorSetLayoutBinding	bindings[] = {
-		// Base Color Texture binding
-		{
-			.binding = 0,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-		},
-		// Metalic roughness binding
-		{
-			.binding = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-		},
-		// Normal map binding
-		{
-			.binding = 2,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-		},
-		// Occlusion map binding
-		{
-			.binding = 3,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-		},
-		// Emissive map binding
-		{
-			.binding = 4,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = 1,
-			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-		},
-	};
-
-	VkDescriptorSetLayoutCreateInfo	descriptor_set_layout_info = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.pNext = NULL,
-		.flags = 0,
-		.bindingCount = sizeofarray(bindings),
-		.pBindings = bindings
-	};
-	vkCreateDescriptorSetLayout(ctx->device, &descriptor_set_layout_info, NULL, &ctx->material_descriptor_layout);
-}
-
-void	createDescriptorSetsForMaterials(GraphicsContext *ctx, Material *materials, u32 material_count)
-{
-
-	for (u32 i = 0; i < material_count; i++) {
-		Material	*mat = &materials[i];
-
-		VkDescriptorSetAllocateInfo alloc_info = {
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			.descriptorPool = ctx->descriptor_pool,
-			.descriptorSetCount = 1,
-			.pSetLayouts = &ctx->material_descriptor_layout
-		};
-
-		vkAllocateDescriptorSets(ctx->device, &alloc_info, &mat->descriptor_set);
-
-		VkWriteDescriptorSet	write_set = {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = mat->descriptor_set,
-			// dstBinding is set in each material
-			// .dstBinding = 0,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.pImageInfo = NULL	// Set after
-		};
-
-		VkWriteDescriptorSet	all_sets[5] = {write_set, write_set, write_set, write_set, write_set};
-		VkDescriptorImageInfo	img_infos[5];
-
-		// »speed
-		// TODO: Investigate possible optimizations here
-		Texture		used;
-
-		if (mat->base_color_texture.sampler) {
-			used = mat->base_color_texture;
-		} else {
-			used = ctx->default_base_color_texture;
-		}
-		img_infos[0].sampler = used.sampler;
-		img_infos[0].imageView = used.gpu_image.view;
-		img_infos[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-		all_sets[0].pImageInfo = &img_infos[0];
-		all_sets[0].dstBinding = 0;
-
-		if (mat->metallic_roughness_texture.sampler) {
-			used = mat->metallic_roughness_texture;
-		} else {
-			used = ctx->default_metallic_texture;
-		}
-		img_infos[1].sampler = used.sampler;
-		img_infos[1].imageView = used.gpu_image.view;
-		img_infos[1].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-		all_sets[1].pImageInfo = &img_infos[1];
-		all_sets[1].dstBinding = 1;
-
-		if (mat->normal_texture.sampler) {
-			used = mat->normal_texture;
-		} else {
-			used = ctx->default_normal_texture;
-		}
-		img_infos[2].sampler = used.sampler;
-		img_infos[2].imageView = used.gpu_image.view;
-		img_infos[2].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-		all_sets[2].pImageInfo = &img_infos[2];
-		all_sets[2].dstBinding = 2;
-
-		if (mat->occlusion_texture.sampler) {
-			used = mat->occlusion_texture;
-		} else {
-			used = ctx->default_occlusion_texture;
-		}
-		img_infos[3].sampler = used.sampler;
-		img_infos[3].imageView = used.gpu_image.view;
-		img_infos[3].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-		all_sets[3].pImageInfo = &img_infos[3];
-		all_sets[3].dstBinding = 3;
-		if (mat->emissive_texture.sampler) {
-			used = mat->emissive_texture;
-		} else {
-			used = ctx->default_emissive_texture;
-		}
-		img_infos[4].sampler = used.sampler;
-		img_infos[4].imageView = used.gpu_image.view;
-		img_infos[4].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-		all_sets[4].pImageInfo = &img_infos[4];
-		all_sets[4].dstBinding = 4;
-
-		vkUpdateDescriptorSets(ctx->device, 5, all_sets, 0, NULL);
-	}
-}
-
 static void	gltfCreateMeshBuffers(Mesh *mesh, GraphicsContext *ctx)
 {
 	if (mesh->vertex_count == 0)
@@ -950,18 +841,14 @@ static void	gltfCreateMeshBuffers(Mesh *mesh, GraphicsContext *ctx)
 	// uploaded to the gpu with the texture data in one call.
 	// »speed
 
-	VkBufferCreateInfo	v_buffer_info = {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+	BufferInfo	v_buffer_info = {
 		.size = (sizeof(Vertex) * mesh->vertex_count),
-		.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+		.cpu_accessible = true,
 	};
-
-	void		*v_alloc;
-	VkBuffer	v_buf;
-	if (wrapperVMAcreateBuffer(ctx->vma_allocator, &v_buffer_info, &v_buf, &v_alloc, 1) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to allocate mesh buffer");
-	}
+	createVkBuffer(ctx, &v_buffer_info, &mesh->gpu_vertex_data);
+	// Copy data directly using the persistently mapped pointer
+	memcpy(mesh->gpu_vertex_data.mapped, mesh->vertices, v_buffer_info.size);
 
 	u32	index_size;
 	switch (mesh->index_type) {
@@ -979,34 +866,14 @@ static void	gltfCreateMeshBuffers(Mesh *mesh, GraphicsContext *ctx)
 			index_size = 0;
 			break;
 	}
-	VkBufferCreateInfo	i_buffer_info = {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+	BufferInfo	i_buffer_info = {
 		.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		.size = index_size * mesh->index_count,
+		.cpu_accessible = true,
 	};
-
-	void		*i_alloc;
-	VkBuffer	i_buf;
-	if (wrapperVMAcreateBuffer(ctx->vma_allocator, &i_buffer_info, &i_buf, &i_alloc, 1) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to allocate mesh buffer");
-	}
-
-	// Copy data to gpu
-	// TODO: See if i can deallocate this data after
-	void	*data;
-	wrapperVMAmapMemory(ctx->vma_allocator, v_alloc, &data);
-	memcpy(data, mesh->vertices, sizeof(Vertex) * mesh->vertex_count);
-	wrapperVMAunmapMemory(ctx->vma_allocator, v_alloc);
-
-	wrapperVMAmapMemory(ctx->vma_allocator, i_alloc, &data);
-	memcpy(data, mesh->indices, index_size * mesh->index_count);
-	wrapperVMAunmapMemory(ctx->vma_allocator, i_alloc);
-
-	mesh->gpu_vertex_alloc = v_alloc;
-	mesh->gpu_vertex_data = v_buf;
-	mesh->gpu_index_alloc = i_alloc;
-	mesh->gpu_index_data = i_buf;
+	createVkBuffer(ctx, &i_buffer_info, &mesh->gpu_index_data);
+	// Copy data directly using the persistently mapped pointer
+	memcpy(mesh->gpu_index_data.mapped, mesh->indices, i_buffer_info.size);
 }
 
 void	createDefaultTextures(GraphicsContext *ctx)
@@ -1057,7 +924,6 @@ void	modelLoad(String filename, GraphicsContext *ctx, Model *model)
 		}
 	}
 	gltfLoadAnimations(model, gltf_model);
-	createDescriptorSetsForMaterials(ctx, model->materials, model->material_count);
 
 	// TODO: Destroy tg3 object
 

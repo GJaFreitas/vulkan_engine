@@ -26,11 +26,11 @@ MYLIB_DIR := MyLib
 MYLIB_INC := $(MYLIB_DIR)/include
 MYLIB_LIB := $(MYLIB_DIR)/mylib.a
 
-#### HORRIBLE SHADER STUFF ####
+#### SHADER STUFF ####
 
 SHADER_SRCS := $(shell find $(SHADER_DIR) -maxdepth 1 -type f -name '*.slang')
 SHADERS := $(patsubst $(SHADER_DIR)/%.slang,$(COMPILED_SHADER_DIR)/%.spv,$(SHADER_SRCS))
-SHADER_INC := -I$(SHADER_DIR)/include
+SHADER_INC := -I$(SHADER_DIR)/include -I$(INC_DIR)
 ENTRY_POINTS := -entry vertMain -entry fragMain
 SLANGC := slangc
 
@@ -82,7 +82,7 @@ $(COMPILED_SHADER_DIR):
 	@mkdir -p shaders/compiled
 
 $(COMPILED_SHADER_DIR)/%.spv: $(SHADER_DIR)/%.slang
-	$(SLANGC) $< $(SHADER_INC) -target spirv -profile spirv_1_4 -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o $@
+	$(SLANGC) $< $(SHADER_INC) -target spirv -profile spirv_1_6 -fvk-use-scalar-layout -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o $@
 
 $(TARGET): $(OBJS) $(CPP_OBJS) $(MYLIB_LIB)
 	$(CC) $^ -o $@ $(LDFLAGS) $(LDLIBS)

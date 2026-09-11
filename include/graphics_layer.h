@@ -21,6 +21,25 @@
 #define TINYGLTF3_ENABLE_FS
 #include "tiny_gltf_v3.h"
 
+#include "shared_structs.h"
+
+typedef struct BufferObject
+{
+	VkBuffer	handle;
+	VkDeviceSize	capacity;
+	void		*allocation;
+	u64		device_address;
+
+	// Optional
+	void		*mapped;
+}	BufferObject;
+
+typedef struct
+{
+	VkDeviceSize		size;
+	VkBufferUsageFlags	usage;
+	bool			cpu_accessible;
+}	BufferInfo;
 
 // Optional struct for specific mip/layer ranges
 typedef struct TransitionRange
@@ -52,32 +71,6 @@ typedef struct TextPushConstants
 	float	px_range;
 }	TextPushConstants;
 
-#define MAX_POINT_LIGHTS 16
-typedef struct PointLight {
-	vec4 position; // xyz = position, w = radius (for attenuation cutoff)
-	vec4 color;    // rgb = color, a = intensity
-}	PointLight;
-
-typedef struct UniformBufferObject
-{
-	mat4	view;
-	mat4	proj;
-	mat4	inv_view;
-	mat4	inv_proj;
-
-	mat4	light_space_matrices[4];
-	vec4	cascade_split_depths;
-
-	vec4	sun_direction;
-	vec4	sun_color;
-	PointLight	point_lights[MAX_POINT_LIGHTS];
-	u32	point_light_count;
-
-	vec4	cam_pos;			// For view dependent effects
-	float	exposure;			// for HDR rendering
-	float	gamma;				// gamma correction
-}	UniformBufferObject;
-
 typedef struct ImageObject
 {
 	VkImageView	view;
@@ -93,32 +86,24 @@ typedef struct Texture
 	VkSampler	sampler;
 	ImageObject	gpu_image;
 
+	u32		global_index;
+
 }	Texture;
 
 typedef struct Material
 {
-	Texture		base_color_texture;
-	Texture		metallic_roughness_texture;
-	Texture		normal_texture;
-	Texture		occlusion_texture;
-	Texture		emissive_texture;
+	u32		base_color_tex_idx;
+	u32		metallic_roughness_tex_idx;
+	u32		normal_tex_idx;
+	u32		occlusion_tex_idx;
+	u32		emissive_tex_idx;
 
 	float		base_color_factor[4];
 	float		roughness_factor;
 	float		metallic_factor;
 	float		emissive_factor[3];
 	float		alpha_cutoff;
-
-	VkDescriptorSet	descriptor_set;
 }	Material;
-
-typedef struct
-{
-	vec3	pos;
-	vec3	normal;
-	vec2	uv;
-	vec4	tangent;
-}	Vertex;
 
 typedef struct Mesh
 {
@@ -130,10 +115,8 @@ typedef struct Mesh
 	u32		index_count;
 	VkIndexType	index_type;
 
-	VkBuffer	gpu_vertex_data;
-	void		*gpu_vertex_alloc;
-	VkBuffer	gpu_index_data;
-	void		*gpu_index_alloc;
+	BufferObject	gpu_vertex_data;
+	BufferObject	gpu_index_data;
 }	Mesh;
 
 typedef struct Node
@@ -236,49 +219,6 @@ typedef struct ModelCache
 	Allocator	pool;
 }	ModelCache;
 
-typedef struct MaterialProperties
-{
-	vec4	base_color_factor;			// rgb base color and alpha
-	float	metallic_factor;			// how metallic the surface is
-	float	roughness_factor;			// how rough the surface is
-	i32	basecolor_texture_set;			// texture coordinate set for base color
-	i32	physical_descriptor_texture_set;	// texture coordinate set for metallic-roughness
-	i32	normal_texture_set;			// texture coordinate set for normal map
-	i32	occlusion_texture_set;			// texture coordinate set for occlusion
-	i32	emissive_texture_set;			// texture coordinate set for emission
-	float	alpha_mask;				// whether to use alpha masking
-	float	alpha_mask_cut_off;			// alpha threshold for masking
-}	MaterialProperties;
-
-typedef struct GridProperties
-{
-	float grid_size;		// spacing between minor lines, e.g. 1.0
-	float line_width;	// in world units, e.g. 0.02
-	float major_line_every;	// e.g. every 10th line is "major" (thicker/brighter)
-	float fade_distance;	// distance at which grid fully fades out
-}	GridProperties;
-
-typedef struct BufferObject
-{
-	VkBuffer	handle;
-	VkDeviceSize	capacity;
-	void		*allocation;
-
-	// Optional
-	void		*mapped;
-}	BufferObject;
-
-typedef struct PipelineObject
-{
-
-	VkPipeline		handle;
-	VkPipelineLayout	layout;
-
-	VkShaderModule		vertex_shader;
-	VkShaderModule		frag_shader;
-
-}	PipelineObject;
-
 typedef struct FrameResources
 {
 	VkCommandPool	cmd_pool;
@@ -293,14 +233,15 @@ typedef struct FrameResources
 
 }	FrameResources;
 
-#define SHADOW_MAP_CASCADE_COUNT	4
 #define SHADOW_MAP_RESOLUTION		2048
 typedef struct CascadedShadowMap
 {
 	ImageObject	image;
 	VkImageView	cascade_views[SHADOW_MAP_CASCADE_COUNT]; // Individual layer views
+	VkDescriptorSet	descriptor_set;
 }	CascadedShadowMap;
 
+#define BINDLESS_TEXTURE_COUNT 8192
 typedef struct GraphicsContext
 {
 	i32			window_width;
@@ -308,9 +249,9 @@ typedef struct GraphicsContext
 	SDL_Window		*window;
 
 	u32			required_extension_count;
-	const char		*const *required_extensions;
+	const			char      *const *required_extensions;
 	u32			required_layer_count;
-	const char		*const *required_layers;
+	const			char      *const *required_layers;
 	VkInstance		vk_instance;
 
 	VkSurfaceKHR		surface;
@@ -337,25 +278,25 @@ typedef struct GraphicsContext
 
 	VkCommandPool		single_time_pool;
 
-	// Shared between pipelines
-	VkDescriptorSetLayout	ubo_descriptor_layout;
-	VkDescriptorSetLayout	instance_descriptor_layout;
-	VkDescriptorSetLayout	atlas_descriptor_layout;
+	VkDescriptorSetLayout	global_descriptor_layout; // Binding 0: Textures[], Binding 1: Samplers[]
+	VkDescriptorSetLayout	shadow_descriptor_layout;
+	VkDescriptorPool	global_descriptor_pool;   // Allocated once for MAX_TEXTURES
+	VkDescriptorSet		global_descriptor_set;    // Bound ONCE at the start of every frame
+	VkPipelineLayout	global_pipeline_layout;   // Shared across ALL pipelines in the engine
 
-	VkDescriptorPool	descriptor_pool;
-	VkDescriptorSet		ubo_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
-	VkDescriptorSet		instance_descriptor_sets[MAX_FRAMES_IN_FLIGHT];
-	VkDescriptorSet		atlas_descriptor_set;
-	// ------------------------
+	// Texture/Sampler Heap Index Allocators
+	u32			next_free_texture_index;
+	u32			next_free_sampler_index;
 
 	// Shadow Pipeline ------------
-	CascadedShadowMap    shadow_maps[MAX_FRAMES_IN_FLIGHT];
-	VkSampler            shadow_sampler;
-	PipelineObject       pipeline_shadow;
+	CascadedShadowMap	shadow_maps[MAX_FRAMES_IN_FLIGHT];
+	VkSampler		shadow_sampler;
+	VkPipeline		pipeline_shadow;
+	// ---------------------
 
 	// PBR Pipeline ------------
-	PipelineObject		pipeline_pbr;
-	VkDescriptorSetLayout	material_descriptor_layout;
+	VkPipeline		pipeline_pbr;
+
 	Texture			default_base_color_texture;
 	Texture			default_metallic_texture;
 	Texture			default_normal_texture;
@@ -364,16 +305,17 @@ typedef struct GraphicsContext
 	// -------------------------
 
 	// Transparent Pipeline ------------
-	//PipelineObject		pipeline_glass;
+	// VkPipeline			pipeline_transparent;
 	// ---------------------------------
-	
+
 	// Grid Pipeline ------------
-	PipelineObject		pipeline_grid;
+	VkPipeline		pipeline_grid;
 	GridProperties		grid_properties;
 	// --------------------------
-	
+
 	// Text Pipeline ------------
-	PipelineObject		pipeline_text;
+	VkPipeline		pipeline_text;
+	u32			font_atlas_global_index;
 	// --------------------------
 
 	u32			frames_in_flight_count;
@@ -383,15 +325,10 @@ typedef struct GraphicsContext
 	u32			frame_index;
 	u64			next_signal_value;
 
-}	GraphicsContext;
+} GraphicsContext;
 
 // TODO: Test test test, how many instances are needed? Am i gonna use particles like this later? (2026-07-23)
 #define	MAX_INSTANCES	4096
-typedef struct EntityInstanceData
-{
-	mat4	model_mat;
-}	EntityInstanceData;
-
 typedef struct EntityRenderData
 {
 	EntityInstanceData	instance_data;
@@ -407,19 +344,6 @@ typedef struct EntityRenderInfo
 
 // TODO: Change all colors to u32
 #define MAX_GLYPH_INSTANCES 1024
-typedef struct UiRenderInstance
-{
-	vec2	pos;
-	vec2	size;
-	vec2	uv_offset;
-	vec2	uv_size;
-	vec4	color;
-	vec4	inner_color;
-	u32	primitive_type;
-	f32	corner_radius;
-	f32	stroke_width;		// 0.0 = Solid Fill, >0.0 = Outline thickness (pixels)
-	vec4	clip_rect;
-}	UiRenderInstance;
 
 typedef struct UiRenderInfo
 {
@@ -468,12 +392,12 @@ void	endGraphics(GraphicsContext *ctx);
 void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, UiRenderInfo text_info);
 void	beginSingleTimeCommand(GraphicsContext *ctx, VkCommandBuffer *cmd_buffer);
 void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, u32 data_size, void *data_for_upload, ImageObject *gpu_image);
+void	createVkBuffer(GraphicsContext *ctx, const BufferInfo *info, BufferObject *out_buffer);
 
 
 void	modelLoad(String filename, GraphicsContext *ctx, Model *model);
 void	gltf_destroy(Model model);
 void	createDefaultTextures(GraphicsContext *ctx);
-void	createMaterialDescriptorSetLayout(GraphicsContext *ctx);
 
 void	initModelCache(void);
 Model	*modelCacheAcquire(GraphicsContext *ctx, String path);
