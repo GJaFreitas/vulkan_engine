@@ -1272,12 +1272,12 @@ static void	createGlobalDescriptorLayout(GraphicsContext *ctx)
 	bindings[0].binding = 0;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 	bindings[0].descriptorCount = BINDLESS_TEXTURE_COUNT;
-	bindings[0].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS; // Accessible everywhere
+	bindings[0].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
 
 	// Binding 1: Samplers
 	bindings[1].binding = 1;
 	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-	bindings[1].descriptorCount = BINDLESS_TEXTURE_COUNT; 
+	bindings[1].descriptorCount = GLOBAL_SAMPLER_COUNT; 
 	bindings[1].stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
 
 	// The magic flags that make bindless work
@@ -1344,9 +1344,10 @@ static void	createGlobalDescriptorLayout(GraphicsContext *ctx)
 static void	createGlobalDescriptorPoolAndSet(GraphicsContext *ctx)
 {
 	VkDescriptorPoolSize poolSizes[] = {
+		// Textures
 		{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, BINDLESS_TEXTURE_COUNT },
+		// Samplers
 		{ VK_DESCRIPTOR_TYPE_SAMPLER, BINDLESS_TEXTURE_COUNT },
-
 		// Shadow maps
 		{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_FRAMES_IN_FLIGHT },
 	};
@@ -1373,7 +1374,6 @@ static void	createGlobalDescriptorPoolAndSet(GraphicsContext *ctx)
 
 	// Initialize an atomic counter for your texture indices
 	ctx->next_free_texture_index = 0;
-	ctx->next_free_sampler_index = 0;
 }
 
 void createGlobalPipelineLayout(GraphicsContext *ctx)
@@ -1403,6 +1403,79 @@ void createGlobalPipelineLayout(GraphicsContext *ctx)
 	}
 }
 
+static void	createGlobalSamplers(GraphicsContext *ctx)
+{
+	// 1. Create PBR Sampler (Linear, Mipmapped, Repeating)
+	VkSamplerCreateInfo pbr_sampler_info = {
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.magFilter = VK_FILTER_LINEAR,
+		.minFilter = VK_FILTER_LINEAR,
+		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.mipLodBias = 0.0f,
+		.compareOp = VK_COMPARE_OP_ALWAYS,
+		.minLod = 0.0f,
+		.maxLod = VK_LOD_CLAMP_NONE,
+		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+		.unnormalizedCoordinates = VK_FALSE,
+		.anisotropyEnable = VK_FALSE, 
+		.maxAnisotropy = 1.0f
+	};
+	vkCreateSampler(ctx->device, &pbr_sampler_info, NULL, &ctx->default_pbr_sampler);
+
+	// 2. Create UI/Text Sampler (Linear, No Mipmaps, Clamped to Edge)
+	VkSamplerCreateInfo ui_sampler_info = {
+		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		.magFilter = VK_FILTER_LINEAR,
+		.minFilter = VK_FILTER_LINEAR,
+		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		.mipLodBias = 0.0f,
+		.compareOp = VK_COMPARE_OP_ALWAYS,
+		.minLod = 0.0f,
+		.maxLod = 0.0f,
+		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+		.unnormalizedCoordinates = VK_FALSE,
+		.anisotropyEnable = VK_FALSE,
+		.maxAnisotropy = 1.0f
+	};
+	vkCreateSampler(ctx->device, &ui_sampler_info, NULL, &ctx->ui_sampler);
+
+	// 3. Write them directly to the Bindless Heap (Binding 1)
+	VkDescriptorImageInfo pbr_info = {
+		.sampler = ctx->default_pbr_sampler,
+	};
+	VkWriteDescriptorSet pbr_write = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = ctx->global_descriptor_set,
+		.dstBinding = 1,
+		.dstArrayElement = GLOBAL_SAMPLER_PBR,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+		.pImageInfo = &pbr_info,
+	};
+
+	VkDescriptorImageInfo ui_info = {
+		.sampler = ctx->ui_sampler,
+	};
+	VkWriteDescriptorSet ui_write = {
+		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		.dstSet = ctx->global_descriptor_set,
+		.dstBinding = 1,
+		.dstArrayElement = GLOBAL_SAMPLER_UI,
+		.descriptorCount = 1,
+		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+		.pImageInfo = &ui_info,
+	};
+
+	VkWriteDescriptorSet writes[] = {pbr_write, ui_write};
+	vkUpdateDescriptorSets(ctx->device, 2, writes, 0, NULL);
+}
+
 static void	initVulkan(GraphicsContext *ctx)
 {
 	createInstance(ctx);
@@ -1420,6 +1493,7 @@ static void	initVulkan(GraphicsContext *ctx)
 
 	createGlobalDescriptorLayout(ctx);
 	createGlobalDescriptorPoolAndSet(ctx);
+	createGlobalSamplers(ctx);
 
 	createShadowResources(ctx);
 	createFrameResources(ctx);
@@ -1738,7 +1812,6 @@ void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, UiRenderInfo info)
 	// Populate Push Constants
 	TextRootConstants push_constants = {
 		.window_size = {ctx->window_width, ctx->window_height},
-		.atlas_size = {info.atlas_size[0], info.atlas_size[1]},
 		.px_range = info.px_range,
 		.instance_addr = resource->text_instance_buffer.device_address,
 		.atlas_tex_idx = ctx->font_atlas_global_index // Set when you load the font!
@@ -1836,7 +1909,7 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 					push_constants.roughness_factor = mat->roughness_factor;
 					push_constants.metallic_factor = mat->metallic_factor;
 					push_constants.alpha_cutoff = mat->alpha_cutoff;
-					glm_vec4_copy(mat->base_color_factor, push_constants.base_color_factor);
+					glm_vec4_ucopy(mat->base_color_factor, push_constants.base_color_factor);
 				}
 
 				// 3. Push to BOTH Vertex (for pointers) and Fragment (for textures/factors) stages
@@ -1985,6 +2058,11 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, 
 
 
 	// ---- Shadow Pass ------------------ //
+	vkCmdBindDescriptorSets(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, 
+			 ctx->global_pipeline_layout, // (See note below!)
+			 0, 1, &ctx->global_descriptor_set, 
+			 0, NULL);
+
 	SHADOWPass(ctx, entity_info, resource, frame_res_index);
 	vkCmdBeginRendering(resource->cmd_buf, &render_info);
 	{

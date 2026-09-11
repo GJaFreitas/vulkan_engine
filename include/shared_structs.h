@@ -1,6 +1,10 @@
 #ifndef SHARED_STRUCTS_H
 #define SHARED_STRUCTS_H
 
+#define GLOBAL_SAMPLER_PBR	0
+#define GLOBAL_SAMPLER_UI	1
+#define GLOBAL_SAMPLER_COUNT	2
+
 #ifdef __SLANG__
 	// =========================================================================
 	// SLANG / GPU ENVIRONMENT
@@ -8,10 +12,6 @@
 	typedef uint        u32;
 	typedef uint64_t    u64;
 	typedef float       f32;
-	typedef float2      vec2;
-	typedef float3      vec3;
-	typedef float4      vec4;
-	typedef float4x4    mat4;
 
 	// In Slang, we want BDA pointers to be strictly typed so we can dereference them
 	#define BDA_PTR(Type) Type*
@@ -23,7 +23,6 @@
 #include <stdint.h>
 
 	// Assuming you have typedefs for u32, u64, and cglm included already:
-	#include <cglm/cglm.h> 
 	#include "typedefs.h"
 
 	// In C, Vulkan Buffer Device Addresses are just 64-bit integers
@@ -37,40 +36,40 @@
 
 SHARED_STRUCT(Vertex)
 {
-	vec3 pos;
-	vec3 normal;
-	vec2 uv;
-	vec4 tangent;
+	float3 pos;
+	float3 normal;
+	float2 uv;
+	float4 tangent;
 };
 
 SHARED_STRUCT(EntityInstanceData)
 {
-	mat4 model_mat;
+	float4x4 model_mat;
 };
 
 #define MAX_POINT_LIGHTS 16
 SHARED_STRUCT(PointLight)
 {
-	vec4 position; // xyz = position, w = radius (for attenuation cutoff)
-	vec4 color;    // rgb = color, a = intensity
+	float4 position; // xyz = position, w = radius (for attenuation cutoff)
+	float4 color;    // rgb = color, a = intensity
 };
 
 SHARED_STRUCT(UniformBufferObject)
 {
-	mat4	view;
-	mat4	proj;
-	mat4	inv_view;
-	mat4	inv_proj;
+	float4x4	view;
+	float4x4	proj;
+	float4x4	inv_view;
+	float4x4	inv_proj;
 
-	mat4	light_space_matrices[4];
-	vec4	cascade_split_depths;
+	float4x4	light_space_matrices[4];
+	float4	cascade_split_depths;
 
-	vec4	sun_direction;
-	vec4	sun_color;
+	float4	sun_direction;
+	float4	sun_color;
 	PointLight	point_lights[MAX_POINT_LIGHTS];
 	u32	point_light_count;
 
-	vec4	cam_pos;			// For view dependent effects
+	float4	cam_pos;			// For view dependent effects
 	float	exposure;			// for HDR rendering
 	float	gamma;				// gamma correction
 };
@@ -93,7 +92,7 @@ SHARED_STRUCT(PBRRootConstants)
 
 	u32	shadow_cascades[SHADOW_MAP_CASCADE_COUNT];
 
-	vec4	base_color_factor;			// rgb base color and alpha
+	float4	base_color_factor;			// rgb base color and alpha
 	float	metallic_factor;			// how metallic the surface is
 	float	roughness_factor;			// how rough the surface is
 	float	alpha_mask;				// whether to use alpha masking
@@ -110,23 +109,23 @@ SHARED_STRUCT(ShadowRootConstants)
 
 SHARED_STRUCT(UiRenderInstance)
 {
-	vec2	pos;
-	vec2	size;
-	vec2	uv_offset;
-	vec2	uv_size;
-	vec4	color;
-	vec4	inner_color;
+	float2	pos;
+	float2	size;
+	float2	uv_offset;
+	float2	uv_size;
+	float4	color;
+	float4	inner_color;
 	u32	primitive_type;
 	f32	corner_radius;
 	f32	stroke_width;		// 0.0 = Solid Fill, >0.0 = Outline thickness (pixels)
-	vec4	clip_rect;
+	float4	clip_rect;
 };
 
 SHARED_STRUCT(TextRootConstants)
 {
 	BDA_PTR(UiRenderInstance)	instance_addr;   // Replaces vkCmdBindVertexBuffers for UI instances
-	vec2			window_size;
-	vec2			atlas_size;
+	float2			window_size;
+	float2			atlas_size;
 	float			px_range;
 	u32			atlas_tex_idx;   // Replaces atlas descriptor set
 };

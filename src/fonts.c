@@ -63,27 +63,8 @@ void	uploadAtlasToGpu(GraphicsContext *ctx, TextAtlas *atlas, u8 *atlas_data)
 		engine_error(LOG_FILE, "Failed to create image view");
 	}
 
-	VkSamplerCreateInfo	sampler_info = {
-		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		// How to sample when texture is magnified or minified
-		.magFilter = VK_FILTER_LINEAR,
-		.minFilter = VK_FILTER_LINEAR,
-		.minLod = 0,
-		.maxLod = 0,
-		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
-		// What happens when axes go outside 0 - 1 range
-		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		// Need to check feature for this
-		.anisotropyEnable = VK_FALSE
-	};
-	vkCreateSampler(ctx->device, &sampler_info, NULL, &atlas->sampler);
+	ctx->font_atlas_global_index = allocateBindlessTexture(ctx);
 
-	// 1. Allocate an index in the global heap and save it to the context
-	ctx->font_atlas_global_index = ctx->next_free_texture_index++;
-
-	// 2. Write the Texture (Binding 0)
 	VkDescriptorImageInfo atlas_image_info = {
 		.sampler = VK_NULL_HANDLE, // Separated in bindless
 		.imageView = atlas->gpu_image.view,
@@ -99,25 +80,7 @@ void	uploadAtlasToGpu(GraphicsContext *ctx, TextAtlas *atlas, u8 *atlas_data)
 		.pImageInfo = &atlas_image_info,
 	};
 
-	// 3. Write the Sampler (Binding 1)
-	VkDescriptorImageInfo atlas_sampler_info = {
-		.sampler = atlas->sampler,
-		.imageView = VK_NULL_HANDLE,
-		.imageLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-	};
-	VkWriteDescriptorSet atlas_samp_write = {
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.dstSet = ctx->global_descriptor_set,
-		.dstBinding = 1,
-		.dstArrayElement = ctx->font_atlas_global_index,
-		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
-		.pImageInfo = &atlas_sampler_info,
-	};
-
-	// 4. Update the global descriptor set
-	VkWriteDescriptorSet writes[] = {atlas_tex_write, atlas_samp_write};
-	vkUpdateDescriptorSets(ctx->device, 2, writes, 0, NULL);
+	vkUpdateDescriptorSets(ctx->device, 1, &atlas_tex_write, 0, NULL);
 
 }
 

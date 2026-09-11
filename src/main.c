@@ -183,6 +183,7 @@ static inline void beginFrame(World *world) {
 }
 
 static inline void	endFrame(World world) {
+	(void)world;
 	modelCacheSweep();
 	imguiResetFrame();
 	inputEndFrame();

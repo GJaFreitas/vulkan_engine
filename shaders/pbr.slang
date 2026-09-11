@@ -171,8 +171,8 @@ float4 fragMain(VSOutput input) : SV_TARGET
     // --- BINDLESS: GLOBAL TEXTURE HEAP LOOKUPS ---
     // Instead of sampling dedicated binding slots, we use the helper function from common.slang
     // to fetch the texture from the massive global array using our material indices!
-    float4 baseColor    = sampleGlobalTexture(root.base_color_tex, input.UV) * root.base_color_factor;
-    float4 physicalDesc = sampleGlobalTexture(root.metallic_roughness_tex, input.UV);
+    float4 baseColor    = sampleGlobalTexture(root.base_color_tex, GLOBAL_SAMPLER_PBR, input.UV) * root.base_color_factor;
+    float4 physicalDesc = sampleGlobalTexture(root.metallic_roughness_tex, GLOBAL_SAMPLER_PBR, input.UV);
     
     float roughness = max(physicalDesc.g * root.roughness_factor, 0.01);
     float metallic = physicalDesc.b * root.metallic_factor;

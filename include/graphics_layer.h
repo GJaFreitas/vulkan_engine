@@ -284,9 +284,12 @@ typedef struct GraphicsContext
 	VkDescriptorSet		global_descriptor_set;    // Bound ONCE at the start of every frame
 	VkPipelineLayout	global_pipeline_layout;   // Shared across ALL pipelines in the engine
 
-	// Texture/Sampler Heap Index Allocators
+	// Texture Heap Index Allocators
 	u32			next_free_texture_index;
-	u32			next_free_sampler_index;
+
+	// Sampler handles (only for destroying later)
+	VkSampler		default_pbr_sampler;
+	VkSampler		ui_sampler;
 
 	// Shadow Pipeline ------------
 	CascadedShadowMap	shadow_maps[MAX_FRAMES_IN_FLIGHT];
@@ -385,6 +388,16 @@ typedef struct Camera
 	float zoom;             // Field of view control for perspective projection
 
 }	Camera;
+
+
+static inline u32	allocateBindlessTexture(GraphicsContext *ctx) 
+{
+	if (ctx->next_free_texture_index >= BINDLESS_TEXTURE_COUNT) {
+		engine_error(LOG_FILE, "Bindless texture heap exhausted!\n");
+		exit(1);
+	}
+	return ctx->next_free_texture_index++;
+}
 
 void	immediate_submit(GraphicsContext *ctx, void (*fn)(VkCommandBuffer cmd, void *data), void *data);
 void	startGraphics(GraphicsContext *ctx);

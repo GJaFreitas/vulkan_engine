@@ -3,11 +3,15 @@
 
 void	spawnCommand(int argc, String *argv)
 {
+	(void)argc;
+	(void)argv;
 	consoleAppend("To be implemented");
 }
 
 void	updateEntities(Vector *entities, double dt)
 {
+	(void)entities;
+	(void)dt;
 }
 
 static void modelMatFromPosDir(vec3 position, versor rotation, mat4 dest)
@@ -103,6 +107,7 @@ Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a)
 
 void	updatePlayer(Player *p, double dt, SDL_Window *window)
 {
+	(void)window;
 	Camera	*camera = &p->camera;
 	vec3 move = {0};
 

@@ -82,7 +82,7 @@ $(COMPILED_SHADER_DIR):
 	@mkdir -p shaders/compiled
 
 $(COMPILED_SHADER_DIR)/%.spv: $(SHADER_DIR)/%.slang
-	$(SLANGC) $< $(SHADER_INC) -target spirv -profile spirv_1_6 -fvk-use-scalar-layout -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o $@
+	$(SLANGC) $< $(SHADER_INC) -target spirv -fvk-use-scalar-layout -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o $@
 
 $(TARGET): $(OBJS) $(CPP_OBJS) $(MYLIB_LIB)
 	$(CC) $^ -o $@ $(LDFLAGS) $(LDLIBS)

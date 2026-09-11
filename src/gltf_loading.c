@@ -329,25 +329,8 @@ static void	uploadTexture(GraphicsContext *ctx, VkFormat format, i32 width, i32 
 		engine_error(LOG_FILE, "Failed to create image view");
 	}
 
-	VkSamplerCreateInfo	sampler_info = {
-		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		// How to sample when texture is magnified or minified
-		.magFilter = VK_FILTER_LINEAR,
-		.minFilter = VK_FILTER_LINEAR,
-		.minLod = 0,
-		.maxLod = mip_levels,
-		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-		// What happens when axes go outside 0 - 1 range
-		.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		// Need to check feature for this
-		.anisotropyEnable = VK_FALSE
-	};
-	vkCreateSampler(ctx->device, &sampler_info, NULL, &tex->sampler);
-
 	// 1. Grab the next available index in the global heap
-	tex->global_index = ctx->next_free_texture_index++;
+	tex->global_index = allocateBindlessTexture(ctx);
 
 	// 2. Write the Texture (Binding 0)
 	VkDescriptorImageInfo image_write_info = {
@@ -365,23 +348,7 @@ static void	uploadTexture(GraphicsContext *ctx, VkFormat format, i32 width, i32 
 		.pImageInfo = &image_write_info
 	};
 
-	// 3. Write the Sampler (Binding 1)
-	VkDescriptorImageInfo sampler_write_info = {
-		.imageView = VK_NULL_HANDLE,
-		.sampler = tex->sampler
-	};
-	VkWriteDescriptorSet samp_write = {
-		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		.dstSet = ctx->global_descriptor_set,
-		.dstBinding = 1,
-		.dstArrayElement = tex->global_index,
-		.descriptorCount = 1,
-		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
-		.pImageInfo = &sampler_write_info
-	};
-
-	VkWriteDescriptorSet writes[] = {tex_write, samp_write};
-	vkUpdateDescriptorSets(ctx->device, 2, writes, 0, NULL);
+	vkUpdateDescriptorSets(ctx->device, 1, &tex_write, 0, NULL);
 }
 
 static void	loadFromPNG(GraphicsContext *ctx, tg3_model model, tg3_image image, Texture *tex)
@@ -420,7 +387,7 @@ static void	gltfLoadTextures(GraphicsContext *ctx, Model *model, tg3_model gltf_
 		} else {
 			String tex_string = STRING_LIT("texture_");
 			char	buf[32];
-			stbsp_snprintf(buf, 32, "%S%i", tex_string, i);
+			vsprint(buf, 32, "%S%i", tex_string, i);
 			tex.name = cstringToString(buf, &model->arena);
 		}
 
@@ -638,7 +605,7 @@ static void	gltfSetMeshData(Model *model, tg3_model gltf_model)
 				mesh.material_index = primitive.material;
 
 				// The index for the attributes
-				i32	pos_idx = -1, normal_idx = -1, uv_idx = -1, tangent_idx = -1;
+				i32	pos_idx = -1, normal_idx = -1, uv_idx = -1;
 				for (u32 a = 0; a < primitive.attributes_count; a++) {
 					if (strEq(tg3_to_String(primitive.attributes[a].key), STRING_LIT("POSITION"))) {
 						pos_idx = primitive.attributes[a].value;
@@ -646,9 +613,6 @@ static void	gltfSetMeshData(Model *model, tg3_model gltf_model)
 						normal_idx = primitive.attributes[a].value;
 					} else if (strEq(tg3_to_String(primitive.attributes[a].key), STRING_LIT("TEXCOORD_0"))) {
 						uv_idx = primitive.attributes[a].value;
-					} else if (strEq(tg3_to_String(primitive.attributes[a].key), STRING_LIT("TANGENT"))) {
-						tangent_idx = primitive.attributes[a].value;
-						printf("We got free tangents\n");
 					}
 				}
 

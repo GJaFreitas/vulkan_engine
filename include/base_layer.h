@@ -12,7 +12,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <time.h>
-#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#define CGLM_ALL_UNALIGNED
 #include <cglm/cglm.h>
 
 #include "typedefs.h"
