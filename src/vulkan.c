@@ -1086,7 +1086,7 @@ static void	createGRIDPipeline(GraphicsContext *ctx)
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		.depthTestEnable = VK_TRUE,
 		.depthWriteEnable = VK_FALSE,
-		.depthCompareOp = VK_COMPARE_OP_LESS,
+		.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
 		.stencilTestEnable = VK_FALSE
 	};
 	VkPipelineViewportStateCreateInfo	viewport_info = viewportCreate();
@@ -1669,7 +1669,7 @@ static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 	glm_vec4_copy((vec4){sun_dir[0], sun_dir[1], sun_dir[2], 0.0f}, ubo.sun_direction);
 
 	// Warm sunlight, intensity 5.0
-	glm_vec4_copy((vec4){1.0f, 0.95f, 0.8f, 0.0f}, ubo.sun_color);
+	glm_vec4_copy((vec4){1.0f, 0.95f, 0.8f, 1.0f}, ubo.sun_color);
 
 	ubo.exposure = 1.0f;
 	ubo.gamma = 2.2f;

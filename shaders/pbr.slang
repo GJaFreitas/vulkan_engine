@@ -8,12 +8,8 @@ import common;
 // a Texture2DArray type instead of a standard Texture2D.
 [[vk::binding(0, 1)]] Sampler2DArray shadowMap;
 
-// --- BINDLESS: PUSH CONSTANTS ---
-// We use the exact struct imported from shared_structs.h via common.slang!
-// This contains our 64-bit BDA pointers and our global texture indices.
 [[vk::push_constant]] PBRRootConstants root;
 
-// Output from vertex shader / Input to fragment shader
 struct VSOutput {
     float4 Position : SV_POSITION; 
     float3 WorldPos : POSITION;    
@@ -23,26 +19,18 @@ struct VSOutput {
     float ViewDepth : TEXCOORD1;   
 };
 
-// --- BINDLESS: VERTEX INPUT ---
-// Notice we no longer have `VSInput input`. 
-// Instead, we just ask the GPU for the current Vertex ID and Instance ID.
 [[shader("vertex")]]
 VSOutput vertMain(uint vertexID : SV_VertexID, uint instanceID: SV_InstanceID)
 {
     VSOutput out;
 
-    // --- BINDLESS: POINTER DEREFERENCING ---
-    // We fetch the vertex and instance data directly from raw GPU memory using the pointers!
     Vertex v = root.vertex_addr[vertexID];
     EntityInstanceData inst = root.instance_addr[instanceID];
-    
-    // Fetch the UBO from its pointer
-    UniformBufferObject ubo = root.ubo_addr[0];
 
     // --- POSITION CALCULATIONS ---
     float4 world_pos = mul(inst.model_mat, float4(v.pos, 1.0));
-    float4 camera_pos = mul(ubo.view, world_pos);
-    out.Position = mul(ubo.proj, camera_pos);
+    float4 camera_pos = mul(root.ubo_addr[0].view, world_pos);
+    out.Position = mul(root.ubo_addr[0].proj, camera_pos);
 
     // --- NORMAL CALCULATIONS ---
     out.Normal = normalize(mul((float3x3)inst.model_mat, v.normal));
@@ -55,7 +43,6 @@ VSOutput vertMain(uint vertexID : SV_VertexID, uint instanceID: SV_InstanceID)
     return out;
 }
 
-// 1. Normal Distribution Function (GGX)
 float distributionGGX(float3 N, float3 H, float roughness)
 {
     float a = roughness * roughness;
@@ -70,7 +57,6 @@ float distributionGGX(float3 N, float3 H, float roughness)
     return num / denom;
 }
 
-// 2. Geometry Function (Schlick-GGX)
 float geometrySchlickGGX(float NdotV, float roughness)
 {
     float r = (roughness + 1.0);
@@ -82,7 +68,6 @@ float geometrySchlickGGX(float NdotV, float roughness)
     return num / denom;
 }
 
-// 2b. Geometry Smith
 float geometrySmith(float3 N, float3 V, float3 L, float roughness)
 {
     float NdotV = max(dot(N, V), 0.0);
@@ -94,21 +79,17 @@ float geometrySmith(float3 N, float3 V, float3 L, float roughness)
     return ggx1 * ggx2;
 }
 
-// 3. Fresnel Equation (Schlick's Approximation)
 float3 fresnelSchlick(float cosTheta, float3 F0)
 {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-// Note: We pass the UBO in as a parameter now since it is fetched from a pointer in fragMain
-float calculateShadow(float3 worldPos, float viewDepth, UniformBufferObject ubo)
+float calculateShadow(float3 worldPos, float viewDepth, uint2 shadowMapDimensions, UniformBufferObject ubo)
 {
-    uint cascadeIndex = 0;
-    for(uint i = 0; i < 3; ++i) {
-        if(viewDepth > ubo.cascade_split_depths[i]) {
-            cascadeIndex = i + 1;
-        }
-    }
+    // Vectorized, branchless cascade selection
+    float4 depths = float4(ubo.cascade_split_depths[0], ubo.cascade_split_depths[1], ubo.cascade_split_depths[2], 999999.0);
+    float4 isGreater = step(depths, float4(viewDepth, viewDepth, viewDepth, viewDepth));
+    uint cascadeIndex = (uint)dot(isGreater, float4(1.0, 1.0, 1.0, 0.0));
 
     float4 lightSpacePos = mul(ubo.light_space_matrices[cascadeIndex], float4(worldPos, 1.0));
     float3 projCoords = lightSpacePos.xyz / lightSpacePos.w;
@@ -121,9 +102,7 @@ float calculateShadow(float3 worldPos, float viewDepth, UniformBufferObject ubo)
         return 0.0;
     }
 
-    uint width, height, elements;
-    shadowMap.GetDimensions(width, height, elements);
-    float2 texelSize = 1.0 / float2(width, height);
+    float2 texelSize = 1.0 / float2(shadowMapDimensions.x, shadowMapDimensions.y);
 
     float currentDepth = projCoords.z;
     float shadow = 0.0;
@@ -165,12 +144,9 @@ float3 calculateMicrofacetLighting(float3 N, float3 V, float3 L, float3 F0, floa
 [[shader("fragment")]]
 float4 fragMain(VSOutput input) : SV_TARGET
 {
-    // --- BINDLESS: POINTER DEREFERENCING ---
     UniformBufferObject ubo = root.ubo_addr[0];
 
     // --- BINDLESS: GLOBAL TEXTURE HEAP LOOKUPS ---
-    // Instead of sampling dedicated binding slots, we use the helper function from common.slang
-    // to fetch the texture from the massive global array using our material indices!
     float4 baseColor    = sampleGlobalTexture(root.base_color_tex, GLOBAL_SAMPLER_PBR, input.UV) * root.base_color_factor;
     float4 physicalDesc = sampleGlobalTexture(root.metallic_roughness_tex, GLOBAL_SAMPLER_PBR, input.UV);
     
@@ -192,8 +168,10 @@ float4 fragMain(VSOutput input) : SV_TARGET
     float3 sunL = normalize(-ubo.sun_direction.xyz);
     float3 sunRadiance = ubo.sun_color.rgb * ubo.sun_color.a;
     
-    // Pass UBO to shadow calculation
-    float shadowFactor = calculateShadow(input.WorldPos, input.ViewDepth, ubo);
+    uint width, height, elements;
+    shadowMap.GetDimensions(width, height, elements);
+    uint2 shadowMapDim = uint2(width, height);
+    float shadowFactor = calculateShadow(input.WorldPos, input.ViewDepth, shadowMapDim, ubo);
     
     Lo += calculateMicrofacetLighting(N, V, sunL, F0, baseColor.rgb, roughness, metallic, sunRadiance) * (1.0 - shadowFactor);
 
