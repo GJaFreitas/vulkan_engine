@@ -1376,33 +1376,6 @@ static void	createGlobalDescriptorPoolAndSet(GraphicsContext *ctx)
 	ctx->next_free_texture_index = 0;
 }
 
-void createGlobalPipelineLayout(GraphicsContext *ctx)
-{
-	// 2. Define the Push Constants
-	// 128 bytes is the guaranteed minimum size across all Vulkan hardware.
-	// This is enough for 16 uint64_t/pointers!
-	VkPushConstantRange push_constant = {
-		.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-		.offset = 0,
-		.size = 128 
-	};
-
-	VkDescriptorSetLayout	layouts[] = {ctx->global_descriptor_layout, ctx->shadow_descriptor_layout};
-
-	VkPipelineLayoutCreateInfo pipeline_layout_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = sizeofarray(layouts),
-		.pSetLayouts = layouts,
-		.pushConstantRangeCount = 1,
-		.pPushConstantRanges = &push_constant
-	};
-
-	if (vkCreatePipelineLayout(ctx->device, &pipeline_layout_info, NULL, &ctx->global_pipeline_layout) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create global pipeline layout!");
-		exit(1);
-	}
-}
-
 static void	createGlobalSamplers(GraphicsContext *ctx)
 {
 	// 1. Create PBR Sampler (Linear, Mipmapped, Repeating)
@@ -1602,12 +1575,12 @@ static void	calculateShadowCascades(vec3 light_dir, mat4 cam_view, float cam_fov
 		}
 
 		// // Z-multiplier to pull the near plane further back (captures casters behind the camera)
-		// float z_mult = 10.0f;
-		// if (minZ < 0) minZ *= z_mult; else minZ /= z_mult;
-		// if (maxZ < 0) maxZ /= z_mult; else maxZ *= z_mult;
+		float z_mult = 10.0f;
+		if (minZ < 0) minZ *= z_mult; else minZ /= z_mult;
+		if (maxZ < 0) maxZ /= z_mult; else maxZ *= z_mult;
 
-		minZ = -200; 
-		maxZ = 200;
+		// minZ = -200; 
+		// maxZ = 200;
 		// 5. Create Orthographic Projection for this cascade
 		mat4 light_ortho;
 		glm_ortho(minX, maxX, minY, maxY, minZ, maxZ, light_ortho);
@@ -1634,9 +1607,9 @@ static inline void	addPointLight(UniformBufferObject *ubo, vec4 p_light_pos, vec
 	ubo->point_light_count += 1;
 }
 
-static inline void	getProjectionMatrix(mat4 dst, Camera *c, float aspect_ratio)
+static inline void	getProjectionMatrix(mat4 dst, Camera *c, float aspect_ratio, f32 near_z, f32 far_z)
 {
-	glm_perspective(glm_rad(c->zoom), aspect_ratio, 0.1f, 100.0f, dst);
+	glm_perspective(glm_rad(c->zoom), aspect_ratio, near_z, far_z, dst);
 }
 
 static inline void	getViewMatrix(mat4 dst, Camera *c)
@@ -1651,9 +1624,11 @@ static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 	UniformBufferObject ubo = {0}; // Ensure zero initialization
 
 	f32	aspect_ratio = (float)ctx->swapchain_width / (float)ctx->swapchain_height;
+	const f32	near_z = 0.1f;
+	const f32	far_z = 1000.0f;
 
 	getViewMatrix(ubo.view, cam);
-	getProjectionMatrix(ubo.proj, cam, aspect_ratio);
+	getProjectionMatrix(ubo.proj, cam, aspect_ratio, near_z, far_z);
 
 	// Vulkan y shift
 	ubo.proj[1][1] *= -1;
@@ -1664,20 +1639,17 @@ static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 
 	// --- Setup Global Sun ---
 	// Pointing slightly down and to the side
-	vec3 sun_dir = { 0.0f, -0.2f, -1.0f };
+	vec3 sun_dir = { 0.1f, -1.0f, -0.2f };
 	glm_vec3_normalize(sun_dir);
 	glm_vec4_copy((vec4){sun_dir[0], sun_dir[1], sun_dir[2], 0.0f}, ubo.sun_direction);
 
 	// Warm sunlight, intensity 5.0
-	glm_vec4_copy((vec4){1.0f, 0.95f, 0.8f, 1.0f}, ubo.sun_color);
+	glm_vec4_copy((vec4){1.0f, 0.95f, 0.8f, 2.0f}, ubo.sun_color);
 
 	ubo.exposure = 1.0f;
 	ubo.gamma = 2.2f;
 
-	calculateShadowCascades(sun_dir, ubo.view, glm_rad(cam->zoom), aspect_ratio, 0.1f, 100.0f, &ubo);
-	vec4	p_light_pos = { 1, 1, 0.5, 10 };
-	vec4	p_light_color = { 1, 1, 1, 5.0f };
-	addPointLight(&ubo, p_light_pos, p_light_color);
+	calculateShadowCascades(sun_dir, ubo.view, glm_rad(cam->zoom), aspect_ratio, near_z, far_z, &ubo);
 
 	memcpy(resource->uniform_buffer.mapped, &ubo, sizeof(UniformBufferObject));
 }

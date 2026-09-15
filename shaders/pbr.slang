@@ -175,24 +175,6 @@ float4 fragMain(VSOutput input) : SV_TARGET
     
     Lo += calculateMicrofacetLighting(N, V, sunL, F0, baseColor.rgb, roughness, metallic, sunRadiance) * (1.0 - shadowFactor);
 
-    // --- B. POINT LIGHTS ---
-    for (int i = 0; i < ubo.point_light_count; ++i) 
-    {
-        float3 lightPos = ubo.point_lights[i].position.xyz;
-        float radius = ubo.point_lights[i].position.w; 
-        float3 lightColor = ubo.point_lights[i].color.rgb;
-        float intensity = ubo.point_lights[i].color.a; 
-
-        float3 L = lightPos - input.WorldPos;
-        float distance = length(L);
-        L = normalize(L);
-        
-        float attenuation = pow(clamp(1.0 - pow(distance / radius, 4.0), 0.0, 1.0), 2.0) / (distance * distance + 1.0);
-        float3 radiance = lightColor * intensity * attenuation;
-        
-        Lo += calculateMicrofacetLighting(N, V, L, F0, baseColor.rgb, roughness, metallic, radiance);
-    }
-
     // 5. Ambient & Post
     float ao = 1.0;
     float3 ambient = float3(0.03, 0.03, 0.03) * baseColor.rgb * ao;
