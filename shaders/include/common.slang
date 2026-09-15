@@ -16,10 +16,8 @@ public float4 sampleGlobalTexture(uint tex_idx, uint sampler_idx, float2 uv)
         return float4(1.0, 1.0, 1.0, 1.0);
     }
 
-    // Texture index is still non-uniform (it changes depending on the material)
     Texture2D tex = g_textures[NonUniformResourceIndex(tex_idx)];
     
-    // Sampler index is a static global constant now, so no NonUniform wrapper is needed!
     SamplerState samp = g_samplers[NonUniformResourceIndex(sampler_idx)];
     
     return tex.Sample(samp, uv);

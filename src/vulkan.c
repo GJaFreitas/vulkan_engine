@@ -1510,7 +1510,7 @@ static void	calculateShadowCascades(vec3 light_dir, mat4 cam_view, float cam_fov
 {
 	float cascade_splits[SHADOW_MAP_CASCADE_COUNT];
 
-	// 1. Calculate split depths using a practical logarithmic/linear mix
+	// Calculate split depths using a practical logarithmic/linear mix
 	float lambda = 0.95f; // Adjust between 0 (pure linear) and 1 (pure logarithmic)
 	for (u32 i = 0; i < SHADOW_MAP_CASCADE_COUNT; i++) {
 		float p = (i + 1) / (float)SHADOW_MAP_CASCADE_COUNT;
@@ -1522,81 +1522,102 @@ static void	calculateShadowCascades(vec3 light_dir, mat4 cam_view, float cam_fov
 	float last_split_dist = near_z;
 
 	for (u32 i = 0; i < SHADOW_MAP_CASCADE_COUNT; i++) {
-		float split_dist = cascade_splits[i];
+		float	split_dist	= cascade_splits[i];
 
-		// 2. Get frustum corners for this cascade slice in view space
-		vec3 frustum_corners[8] = {
+		// 1. Get frustum corners for this cascade slice in view space
+		vec3	frustum_corners[8] = {
 			{-1.0f,  1.0f, -1.0f}, { 1.0f,  1.0f, -1.0f}, { 1.0f, -1.0f, -1.0f}, {-1.0f, -1.0f, -1.0f},
 			{-1.0f,  1.0f,  1.0f}, { 1.0f,  1.0f,  1.0f}, { 1.0f, -1.0f,  1.0f}, {-1.0f, -1.0f,  1.0f}
 		};
 
-		mat4 cam_proj;
+		mat4	cam_proj;
 		glm_perspective(cam_fov, aspect_ratio, last_split_dist, split_dist, cam_proj);
 
-		mat4 inv_cam;
+		mat4	inv_cam;
 		glm_mat4_mul(cam_proj, cam_view, inv_cam);
 		glm_mat4_inv(inv_cam, inv_cam);
 
 		// Transform corners to world space and find the center
-		vec3 frustum_center = {0.0f, 0.0f, 0.0f};
+		vec3	frustum_center	= {0.0f, 0.0f, 0.0f};
 		for (u32 j = 0; j < 8; j++) {
-			vec4 inv_corner;
+			vec4	inv_corner;
 			glm_mat4_mulv(inv_cam, (vec4){frustum_corners[j][0], frustum_corners[j][1], frustum_corners[j][2], 1.0f}, inv_corner);
 			glm_vec3_scale(inv_corner, 1.0f / inv_corner[3], frustum_corners[j]);
 			glm_vec3_add(frustum_center, frustum_corners[j], frustum_center);
 		}
 		glm_vec3_scale(frustum_center, 1.0f / 8.0f, frustum_center);
 
-		// 3. Create the Light View Matrix looking at the frustum center
-		vec3 light_up = {0.0f, 1.0f, 0.0f};
-		if (fabs(light_dir[0]) < 0.001f && fabs(light_dir[2]) < 0.001f) {
-			light_up[0] = 1.0f;
-			light_up[1] = 0.0f;
-		}
-		vec3 light_pos;
-		// Move the light backwards along its direction vector
-		glm_vec3_scale(light_dir, -100.0f, light_pos); 
-		glm_vec3_add(frustum_center, light_pos, light_pos);
-
-		mat4 light_view;
-		glm_lookat(light_pos, frustum_center, light_up, light_view);
-
-		// 4. Find the bounding box of the frustum in Light View space
-		float minX =  INFINITY, maxX = -INFINITY;
-		float minY =  INFINITY, maxY = -INFINITY;
-		float minZ =  INFINITY, maxZ = -INFINITY;
-
+		// 2. Calculate the bounding sphere radius of the frustum slice
+		float	radius	= 0.0f;
 		for (u32 j = 0; j < 8; j++) {
-			vec4 trf;
-			glm_mat4_mulv(light_view, (vec4){frustum_corners[j][0], frustum_corners[j][1], frustum_corners[j][2], 1.0f}, trf);
-			minX = glm_min(minX, trf[0]); maxX = glm_max(maxX, trf[0]);
-			minY = glm_min(minY, trf[1]); maxY = glm_max(maxY, trf[1]);
-			minZ = glm_min(minZ, trf[2]); maxZ = glm_max(maxZ, trf[2]);
+			float	dist	= glm_vec3_distance(frustum_corners[j], frustum_center);
+			radius		= glm_max(radius, dist);
 		}
+		radius	= ceilf(radius);
 
-		// // Z-multiplier to pull the near plane further back (captures casters behind the camera)
-		float z_mult = 10.0f;
-		if (minZ < 0) minZ *= z_mult; else minZ /= z_mult;
-		if (maxZ < 0) maxZ /= z_mult; else maxZ *= z_mult;
+		// 3. Build a temporary view matrix to transform our frustum center
+		vec3	light_up	= {0.0f, 1.0f, 0.0f};
+		if (fabs(light_dir[0]) < 0.001f && fabs(light_dir[2]) < 0.001f) {
+			light_up[0]	= 1.0f;
+			light_up[1]	= 0.0f;
+		}
+		
+		mat4	temp_light_view;
+		glm_lookat((vec3){0.0f, 0.0f, 0.0f}, light_dir, light_up, temp_light_view);
 
-		// minZ = -200; 
-		// maxZ = 200;
-		// 5. Create Orthographic Projection for this cascade
-		mat4 light_ortho;
+		// 4. Transform center to light space and snap to texel grid
+		float	shadow_map_res	= 2048.0f; // Make sure this matches your actual texture size
+		float	units_per_texel	= (radius * 2.0f) / shadow_map_res;
+
+		vec4	ls_center;
+		glm_mat4_mulv(temp_light_view, (vec4){frustum_center[0], frustum_center[1], frustum_center[2], 1.0f}, ls_center);
+		
+		ls_center[0]	= floorf(ls_center[0] / units_per_texel) * units_per_texel;
+		ls_center[1]	= floorf(ls_center[1] / units_per_texel) * units_per_texel;
+
+		// Transform snapped center back to world space
+		mat4	inv_temp_light_view;
+		glm_mat4_inv(temp_light_view, inv_temp_light_view);
+		
+		vec4	snapped_center_4;
+		glm_mat4_mulv(inv_temp_light_view, ls_center, snapped_center_4);
+		
+		vec3	snapped_center;
+		snapped_center[0]	= snapped_center_4[0];
+		snapped_center[1]	= snapped_center_4[1];
+		snapped_center[2]	= snapped_center_4[2];
+
+		// 5. Create final Light View Matrix looking at the snapped center
+		vec3	light_pos;
+		glm_vec3_scale(light_dir, -100.0f, light_pos); 
+		glm_vec3_add(snapped_center, light_pos, light_pos);
+
+		mat4	light_view;
+		glm_lookat(light_pos, snapped_center, light_up, light_view);
+
+		// 6. Create Orthographic Projection using the static sphere radius
+		float	minX	= -radius;
+		float	maxX	=  radius;
+		float	minY	= -radius;
+		float	maxY	=  radius;
+		float	minZ	= -2000.0f;
+		float	maxZ	=  radius + 200.0f;
+
+		mat4	light_ortho;
 		glm_ortho(minX, maxX, minY, maxY, minZ, maxZ, light_ortho);
 
 		// Fix Vulkan's inverted Y-axis
-		light_ortho[1][1] *= -1.0f;
+		light_ortho[1][1]	*= -1.0f;
 
 		// Manually convert Z from [-1, 1] (OpenGL) to [0, 1] (Vulkan)
-		light_ortho[2][2] = light_ortho[2][2] * 0.5f;
-		light_ortho[3][2] = light_ortho[3][2] * 0.5f + 0.5f;
+		light_ortho[2][2]	= light_ortho[2][2] * 0.5f;
+		light_ortho[3][2]	= light_ortho[3][2] * 0.5f + 0.5f;
 
-		// 6. Final Light Space Matrix (Proj * View)
+		// 7. Final Light Space Matrix (Proj * View)
 		glm_mat4_mul(light_ortho, light_view, ubo->light_space_matrices[i]);
-		ubo->cascade_split_depths[i] = split_dist;
+		ubo->cascade_split_depths[i]	= split_dist;
 
-		last_split_dist = split_dist;
+		last_split_dist	= split_dist;
 	}
 }
 
