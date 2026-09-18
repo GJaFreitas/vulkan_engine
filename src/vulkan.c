@@ -479,6 +479,11 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 		exit(1);
 	}
 
+	VkExtent2D	real_extent = { width, height };
+	if (surface_capabilities.currentExtent.width != UINT32_MAX) {
+		real_extent = surface_capabilities.currentExtent;
+	}
+
 	u32	requested_img_count = 2;
 	if (surface_capabilities.minImageCount > 2)
 		requested_img_count = surface_capabilities.minImageCount;
@@ -491,7 +496,7 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 		.minImageCount = requested_img_count,
 		.imageFormat = ctx->swapchain_format.format,
 		.imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
-		.imageExtent = surface_capabilities.currentExtent,
+		.imageExtent = real_extent,
 		.imageArrayLayers = 1,
 		.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 		.preTransform = surface_capabilities.currentTransform,
