@@ -5,6 +5,9 @@
 #include "fonts.h"
 #include "console.h"
 
+Allocator	g_frame_arena = {0};
+Allocator	g_perm_arena = {0};
+
 void	createPBRPipeline(GraphicsContext *ctx);
 
 GameState	g_game_state = 0;
@@ -114,7 +117,7 @@ static inline void beginFrame(World *world) {
 							break;
 						case SDL_SCANCODE_BACKSPACE:	consoleBackspace(); consumed = true; break;
 						case SDL_SCANCODE_RETURN:
-						case SDL_SCANCODE_KP_ENTER:	consoleEnter(&world->frame_allocator); consumed = true; break;
+						case SDL_SCANCODE_KP_ENTER:	consoleEnter(&g_frame_arena); consumed = true; break;
 						case SDL_SCANCODE_LEFT:		consoleLeftArrow(); consumed = true; break;
 						case SDL_SCANCODE_RIGHT:	consoleRightArrow(); consumed = true; break;
 						case SDL_SCANCODE_UP:		consoleUpArrow(); consumed = true; break;
@@ -166,7 +169,7 @@ int	loop(World world)
 	const u32	screen_h = world.graphics_ctx->window_height;
 
 	Font	*font = &world.fonts.fonts[0];
-	Allocator	*frame_arena = &world.frame_allocator;
+	Allocator	*frame_arena = &g_frame_arena;
 
 	u64	frames = 0;
 	double	fps = 0;
@@ -197,9 +200,9 @@ int	loop(World world)
 
 		// --- RENDERING ---
 		if (getModelCountFromCache())
-			entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &world.frame_allocator);
-		uiCalculateLayout(world.graphics_ctx->window_width, world.graphics_ctx->window_height, &world.frame_allocator);
-		ui_info = buildUiRenderInfo(world.ui->rmgui_root, &world.frame_allocator);
+			entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &g_frame_arena);
+		uiCalculateLayout(world.graphics_ctx->window_width, world.graphics_ctx->window_height, &g_frame_arena);
+		ui_info = buildUiRenderInfo(world.ui->rmgui_root, &g_frame_arena);
 
 		render(world.graphics_ctx, &world.player->camera, entity_info, ui_info);
 
@@ -209,7 +212,7 @@ int	loop(World world)
 
 		// --- End of frame ---
 		endFrame(world);
-		world.frame_allocator.fp_reset(&world.frame_allocator);
+		g_frame_arena.fp_reset(&g_frame_arena);
 
 	}
 	engine_debug(LOG_FILE, "Killing proccess");
@@ -249,22 +252,22 @@ int	main(void)
 	world.graphics_ctx = &gctx;
 	world.ui = &ui;
 	world.key_states = SDL_GetKeyboardState(NULL);
-	world.frame_allocator = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
-	world.perm_allocator = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
+	g_frame_arena = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
+	g_perm_arena = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
 	world.entity_allocator = newHeapAllocator(MB(2), NULL, DEFAULT_ALIGN);
 	world.entities = vectorCreate(16, sizeof(Entity *), &world.entity_allocator);
 	updateGridProperties(&world);
 
 	startGraphics(world.graphics_ctx);
-	initUi(&ui, gctx.window_width, gctx.window_height, &world.perm_allocator);
-	consoleInit(&world.perm_allocator);
+	initUi(&ui, gctx.window_width, gctx.window_height, &g_perm_arena);
+	consoleInit(&g_perm_arena);
 
 	Entity	*player = loadEntity(world.graphics_ctx, STRING_LIT("data/models/rabbit.glb"), &world.entity_allocator);
 	vectorAppend(world.entities, &player);
 
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);
 	initPlayer(world.player, &world);
-	initFonts(world.graphics_ctx, &world.fonts, &world.perm_allocator, &world.frame_allocator);
+	initFonts(world.graphics_ctx, &world.fonts, &g_perm_arena, &g_frame_arena);
 
 	loop(world);
 	printf("\n\n\n");

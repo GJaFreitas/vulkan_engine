@@ -42,10 +42,7 @@ static inline bool	gameStateQuery(GameState state, enum GameStateField field) {
 
 typedef struct World
 {
-	Allocator	frame_allocator;
-	Allocator	perm_allocator;
 	GraphicsContext	*graphics_ctx;
-
 
 	// TODO: Implement sim regions?
 	Allocator	entity_allocator;
@@ -92,6 +89,13 @@ enum {
 	ENGINE_MODE_CONSOLE,
 	ENGINE_MODE_MENU,
 };
+
+// --------------- //
+// --- GLOBALS --- //
+// --------------- //
+
+extern Allocator	g_frame_arena;
+extern Allocator	g_perm_arena;
 
 // ------------- //
 // --- Input --- //

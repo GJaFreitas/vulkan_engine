@@ -24,7 +24,7 @@
 
 [ ] Implement indirect drawing
 
-[ ] Set a g_frame_arena variable to make frame allocations easier
+[X] Set a g_frame_arena variable to make frame allocations easier
 
 ### --- STUFF THAT DOESNT WORK ---
 
