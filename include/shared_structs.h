@@ -142,6 +142,7 @@ SHARED_STRUCT(GridRootConstants)
 {
 	BDA_PTR(UniformBufferObject)	ubo_addr;
 	GridProperties			properties;
+	bool				show_grid;
 };
 
 #endif // SHARED_STRUCTS_H

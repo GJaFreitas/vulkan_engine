@@ -58,7 +58,7 @@ float4 fragMain(VSOutput input) : SV_TARGET
     
     float4 finalColor = float4(lerp(horizonColor, topColor, skyBlend), 1.0);
 
-    if (abs(input.FarPoint.y - input.NearPoint.y) > 0.0001) 
+    if (abs(input.FarPoint.y - input.NearPoint.y) > 0.0001 && root.show_grid)
     {
         float t = -input.NearPoint.y / (input.FarPoint.y - input.NearPoint.y);
         
@@ -73,7 +73,6 @@ float4 fragMain(VSOutput input) : SV_TARGET
             gridCol.rgb = lerp(gridCol.rgb, float3(1.0, 1.0, 1.0), majorGrid.a);
             gridCol.a = max(minorGrid.a, majorGrid.a * 0.8);
 
-            // --- NEW: ROOT AXIS COLORING ---
             // Calculate distance to axes in screen-space pixels
             float pixelDistToZAxis = abs(worldPos.x) / max(fwidth(worldPos.x), 0.0001); // X = 0 line
             float pixelDistToXAxis = abs(worldPos.z) / max(fwidth(worldPos.z), 0.0001); // Z = 0 line

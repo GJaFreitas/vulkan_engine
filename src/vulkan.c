@@ -1826,7 +1826,8 @@ void	GRIDPass(GraphicsContext *ctx, FrameResources *resource)
 	// Populate Push Constants
 	GridRootConstants push_constants = {
 		.ubo_addr = resource->uniform_buffer.device_address,
-		.properties = ctx->grid_properties
+		.properties = ctx->grid_properties,
+		.show_grid = gameStateQuery(g_game_state, ShowGrid),
 	};
 
 	// Need both Vertex (for UBO ptr) and Fragment (for properties) stages
@@ -2079,8 +2080,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, 
 		vkCmdSetScissor(resource->cmd_buf, 0, 1, &scissor);
 
 		// ---- GRID Pass ------------------ //
-		if (gameStateQuery(g_game_state, ShowGrid))
-			GRIDPass(ctx, resource);
+		GRIDPass(ctx, resource);
 
 		// ---- PBR Pass --------------- //
 		PBRPass(ctx, entity_info, resource, frame_res_index);
