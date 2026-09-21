@@ -5,6 +5,7 @@ EngineMode	g_engine_mode = ENGINE_MODE_GAME;
 InputState	g_input_state;
 
 // Default keybinds
+// TODO: Chnage this to reading from a file
 SDL_Scancode	g_keybinds[ACTION_MAX_ENUM] = {
 	[ ACTION_MOVE_FORWARD ] = SDL_SCANCODE_W,
 	[ ACTION_MOVE_LEFT ] = SDL_SCANCODE_A,
@@ -18,24 +19,16 @@ SDL_Scancode	g_keybinds[ACTION_MAX_ENUM] = {
 
 void	inputBeginFrame(void)
 {
-	memcpy(g_input_state.current, g_input_state.last, NUM_KEYS);
+	int		numkeys;
+	const bool	*state = SDL_GetKeyboardState(&numkeys);
+
+	// 1. Backup the last frame for key_pressed / key_released logic
+	memcpy(g_input_state.last, g_input_state.current, NUM_KEYS);
+	// 2. Overwrite the current frame with the true OS physical state
+	memcpy(g_input_state.current, state, (numkeys < NUM_KEYS) ? numkeys : NUM_KEYS);
 }
 
 void	inputEndFrame(void)
 {
 	g_input_state.mod = SDL_GetModState();
-}
-
-void	inputProccessEvent(const SDL_Event *e)
-{
-	switch (e->type)
-	{
-		case SDL_EVENT_KEY_DOWN:
-			g_input_state.current[e->key.scancode] = true;
-		break;
-		case SDL_EVENT_KEY_UP:
-			g_input_state.current[e->key.scancode] = false;
-		break;
-		default: break;
-	}
 }

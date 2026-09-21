@@ -12,9 +12,11 @@ static void	_toggle(int argc, String *argv)
 		consoleAppend("Usage: toggle [variable]");
 	}
 	if (strEq(argv[1], STRING_LIT("fps")))
-		gameStateToggle(&game_state, ShowFps);
+		gameStateToggle(&g_game_state, ShowFps);
 	else if (strEq(argv[1], STRING_LIT("grid")))
-		gameStateToggle(&game_state, ShowGrid);
+		gameStateToggle(&g_game_state, ShowGrid);
+	else if (strEq(argv[1], STRING_LIT("noclip")))
+		gameStateToggle(&g_game_state, NoClip);
 }
 
 typedef void	(*ConsoleCmdFn)(int argc, String *argv);
@@ -31,7 +33,7 @@ typedef struct
 
 static const CCmd g_commands[] = {
 	RegisterCmd("spawn", spawnCommand, "Spawns an entity"),
-	RegisterCmd("toggle", _toggle, "Toggles fps counter"),
+	RegisterCmd("toggle", _toggle, "Toggles game state"),
 	RegisterCmd("trie", _trie_test, "Test the trie"),
 };
 static const u32 g_cmd_count = sizeof(g_commands) / sizeof(g_commands[0]);

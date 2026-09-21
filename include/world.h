@@ -5,16 +5,6 @@
 #include "fonts.h"
 #include "ui.h"
 
-typedef struct Player
-{
-	Camera	camera;
-	float	movSpeed;
-	vec3	pos;
-	versor	rotation;
-}	Player;
-void	initPlayer(Player *p);
-void	updatePlayer(Player *p, double dt, SDL_Window *window);
-
 typedef struct Entity
 {
 	Model	*model;
@@ -24,12 +14,13 @@ typedef struct Entity
 	
 	float	spin;
 }	Entity;
-void	spawnCommand(int argc, String *argv);
-void	unloadEntity(Entity *e, Allocator *a);
-Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a);
-void	updateEntities(Vector *entities, double dt);
 
-EntityRenderInfo	buildEntityRenderInfo(Vector *entity_vector, u32 model_count, Allocator *a);
+typedef struct Player
+{
+	Entity	*p_entity;
+	Camera	camera;
+	float	movSpeed;
+}	Player;
 
 typedef u32	GameState;
 enum GameStateField {
@@ -37,6 +28,7 @@ enum GameStateField {
 	ShowFps,
 	ShowConsole,
 	ShowGrid,
+	NoClip,
 
 	StateMax = 31,
 };
@@ -101,11 +93,15 @@ enum {
 	ENGINE_MODE_MENU,
 };
 
+// ------------- //
+// --- Input --- //
+// ------------- //
+
 void	inputBeginFrame(void);
 void	inputEndFrame(void);
 void	inputProccessEvent(const SDL_Event *e);
 
-extern GameState	game_state;
+extern GameState	g_game_state;
 extern EngineMode	g_engine_mode;
 extern InputState	g_input_state;
 extern SDL_Scancode	g_keybinds[ACTION_MAX_ENUM];
@@ -114,3 +110,16 @@ static inline bool key_held(SDL_Scancode sc)       { return g_input_state.curren
 static inline bool key_pressed(SDL_Scancode sc)     { return g_input_state.current[sc] && !g_input_state.last[sc]; }
 static inline bool key_released(SDL_Scancode sc)    { return !g_input_state.current[sc] && g_input_state.last[sc]; }
 static inline bool mod_held(SDL_Keymod m)           { return (g_input_state.mod & m) != 0; }
+
+// ------------------------------- //
+// --- Player/Entity Functions --- //
+// ------------------------------- //
+
+void	initPlayer(Player *p, World *world);
+void	updatePlayer(Player *p, double dt, SDL_Window *window);
+
+void	spawnCommand(int argc, String *argv);
+void	unloadEntity(Entity *e, Allocator *a);
+Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a);
+void	updateEntities(Vector *entities, double dt);
+EntityRenderInfo	buildEntityRenderInfo(Vector *entity_vector, u32 model_count, Allocator *a);

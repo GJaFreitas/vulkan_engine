@@ -7,7 +7,7 @@
 
 void	createPBRPipeline(GraphicsContext *ctx);
 
-GameState	game_state = 0;
+GameState	g_game_state = 0;
 
 static inline void	getMsAndFps(double *ms, double *fps, double *fps_avg, u64 *last_time, u64 *frames) {
 	static u32	frame_start = 2000;
@@ -24,32 +24,6 @@ static inline void	getMsAndFps(double *ms, double *fps, double *fps_avg, u64 *la
 		*fps = 1.0f / dt;
 		*frames += 1;
 		*fps_avg += (*fps - *fps_avg) / *frames;
-	}
-}
-
-static void updateCamera(Camera *camera, SDL_Window *window)
-{
-	// Mouse look - only when right mouse button is held
-	if (SDL_GetMouseState(NULL, NULL) & SDL_BUTTON_LMASK)
-	{
-		SDL_SetWindowRelativeMouseMode(window, true);
-		float xrel, yrel;
-		SDL_GetRelativeMouseState(&xrel, &yrel);
-
-		camera->yaw   += xrel * camera->mouseSensitivity;
-		camera->pitch -= yrel * camera->mouseSensitivity;
-		camera->pitch  = glm_clamp(camera->pitch, -89.0f, 89.0f);
-
-		// Recalculate front vector from yaw/pitch
-		vec3 front;
-		front[0] = cos(glm_rad(camera->yaw)) * cos(glm_rad(camera->pitch));
-		front[1] = sin(glm_rad(camera->pitch));
-		front[2] = sin(glm_rad(camera->yaw)) * cos(glm_rad(camera->pitch));
-		glm_vec3_normalize_to(front, camera->front);
-		glm_vec3_crossn(camera->front, camera->worldUp, camera->right);
-		glm_vec3_crossn(camera->right, camera->front, camera->up);
-	} else {
-		SDL_SetWindowRelativeMouseMode(window, false);
 	}
 }
 
@@ -87,7 +61,7 @@ static inline void beginFrame(World *world) {
 		// 1. GLOBAL / SYSTEM EVENTS (Always process these)
 		// ---------------------------------------------------------
 		if (event.type == SDL_EVENT_QUIT) {
-			gameStateToggle(&game_state, Running);
+			gameStateToggle(&g_game_state, Running);
 			continue; 
 		}
 		if (event.type == SDL_EVENT_WINDOW_RESIZED) {
@@ -102,14 +76,16 @@ static inline void beginFrame(World *world) {
 		// ---------------------------------------------------------
 		if (event.type == SDL_EVENT_KEY_DOWN) {
 			if (event.key.scancode == g_keybinds[ACTION_CONSOLE_TOGGLE]) {
-				gameStateToggle(&game_state, ShowConsole);
+				gameStateToggle(&g_game_state, ShowConsole);
 				if (g_engine_mode == ENGINE_MODE_CONSOLE) {
 					// TODO: When more modes are added i need a queue
 					g_engine_mode = ENGINE_MODE_GAME;
 					SDL_StopTextInput(world->graphics_ctx->window); // Stop OS text capture
+					SDL_SetWindowRelativeMouseMode(world->graphics_ctx->window, false);
 				} else {
 					g_engine_mode = ENGINE_MODE_CONSOLE;
 					SDL_StartTextInput(world->graphics_ctx->window); // Start OS text capture
+					SDL_SetWindowRelativeMouseMode(world->graphics_ctx->window, true);
 				}
 				continue; // CONSUME the toggle event!
 			}
@@ -132,7 +108,7 @@ static inline void beginFrame(World *world) {
 						case SDL_SCANCODE_ESCAPE: 
 							// ESC in console closes console, doesn't quit game!
 							g_engine_mode = ENGINE_MODE_GAME;
-							gameStateToggle(&game_state, ShowConsole);
+							gameStateToggle(&g_game_state, ShowConsole);
 							SDL_StopTextInput(world->graphics_ctx->window);
 							consumed = true; 
 							break;
@@ -153,7 +129,7 @@ static inline void beginFrame(World *world) {
 				// Only process game-specific event presses here
 				if (event.type == SDL_EVENT_KEY_DOWN) {
 					if (event.key.key == SDLK_ESCAPE) {
-						gameStateToggle(&game_state, Running);
+						gameStateToggle(&g_game_state, Running);
 						consumed = true;
 					} else if (event.key.key == SDLK_R) {
 						vkDeviceWaitIdle(world->graphics_ctx->device);
@@ -174,12 +150,6 @@ static inline void beginFrame(World *world) {
 		if (consumed) {
 			continue; 
 		}
-
-		// ---------------------------------------------------------
-		// 4. FALLBACK: RECORD PHYSICAL KEY STATE
-		// ---------------------------------------------------------
-		// Only unconsumed events make it here to update the physical key arrays
-		inputProccessEvent(&event);
 	}
 }
 
@@ -205,11 +175,11 @@ int	loop(World world)
 	EntityRenderInfo	entity_info = {};
 	UiRenderInfo		ui_info = {};
 
-	Entity	*e = loadEntity(world.graphics_ctx, STRING_LIT("data/models/Sponza.glb"), &world.entity_allocator);
-	vectorAppend(world.entities, &e);
+	// Entity	*e = loadEntity(world.graphics_ctx, STRING_LIT("data/models/test_scene.glb"), &world.entity_allocator);
+	// vectorAppend(world.entities, &e);
 
 	u64	last_time = SDL_GetPerformanceCounter();
-	while (gameStateQuery(game_state, Running))
+	while (gameStateQuery(g_game_state, Running))
 	{
 		// --- Begining of frame ---
 		getMsAndFps(&world.dt_ms, &fps, &fps_avg, &last_time, &frames);
@@ -218,10 +188,10 @@ int	loop(World world)
 		}
 		beginFrame(&world);
 
-		if (gameStateQuery(game_state, ShowConsole)) {
+		if (gameStateQuery(g_game_state, ShowConsole)) {
 			openConsole(screen_w, screen_h, font, 12, frame_arena);
 		}
-		if (gameStateQuery(game_state, ShowFps)) {
+		if (gameStateQuery(g_game_state, ShowFps)) {
 			showFps(world.ui->imgui_root, font, fps, frame_arena);
 		}
 
@@ -235,7 +205,6 @@ int	loop(World world)
 
 		// --- UPDATES ---
 		updatePlayer(world.player, world.dt_ms, world.graphics_ctx->window);
-		updateCamera(&world.player->camera, world.graphics_ctx->window);
 		updateEntities(world.entities, world.dt_ms);
 
 		// --- End of frame ---
@@ -275,7 +244,7 @@ int	main(void)
 	Player		p = {};
 	UiState		ui = {};
 
-	gameStateToggle(&game_state, Running);
+	gameStateToggle(&g_game_state, Running);
 	world.player = &p;
 	world.graphics_ctx = &gctx;
 	world.ui = &ui;
@@ -290,8 +259,11 @@ int	main(void)
 	initUi(&ui, gctx.window_width, gctx.window_height, &world.perm_allocator);
 	consoleInit(&world.perm_allocator);
 
+	Entity	*player = loadEntity(world.graphics_ctx, STRING_LIT("data/models/rabbit.glb"), &world.entity_allocator);
+	vectorAppend(world.entities, &player);
+
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);
-	initPlayer(world.player);
+	initPlayer(world.player, &world);
 	initFonts(world.graphics_ctx, &world.fonts, &world.perm_allocator, &world.frame_allocator);
 
 	loop(world);

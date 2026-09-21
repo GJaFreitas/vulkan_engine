@@ -1650,11 +1650,9 @@ static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 	UniformBufferObject ubo = {0}; // Ensure zero initialization
 
 	f32	aspect_ratio = (float)ctx->swapchain_width / (float)ctx->swapchain_height;
-	const f32	near_z = 0.1f;
-	const f32	far_z = 1000.0f;
 
 	getViewMatrix(ubo.view, cam);
-	getProjectionMatrix(ubo.proj, cam, aspect_ratio, near_z, far_z);
+	getProjectionMatrix(ubo.proj, cam, aspect_ratio, cam->near_z, cam->far_z);
 
 	// Vulkan y shift
 	ubo.proj[1][1] *= -1;
@@ -1675,7 +1673,7 @@ static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 	ubo.exposure = 1.0f;
 	ubo.gamma = 2.2f;
 
-	calculateShadowCascades(sun_dir, ubo.view, glm_rad(cam->zoom), aspect_ratio, near_z, far_z, &ubo);
+	calculateShadowCascades(sun_dir, ubo.view, glm_rad(cam->zoom), aspect_ratio, cam->near_z, cam->far_z, &ubo);
 
 	memcpy(resource->uniform_buffer.mapped, &ubo, sizeof(UniformBufferObject));
 }
@@ -2081,7 +2079,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, 
 		vkCmdSetScissor(resource->cmd_buf, 0, 1, &scissor);
 
 		// ---- GRID Pass ------------------ //
-		if (gameStateQuery(game_state, ShowGrid))
+		if (gameStateQuery(g_game_state, ShowGrid))
 			GRIDPass(ctx, resource);
 
 		// ---- PBR Pass --------------- //

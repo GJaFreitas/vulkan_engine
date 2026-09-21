@@ -24,6 +24,8 @@
 
 [ ] Implement indirect drawing
 
+[ ] Set a g_frame_arena variable to make frame allocations easier
+
 ### --- STUFF THAT DOESNT WORK ---
 
 Change strViewChr() to strViewUpToChar()

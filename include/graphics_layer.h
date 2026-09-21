@@ -199,8 +199,6 @@ typedef struct GLTFModel
 	Node		*linear_nodes;	u32	node_count;
 	Mesh		*meshes;	u32	mesh_count;
 	Animation	*animations;	u32	animation_count;
-
-	UniformBufferObject	ubo;
 }	Model;
 
 typedef struct ModelCacheEntry
@@ -386,6 +384,9 @@ typedef struct Camera
 	float movementSpeed;    // Units per second for translation movement
 	float mouseSensitivity; // Multiplier for mouse input to rotation angle conversion
 	float zoom;             // Field of view control for perspective projection
+
+	float	near_z;
+	float	far_z;
 
 }	Camera;
 
