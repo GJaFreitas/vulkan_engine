@@ -285,3 +285,26 @@ void	strReadSize(StringView *sv, void *dest, u64 size)
 	memcpy(dest, sv->data, size);
 	strViewAdvance(sv, size);
 }
+
+// No allocations
+StringView	getNextLine(String str, u64 *offset)
+{
+	StringView	line;
+
+	if (*offset >= str.count)
+		return (StringView){NULL, 0};
+
+	line.data = (u8 *)str.data + (*offset);
+
+	u64	i = *offset;
+	for (; i < str.count && str.data[i] != '\n'; i++) { }
+
+	line.count = i - (*offset);
+
+	if (i < str.count && str.data[i] == '\n')
+		line.count++;
+
+	*offset = i + (i < str.count);
+
+	return line;
+}

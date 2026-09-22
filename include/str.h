@@ -33,3 +33,5 @@ void	strCopy(StringView dst, StringView src);
 String	subStr(StringView sv, u64 size, Allocator *a);
 StringView	strViewChr(String s, const char c);
 void	strReadSize(StringView *sv, void *dest, u64 size);
+// No allocations
+StringView	getNextLine(String str, u64 *offset);

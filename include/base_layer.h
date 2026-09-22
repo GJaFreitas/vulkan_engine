@@ -41,8 +41,6 @@ static inline bool	queryFlag32(u32 bitset, u32 flag) {
 String	readFile(String filename);
 u8	*readFileData(String filename, u64 *file_size);
 void	destroyFile(String file);
-// No allocations
-StringView	getNextLine(String str, u64 *offset);
 
 u64	queryTimer(void);
 u64	getFrameDeltaNano(void);
