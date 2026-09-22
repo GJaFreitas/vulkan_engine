@@ -114,78 +114,101 @@ static void	movePlayer(Player *p, vec3 new_pos)
 
 void	updatePlayer(Player *p, double dt, SDL_Window *window)
 {
-	if (g_engine_mode != ENGINE_MODE_GAME) return ;
+	if (g_engine_mode != ENGINE_MODE_GAME || gameStateQuery(g_game_state, ShowConsole)) return;
 	(void)window;
 
-	// TODO: Setup a noclip command and make it so the camera works like previously but if not toggled
-	// have it implement this:
-	// 	One important detail for character controllers: If this is a walking
-	// 	character rather than a flying spectator camera, you will
-	// 	likely want to zero out the y component of camera->front and
-	// 	camera->right before adding them to move_dir. Otherwise, if the
-	// 	player looks down at the floor and presses forward, their
-	// 	displacement vector will push them directly into the ground,
-	// 	causing them to move much slower horizontally.
-
 	Camera	*camera = &p->camera;
-	vec3	move_dir = GLM_VEC3_ZERO_INIT;
-	bool	moved = false;
+	bool	noclip = gameStateQuery(g_game_state, NoClip);
 
-	// 1. Accumulate raw input directions
-	if (key_held(g_keybinds[ACTION_MOVE_FORWARD]))		{ glm_vec3_add(move_dir, camera->front, move_dir); moved = true; }
-	if (key_held(g_keybinds[ACTION_MOVE_BACKWARD]))		{ glm_vec3_sub(move_dir, camera->front, move_dir); moved = true; }
-	if (key_held(g_keybinds[ACTION_MOVE_LEFT]))		{ glm_vec3_sub(move_dir, camera->right, move_dir); moved = true; }
-	if (key_held(g_keybinds[ACTION_MOVE_RIGHT]))		{ glm_vec3_add(move_dir, camera->right, move_dir); moved = true; }
-	if (key_held(g_keybinds[ACTION_JUMP]))			{ glm_vec3_add(move_dir, camera->worldUp, move_dir); moved = true; }
-	if (key_held(g_keybinds[ACTION_SHIFT]))			{ glm_vec3_sub(move_dir, camera->worldUp, move_dir); moved = true; }
-
-	// Skip this if standing still
-	if (moved) {
-		if (!gameStateQuery(g_game_state, NoClip)) {
-
-			glm_vec3_normalize(move_dir);
-
-			// 3. Scale by speed and delta time to get the final displacement vector
-			vec3	displacement;
-			glm_vec3_scale(move_dir, p->movSpeed * dt, displacement);
-
-			// 4. Calculate the desired position
-			vec3	desired_pos;
-			glm_vec3_add(p->p_entity->pos, displacement, desired_pos);
-
-			// 5. TODO: Collisions
-			movePlayer(p, desired_pos);
-
-		} else { // --- Noclip is on --- //
-
-			glm_vec3_normalize(move_dir);
-
-			vec3	displacement;
-			glm_vec3_scale(move_dir, p->movSpeed * dt, displacement);
-
-			vec3	desired_pos;
-			glm_vec3_add(camera->position, displacement, desired_pos);
-
-			glm_vec3_copy(desired_pos, camera->position);
-		}
-	}
-
-	// Mouse look - only when right mouse button is held
-	float xrel, yrel;
+	// 1. Process mouse look FIRST so movement is relative to the updated view
+	float	xrel, yrel;
 	SDL_GetRelativeMouseState(&xrel, &yrel);
 
-	camera->yaw   += xrel * camera->mouseSensitivity;
-	camera->pitch -= yrel * camera->mouseSensitivity;
-	camera->pitch  = glm_clamp(camera->pitch, -89.0f, 89.0f);
+	camera->yaw	+= xrel * camera->mouseSensitivity;
+	camera->pitch	-= yrel * camera->mouseSensitivity;
+	camera->pitch	= glm_clamp(camera->pitch, -89.0f, 89.0f);
 
-	// Recalculate front vector from yaw/pitch
-	vec3 front;
+	// Recalculate camera vectors from yaw/pitch
+	vec3	front;
 	front[0] = cos(glm_rad(camera->yaw)) * cos(glm_rad(camera->pitch));
 	front[1] = sin(glm_rad(camera->pitch));
 	front[2] = sin(glm_rad(camera->yaw)) * cos(glm_rad(camera->pitch));
 	glm_vec3_normalize_to(front, camera->front);
 	glm_vec3_crossn(camera->front, camera->worldUp, camera->right);
 	glm_vec3_crossn(camera->right, camera->front, camera->up);
+
+	// 2. Handle Mouse Scroll (Zoom / Orbit Distance)
+	if (g_input_state.mouse_wheel_y != 0.0f) {
+		if (noclip) {
+			// Change Field of View (Zoom)
+			camera->fov -= g_input_state.mouse_wheel_y * 5.0f; 
+			camera->fov = glm_clamp(camera->fov, 10.0f, 120.0f); // Keep FOV sane
+		} else {
+			// Change Orbit Distance
+			p->orbit_dist -= g_input_state.mouse_wheel_y * 0.5f;
+			p->orbit_dist = glm_clamp(p->orbit_dist, MIN_ORBIT_DIST, MAX_ORBIT_DIST); // Don't clip inside player or go too far
+		}
+	}
+
+	// 3. Prepare movement vectors based on the current mode
+	vec3	move_front;
+	vec3	move_right;
+	vec3	move_up;
+
+	if (noclip) {
+		glm_vec3_copy(camera->front, move_front);
+		glm_vec3_copy(camera->right, move_right);
+	} else {
+		glm_vec3_copy(camera->front, move_front);
+		move_front[1] = 0.0f;
+		if (glm_vec3_norm2(move_front) > 0.001f) glm_vec3_normalize(move_front);
+
+		glm_vec3_copy(camera->right, move_right);
+		move_right[1] = 0.0f;
+		if (glm_vec3_norm2(move_right) > 0.001f) glm_vec3_normalize(move_right);
+	}
+	glm_vec3_copy(camera->worldUp, move_up);
+
+	// 4. Accumulate raw input directions using the prepared vectors
+	vec3	move_dir = GLM_VEC3_ZERO_INIT;
+	bool	moved = false;
+
+	if (key_held(g_keybinds[ACTION_MOVE_FORWARD]))	{ glm_vec3_add(move_dir, move_front, move_dir); moved = true; }
+	if (key_held(g_keybinds[ACTION_MOVE_BACKWARD]))	{ glm_vec3_sub(move_dir, move_front, move_dir); moved = true; }
+	if (key_held(g_keybinds[ACTION_MOVE_LEFT]))	{ glm_vec3_sub(move_dir, move_right, move_dir); moved = true; }
+	if (key_held(g_keybinds[ACTION_MOVE_RIGHT]))	{ glm_vec3_add(move_dir, move_right, move_dir); moved = true; }
+	if (key_held(g_keybinds[ACTION_JUMP]))		{ glm_vec3_add(move_dir, move_up, move_dir); moved = true; }
+	if (key_held(g_keybinds[ACTION_SHIFT]))		{ glm_vec3_sub(move_dir, move_up, move_dir); moved = true; }
+
+	// 5. Apply movement
+	if (moved) {
+		glm_vec3_normalize(move_dir);
+
+		vec3	displacement;
+		glm_vec3_scale(move_dir, p->movSpeed * dt, displacement);
+
+		if (noclip) {
+			glm_vec3_add(camera->position, displacement, camera->position);
+		} else {
+			vec3	desired_pos;
+			glm_vec3_add(p->p_entity->pos, displacement, desired_pos);
+			movePlayer(p, desired_pos);
+		}
+	}
+
+	// 6. Orbit Camera (Third Person View)
+	if (!noclip) {
+		vec3	target_pos;
+		vec3	offset;
+
+		// Focus on the upper body/head, not the feet
+		glm_vec3_copy(p->p_entity->pos, target_pos);
+		target_pos[1] += 1.5f; 
+
+		// Push the camera backward along its own negative front vector using dynamic orbit distance
+		glm_vec3_scale(camera->front, -p->orbit_dist, offset);
+		glm_vec3_add(target_pos, offset, camera->position);
+	}
 }
 
 void	initPlayer(Player *p, World *world)
@@ -202,7 +225,7 @@ void	initPlayer(Player *p, World *world)
 	glm_vec3_copy((vec3){0.0f, 1.0f, 0.0f},  camera->worldUp);
 	camera->yaw = -90.0f;
 	camera->pitch = 0;
-	camera->zoom = 45.0f;
+	camera->fov = 45.0f;
 	camera->mouseSensitivity = 0.1f;
 	camera->movementSpeed = 0.01f;
 	camera->far_z = 1000.0f;

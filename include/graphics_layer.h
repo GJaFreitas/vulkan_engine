@@ -383,7 +383,7 @@ typedef struct Camera
 	// These control how the camera responds to input and environmental factors
 	float movementSpeed;    // Units per second for translation movement
 	float mouseSensitivity; // Multiplier for mouse input to rotation angle conversion
-	float zoom;             // Field of view control for perspective projection
+	float fov;             // Field of view control for perspective projection
 
 	float	near_z;
 	float	far_z;

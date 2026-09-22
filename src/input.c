@@ -31,6 +31,9 @@ void	inputBeginFrame(void)
 	memcpy(g_input_state.last, g_input_state.current, NUM_KEYS);
 	// 2. Overwrite the current frame with the true OS physical state
 	memcpy(g_input_state.current, state, (numkeys < NUM_KEYS) ? numkeys : NUM_KEYS);
+
+	// Reset scroll every frame so it doesn't spin forever
+	g_input_state.mouse_wheel_y = 0.0f;
 }
 
 void	inputEndFrame(void)
@@ -85,6 +88,10 @@ void	processEvents(World *world) {
 			world->graphics_ctx->window_width = event.window.data1;
 			world->graphics_ctx->window_height = event.window.data2;
 			world->graphics_ctx->swapchain_require_recreate = true;
+			continue;
+		}
+		if (event.type == SDL_EVENT_MOUSE_WHEEL) {
+			g_input_state.mouse_wheel_y = event.wheel.y;
 			continue;
 		}
 

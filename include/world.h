@@ -15,11 +15,15 @@ typedef struct Entity
 	float	spin;
 }	Entity;
 
+#define MAX_ORBIT_DIST	15.0f
+#define MIN_ORBIT_DIST	1.5f
+
 typedef struct Player
 {
 	Entity	*p_entity;
 	Camera	camera;
 	float	movSpeed;
+	float	orbit_dist;
 }	Player;
 
 typedef u32	GameState;
@@ -68,6 +72,7 @@ typedef struct InputState
 	bool		current[NUM_KEYS];
 	bool		last[NUM_KEYS];
 	SDL_Keymod	mod;
+	float		mouse_wheel_y;
 }	InputState;
 
 typedef enum {
