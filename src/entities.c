@@ -114,7 +114,7 @@ static void	movePlayer(Player *p, vec3 new_pos)
 
 void	updatePlayer(Player *p, double dt, SDL_Window *window)
 {
-	if (g_engine_mode != ENGINE_MODE_GAME || gameStateQuery(g_game_state, ShowConsole)) return;
+	if (gameStateQuery(g_game_state, ShowConsole)) return;
 	(void)window;
 
 	Camera	*camera = &p->camera;

@@ -69,6 +69,7 @@ static void resolveMouseState(SDL_Window *window) {
 	SDL_SetWindowRelativeMouseMode(window, should_lock);
 }
 
+// TODO: Analyze logic and see if i can make it simpler or if performance is affected at all.
 void	processEvents(World *world) {
 	SDL_Event	event = {0};
 	bool		consumed;
@@ -84,13 +85,13 @@ void	processEvents(World *world) {
 			gameStateToggle(&g_game_state, Running);
 			continue; 
 		}
-		if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+		else if (event.type == SDL_EVENT_WINDOW_RESIZED) {
 			world->graphics_ctx->window_width = event.window.data1;
 			world->graphics_ctx->window_height = event.window.data2;
 			world->graphics_ctx->swapchain_require_recreate = true;
 			continue;
 		}
-		if (event.type == SDL_EVENT_MOUSE_WHEEL) {
+		else if (event.type == SDL_EVENT_MOUSE_WHEEL) {
 			g_input_state.mouse_wheel_y = event.wheel.y;
 			continue;
 		}
@@ -98,7 +99,7 @@ void	processEvents(World *world) {
 		// ---------------------------------------------------------
 		// 2. CONTEXT TOGGLES (Highest priority input)
 		// ---------------------------------------------------------
-		if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
+		else if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
 			// --- TOGGLE CONSOLE ---
 			if (event.key.scancode == g_keybinds[ACTION_CONSOLE_TOGGLE]) {
 				gameStateToggle(&g_game_state, ShowConsole);
@@ -114,8 +115,10 @@ void	processEvents(World *world) {
 			// --- TOGGLE EDITOR ---
 			if (event.key.scancode == g_keybinds[ACTION_EDITOR_TOGGLE]) {
 				if (g_engine_mode == ENGINE_MODE_GAME) {
+					gameStateSet(&g_game_state, NoClip, 1);
 					g_engine_mode = ENGINE_MODE_EDITOR;
 				} else if (g_engine_mode == ENGINE_MODE_EDITOR) {
+					gameStateSet(&g_game_state, NoClip, 0);
 					g_engine_mode = ENGINE_MODE_GAME;
 				}
 				continue; // CONSUME!

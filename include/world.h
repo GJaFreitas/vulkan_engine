@@ -37,11 +37,17 @@ enum GameStateField {
 	StateMax = 31,
 };
 
+static inline void	gameStateSet(GameState *state, enum GameStateField field, bool val) {
+	if (val)
+		*state |= (1U << field);
+	else
+		*state &= ~(1U << field);
+}
 static inline void	gameStateToggle(GameState *state, enum GameStateField field) {
-	*state = *state ^ (1 << field);
+	*state = *state ^ (1U << field);
 }
 static inline bool	gameStateQuery(GameState state, enum GameStateField field) {
-	return (state & (1 << field));
+	return (state & (1U << field));
 }
 
 typedef struct World
