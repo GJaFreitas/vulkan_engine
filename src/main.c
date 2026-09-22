@@ -8,8 +8,6 @@
 Allocator	g_frame_arena = {0};
 Allocator	g_perm_arena = {0};
 
-void	createPBRPipeline(GraphicsContext *ctx);
-
 GameState	g_game_state = 0;
 
 static inline void	getMsAndFps(double *ms, double *fps, double *fps_avg, u64 *last_time, u64 *frames) {
@@ -53,107 +51,39 @@ void	createRandomEntity(World world)
 	initializeRandomVec(e->pos, 3, -1, 1);
 }
 
+static inline void resolveMouseState(SDL_Window *window) {
+	bool	should_lock = false;
+
+	// 1. Highest Priority: Overlays
+	if (gameStateQuery(g_game_state, ShowConsole)) {
+		should_lock = false; // Free mouse for text selection / UI
+	} 
+	// 2. Base Modes
+	else if (g_engine_mode == ENGINE_MODE_GAME) {
+		should_lock = true;  // Always locked in gameplay
+	} 
+	else if (g_engine_mode == ENGINE_MODE_EDITOR) {
+		// Hybrid Editor Mouse: Lock only while Right Mouse Button is held
+		u32	mouse_state = SDL_GetMouseState(NULL, NULL);
+		if (mouse_state & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) {
+			should_lock = true;
+		} else {
+			should_lock = false;
+		}
+	} 
+	else if (g_engine_mode == ENGINE_MODE_MAIN_MENU) {
+		should_lock = false; // Always free in menus
+	}
+
+	// SDL internally checks if the state is already set, so this is safe to call per-frame
+	SDL_SetWindowRelativeMouseMode(window, should_lock);
+}
+
 static inline void beginFrame(World *world) {
-	SDL_Event event = {0};
 	inputBeginFrame();
 	do_callbacks();
 
-	while (SDL_PollEvent(&event))
-	{
-		// ---------------------------------------------------------
-		// 1. GLOBAL / SYSTEM EVENTS (Always process these)
-		// ---------------------------------------------------------
-		if (event.type == SDL_EVENT_QUIT) {
-			gameStateToggle(&g_game_state, Running);
-			continue; 
-		}
-		if (event.type == SDL_EVENT_WINDOW_RESIZED) {
-			world->graphics_ctx->window_width = event.window.data1;
-			world->graphics_ctx->window_height = event.window.data2;
-			world->graphics_ctx->swapchain_require_recreate = true;
-			continue;
-		}
-
-		// ---------------------------------------------------------
-		// 2. CONTEXT TOGGLES (Highest priority input)
-		// ---------------------------------------------------------
-		if (event.type == SDL_EVENT_KEY_DOWN) {
-			if (event.key.scancode == g_keybinds[ACTION_CONSOLE_TOGGLE]) {
-				gameStateToggle(&g_game_state, ShowConsole);
-				if (g_engine_mode == ENGINE_MODE_CONSOLE) {
-					// TODO: When more modes are added i need a queue
-					g_engine_mode = ENGINE_MODE_GAME;
-					SDL_StopTextInput(world->graphics_ctx->window); // Stop OS text capture
-					SDL_SetWindowRelativeMouseMode(world->graphics_ctx->window, false);
-				} else {
-					g_engine_mode = ENGINE_MODE_CONSOLE;
-					SDL_StartTextInput(world->graphics_ctx->window); // Start OS text capture
-					SDL_SetWindowRelativeMouseMode(world->graphics_ctx->window, true);
-				}
-				continue; // CONSUME the toggle event!
-			}
-		}
-
-		// ---------------------------------------------------------
-		// 3. ROUTE BY ACTIVE CONTEXT
-		// ---------------------------------------------------------
-		bool consumed = false;
-
-		switch (g_engine_mode) {
-			case ENGINE_MODE_CONSOLE:
-				// Handle text input
-				if (event.type == SDL_EVENT_TEXT_INPUT) {
-					consoleInputInsert(event.text.text, strlen(event.text.text));
-					consumed = true;
-				} 
-				else if (event.type == SDL_EVENT_KEY_DOWN) {
-					switch (event.key.scancode) {
-						case SDL_SCANCODE_ESCAPE: 
-							// ESC in console closes console, doesn't quit game!
-							g_engine_mode = ENGINE_MODE_GAME;
-							gameStateToggle(&g_game_state, ShowConsole);
-							SDL_StopTextInput(world->graphics_ctx->window);
-							consumed = true; 
-							break;
-						case SDL_SCANCODE_BACKSPACE:	consoleBackspace(); consumed = true; break;
-						case SDL_SCANCODE_RETURN:
-						case SDL_SCANCODE_KP_ENTER:	consoleEnter(&g_frame_arena); consumed = true; break;
-						case SDL_SCANCODE_LEFT:		consoleLeftArrow(); consumed = true; break;
-						case SDL_SCANCODE_RIGHT:	consoleRightArrow(); consumed = true; break;
-						case SDL_SCANCODE_UP:		consoleUpArrow(); consumed = true; break;
-						case SDL_SCANCODE_DOWN:		consoleDownArrow(); consumed = true; break;
-						case SDL_SCANCODE_TAB:		consoleTab(); consumed = true; break;
-						default: break;
-					}
-				}
-			break;
-
-			case ENGINE_MODE_GAME:
-				// Only process game-specific event presses here
-				if (event.type == SDL_EVENT_KEY_DOWN) {
-					if (event.key.key == SDLK_ESCAPE) {
-						gameStateToggle(&g_game_state, Running);
-						consumed = true;
-					} else if (event.key.key == SDLK_R) {
-						vkDeviceWaitIdle(world->graphics_ctx->device);
-						if (system("make")) {
-							consoleAppend("Error detected recompiling shaders.");
-						} else {
-							createPBRPipeline(world->graphics_ctx);
-						}
-					}
-				}
-			break;
-
-			case ENGINE_MODE_MENU:
-			break;
-		}
-
-		// If a context swallowed the event, do not pass it to the physical key tracker!
-		if (consumed) {
-			continue; 
-		}
-	}
+	processEvents(world);
 }
 
 static inline void	endFrame(World world) {

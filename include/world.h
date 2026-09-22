@@ -79,6 +79,7 @@ typedef enum {
 	ACTION_SHIFT,
 	ACTION_DEBUG_TOGGLE,
 	ACTION_CONSOLE_TOGGLE,
+	ACTION_EDITOR_TOGGLE,
 
 	ACTION_MAX_ENUM,
 }	Action;
@@ -86,8 +87,8 @@ typedef enum {
 typedef u8	EngineMode;
 enum {
 	ENGINE_MODE_GAME,
-	ENGINE_MODE_CONSOLE,
-	ENGINE_MODE_MENU,
+	ENGINE_MODE_EDITOR,
+	ENGINE_MODE_MAIN_MENU,
 };
 
 // --------------- //
@@ -103,7 +104,7 @@ extern Allocator	g_perm_arena;
 
 void	inputBeginFrame(void);
 void	inputEndFrame(void);
-void	inputProccessEvent(const SDL_Event *e);
+void	processEvents(World *world);
 
 extern GameState	g_game_state;
 extern EngineMode	g_engine_mode;
