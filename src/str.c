@@ -1,3 +1,5 @@
+
+#define STB_SPRINTF_IMPLEMENTATION
 #include "str.h"
 #include "allocators.h"
 #include "stb_sprintf.h"

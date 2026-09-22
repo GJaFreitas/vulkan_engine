@@ -1,4 +1,3 @@
-#define STB_SPRINTF_IMPLEMENTATION
 #include "stb_sprintf.h"
 #include "logging.h"
 #include <stdarg.h>

@@ -46,7 +46,7 @@ MSDF_BAKER_FLAGS := #-O2
 
 # The file with stuff in it
 MSDF_BAKE := data/font_file.bin
-MSDF_BAKER_SRC := tools/msdf_baker.c src/base_layer.c
+MSDF_BAKER_SRC := tools/msdf_baker.c src/base_layer.c src/vector.c src/str.c src/allocators.c src/logging.c
 MSDF_BAKER := tools/msdf_baker.out
 
 #### THIS HAS TO BE HERE BECAUSE IT NEEDS THE REST OF THE STUFF ####
