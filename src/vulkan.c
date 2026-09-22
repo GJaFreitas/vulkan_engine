@@ -1635,7 +1635,7 @@ static inline void	addPointLight(UniformBufferObject *ubo, vec4 p_light_pos, vec
 
 static inline void	getProjectionMatrix(mat4 dst, Camera *c, float aspect_ratio, f32 near_z, f32 far_z)
 {
-	glm_perspective(glm_rad(c->zoom), aspect_ratio, near_z, far_z, dst);
+	glm_perspective(glm_rad(c->fov), aspect_ratio, near_z, far_z, dst);
 }
 
 static inline void	getViewMatrix(mat4 dst, Camera *c)
@@ -1673,7 +1673,7 @@ static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 	ubo.exposure = 1.0f;
 	ubo.gamma = 2.2f;
 
-	calculateShadowCascades(sun_dir, ubo.view, glm_rad(cam->zoom), aspect_ratio, cam->near_z, cam->far_z, &ubo);
+	calculateShadowCascades(sun_dir, ubo.view, glm_rad(cam->fov), aspect_ratio, cam->near_z, cam->far_z, &ubo);
 
 	memcpy(resource->uniform_buffer.mapped, &ubo, sizeof(UniformBufferObject));
 }
