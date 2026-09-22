@@ -20,12 +20,6 @@ SRCS := $(shell find $(SRC_DIR) -type f -name '*.c')
 SRCS += $(shell find $(DEP_DIR) -type f -name '*.c')
 OBJS := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/c/%.o,$(SRCS))
 
-#### MY LIBRARY ####
-
-MYLIB_DIR := MyLib
-MYLIB_INC := $(MYLIB_DIR)/include
-MYLIB_LIB := $(MYLIB_DIR)/mylib.a
-
 #### SHADER STUFF ####
 
 SHADER_SRCS := $(shell find $(SHADER_DIR) -maxdepth 1 -type f -name '*.slang')
@@ -46,7 +40,7 @@ VKPKG_LIB := $(VKCPKG_ROOT)/$(TRIPLET)/lib
 FONT_PATHS := /usr/share/fonts/TTF/JetBrainsMonoNerdFont-Bold.ttf
 # FONT_PATHS += /usr/share/fonts/TTF/FiraCode-Bold.ttf
 
-BAKE_LDLIBS := -I$(INC_DIR) -L$(MYLIB_DIR) -l:mylib.a $(shell pkg-config --libs freetype2)
+BAKE_LDLIBS := -I$(INC_DIR) $(shell pkg-config --libs freetype2)
 
 MSDF_BAKER_FLAGS := #-O2
 
@@ -60,13 +54,13 @@ MSDF_BAKER := tools/msdf_baker.out
 CXXFLAGS := -g
 #                           ↓ Force recompilation when .h changes
 CFLAGS := -Wall -Wextra -g -MMD -MP
-CPPFLAGS := -I$(INC_DIR) -I$(DEP_DIR) -I$(MYLIB_INC) -I$(VKPKG_INC)
+CPPFLAGS := -I$(INC_DIR) -I$(DEP_DIR) -I$(VKPKG_INC)
 
-LDFLAGS := -L$(MYLIB_DIR) -l:mylib.a -L$(VKPKG_LIB) -Wl,-rpath,$(VKPKG_LIB)
+LDFLAGS := -L$(VKPKG_LIB) -Wl,-rpath,$(VKPKG_LIB)
 LDLIBS := -lvolk -lvulkan -lSDL3 -lstdc++ -lshaderc_shared -lm \
 		-lharfbuzz -lfreetype  -lpng16 -lz -lbz2 -lbrotlidec -lbrotlicommon
 
-all: $(MYLIB_LIB) $(OBJ_DIR) $(MSDF_BAKE) $(COMPILED_SHADER_DIR) $(SHADERS) $(TARGET)
+all: $(OBJ_DIR) $(MSDF_BAKE) $(COMPILED_SHADER_DIR) $(SHADERS) $(TARGET)
 
 # msdf_baker.out <font paths> <outfile.bin>
 $(MSDF_BAKE): $(MSDF_BAKER)
@@ -75,16 +69,13 @@ $(MSDF_BAKE): $(MSDF_BAKER)
 $(MSDF_BAKER): $(MSDF_BAKER_SRC)
 	@$(CC) $(CFLAGS) $(CPPFLAGS) $(MSDF_BAKER_FLAGS) $(MSDF_BAKER_SRC) $(BAKE_LDLIBS) -o $(MSDF_BAKER)
 
-$(MYLIB_LIB):
-	@$(MAKE) -C $(MYLIB_DIR) --no-print-directory
-
 $(COMPILED_SHADER_DIR):
 	@mkdir -p shaders/compiled
 
 $(COMPILED_SHADER_DIR)/%.spv: $(SHADER_DIR)/%.slang
 	$(SLANGC) $< $(SHADER_INC) -target spirv -fvk-use-scalar-layout -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o $@
 
-$(TARGET): $(OBJS) $(CPP_OBJS) $(MYLIB_LIB)
+$(TARGET): $(OBJS) $(CPP_OBJS)
 	$(CC) $^ -o $@ $(LDFLAGS) $(LDLIBS)
 
 $(OBJ_DIR):
@@ -111,6 +102,5 @@ clean:
 
 compdb:
 	bear -- make clean all
-	cd MyLib && bear -- make clean all
 
 .PHONY: compdb all clean run re

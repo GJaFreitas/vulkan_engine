@@ -5,4 +5,3 @@
 #include "str.h"
 #include "typedefs.h"
 #include "vector.h"
-#include "sparse.h"

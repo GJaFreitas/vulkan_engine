@@ -576,7 +576,6 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
          char lead[8];
          char tail[8];
          char *s;
-         String S = {0, 0};
          char const *h;
          stbsp__uint32 l, n, cs;
          stbsp__uint64 n64;
@@ -593,7 +592,7 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
             s = (char *)"null";
          // get the length, limited to desired precision
          // always limit to ~0u chars since our counts are 32b
-         l = stbsp__strlen_limited(s, (pr >= 0) ? pr : ~0u);
+         l = stbsp__strlen_limited(s, (pr >= 0) ? (unsigned int)pr : ~0u);
          lead[0] = 0;
          tail[0] = 0;
          pr = 0;
@@ -602,16 +601,14 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
          // copy the string in
          goto scopy;
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wformat"
-
       case 'S':
+         String S = {0, 0};
          S = va_arg(va, String);
          if (S.data == 0)
             S.data = (u8 *)"null";
 
 	 l = (S.count >= ~0u) ? ~0u : S.count;
-	 s = S.data;
+	 s = (char *)S.data;
          lead[0] = 0;
          tail[0] = 0;
          pr = 0;
@@ -619,8 +616,6 @@ STBSP__PUBLICDEF int STB_SPRINTF_DECORATE(vsprintfcb)(STBSP_SPRINTFCB *callback,
          cs = 0;
          // copy the string in
          goto scopy;
-
-#pragma clang diagnostic pop
 
       case 'c': // char
          // get the character
