@@ -4,6 +4,10 @@
 
 void	_trie_test(int argc, String *argv);
 
+static void	_pipeline_rebuild(int argc, String *argv) {
+	consoleAppend("To be implemented");
+}
+
 static void	_toggle(int argc, String *argv)
 {
 	(void)argc;
@@ -35,6 +39,7 @@ static const CCmd g_commands[] = {
 	RegisterCmd("spawn", spawnCommand, "Spawns an entity"),
 	RegisterCmd("toggle", _toggle, "Toggles game state"),
 	RegisterCmd("trie", _trie_test, "Test the trie"),
+	RegisterCmd("rebuild_pipelines", _pipeline_rebuild, "Sets up pipeline rebuild"),
 };
 static const u32 g_cmd_count = sizeof(g_commands) / sizeof(g_commands[0]);
 
