@@ -437,7 +437,6 @@ typedef struct GraphicsContext
 	// Text Pipeline ------------
 	ShaderHandle		ui_shader_handle;
 	u64			ui_pipeline_state;
-	VkPipeline		pipeline_text;
 	u32			font_atlas_global_index;
 	// --------------------------
 
