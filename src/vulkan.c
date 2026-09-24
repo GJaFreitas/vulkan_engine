@@ -1681,8 +1681,6 @@ void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, UiRenderInfo info)
 
 void	GRIDPass(GraphicsContext *ctx, FrameResources *resource)
 {
-	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_grid);
-
 	// Populate Push Constants
 	GridRootConstants push_constants = {
 		.ubo_addr = resource->uniform_buffer.device_address,
@@ -1690,7 +1688,9 @@ void	GRIDPass(GraphicsContext *ctx, FrameResources *resource)
 		.show_grid = gameStateQuery(g_game_state, ShowGrid),
 	};
 
-	// Need both Vertex (for UBO ptr) and Fragment (for properties) stages
+	VkPipeline pipeline = pipelineRegistryGetOrCreate(ctx->pipeline_registry, ctx->grid_pipeline_state);
+	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
 	vkCmdPushConstants(resource->cmd_buf, ctx->pipeline_registry->g_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GridRootConstants), &push_constants);
 
 	// Grid is usually drawn as a full-screen quad or large plane without vertex buffers
@@ -1751,6 +1751,7 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 					cull_mode,
 					blend_mode,
 					DEPTH_RW,
+					COMPARE_LESS,
 					TOPO_TRIANGLES,
 					PIPELINE_TYPE_GRAPHICS,
 					PASS_MAIN,

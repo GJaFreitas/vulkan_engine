@@ -10,6 +10,7 @@
 #define STATE_GET_TYPE(s)	(((s) >> SHIFT_TYPE) & 1U)
 #define STATE_GET_PASS(s)	((u8) (((s) >> SHIFT_PASS) & 0x000F))
 #define STATE_GET_DYNAMIC(s)	((u8) ((s >> SHIFT_DYNAMIC) & 1U))
+#define STATE_GET_COMPARE(s)	((u8) (((s) >> SHIFT_COMPARE) & 0x000F))
 
 VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState state)
 {
@@ -29,8 +30,8 @@ VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState
 		
 		VkComputePipelineCreateInfo compute_info = {
 			.sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			.stage  = shader->stages[0], // Slang compute stage
-			.layout = registry->g_layout // Uses your shared Push Constants / BDA layout
+			.stage  = shader->stages[0],
+			.layout = registry->g_layout
 		};
 
 		vkCreateComputePipelines(
@@ -46,6 +47,7 @@ VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState
 		enum CullMode		cull_mode = STATE_GET_CULL(state);
 		enum BlendMode		blend_mode = STATE_GET_BLEND(state);
 		enum DepthMode		depth_mode = STATE_GET_DEPTH(state);
+		enum CompareMode	compare_mode = STATE_GET_COMPARE(state);
 		enum TopologyMode	topo_mode = STATE_GET_TOPO(state);
 		enum PassType		pass_type = STATE_GET_PASS(state);
 		u8			dynamic_type = STATE_GET_DYNAMIC(state);
@@ -61,14 +63,23 @@ VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState
 
 		// --- DEPTH STENCIL ---
 		VkPipelineDepthStencilStateCreateInfo depth_stencil = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
+		VkCompareOp vk_compare = VK_COMPARE_OP_LESS;
+		switch (compare_mode) {
+			case COMPARE_LESS:		vk_compare = VK_COMPARE_OP_LESS; break;
+			case COMPARE_LESS_OR_EQUAL:	vk_compare = VK_COMPARE_OP_LESS_OR_EQUAL; break;
+			case COMPARE_GREATER:		vk_compare = VK_COMPARE_OP_GREATER; break;
+			case COMPARE_GREATER_OR_EQUAL:	vk_compare = VK_COMPARE_OP_GREATER_OR_EQUAL; break;
+			case COMPARE_EQUAL:		vk_compare = VK_COMPARE_OP_EQUAL; break;
+			case COMPARE_ALWAYS:		vk_compare = VK_COMPARE_OP_ALWAYS; break;
+		}
 		if (depth_mode == DEPTH_RW) {
 			depth_stencil.depthTestEnable = VK_TRUE;
 			depth_stencil.depthWriteEnable = VK_TRUE;
-			depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS;
+			depth_stencil.depthCompareOp = vk_compare;
 		} else if (depth_mode == DEPTH_READ) {
 			depth_stencil.depthTestEnable = VK_TRUE;
 			depth_stencil.depthWriteEnable = VK_FALSE;
-			depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS;
+			depth_stencil.depthCompareOp = vk_compare;
 		} else {
 			depth_stencil.depthTestEnable = VK_FALSE;
 			depth_stencil.depthWriteEnable = VK_FALSE;
@@ -332,6 +343,17 @@ void	initPipelineRegistry(PipelineRegistry **reg_out, GraphicsContext *ctx)
 	reg->main_depth_format = ctx->swapchain_depth_format;
 	reg->shadow_depth_format = ctx->swapchain_depth_format;
 	ctx->pbr_shader_handle = pipelineRegistryRegisterShader(reg, STRING_LIT("pbr"), PIPELINE_TYPE_GRAPHICS);
+	ctx->grid_shader_handle = pipelineRegistryRegisterShader(reg, STRING_LIT("grid"), PIPELINE_TYPE_GRAPHICS);
+	ctx->grid_pipeline_state = createPipelineState(ctx->grid_shader_handle,
+							CULL_NONE,
+							BLEND_ALPHA,
+							DEPTH_READ,
+							COMPARE_LESS_OR_EQUAL,
+							TOPO_TRIANGLES,
+							PIPELINE_TYPE_GRAPHICS,
+							PASS_MAIN,
+							DYNAMIC_DEPTH_DISABLE
+						);
 
 	*reg_out = reg;
 }

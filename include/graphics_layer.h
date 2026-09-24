@@ -260,7 +260,8 @@ typedef u64	PipelineState;
 #define SHIFT_TOPO	28	// 3bit		(Bits 28-30)
 #define SHIFT_TYPE	31	// 1bit		(Bit 31) 0 = Graphics | 1 = Compute
 #define SHIFT_PASS	32	// 3bit		(Bits 32-34)
-#define SHIFT_DYNAMIC	33	// 1bit		(Bit 35) 0 = Depth bias disabled | 1 = enabled
+#define SHIFT_DYNAMIC	35	// 1bit		(Bit 35) 0 = Depth bias disabled | 1 = enabled
+#define SHIFT_COMPARE	36	// 3bit		(Bit 36-39)
 
 // ---------------------------------------------------------
 // RENDER STATE ENUMS
@@ -300,16 +301,26 @@ enum DynamicMode {
 	DYNAMIC_DEPTH_ENABLE
 };
 
+enum CompareMode {
+	COMPARE_LESS = 0,
+	COMPARE_LESS_OR_EQUAL,
+	COMPARE_GREATER,
+	COMPARE_GREATER_OR_EQUAL,
+	COMPARE_EQUAL,
+	COMPARE_ALWAYS
+};
+
 // Helper to pack the state
-static inline PipelineState createPipelineState(u16 shader, u8 cull, u8 blend, u8 depth, u8 topo, u8 type, u8 pass, u8 dynamic) {
-	return	((u64)shader	<< SHIFT_SHADER) |
-		((u64)cull	<< SHIFT_CULL)   |
-		((u64)blend	<< SHIFT_BLEND)  |
-		((u64)depth	<< SHIFT_DEPTH)  |
-		((u64)topo	<< SHIFT_TOPO)   |
-		((u64)type	<< SHIFT_TYPE)   |
-		((u64)pass	<< SHIFT_PASS)   |
-		((u64)dynamic	<< SHIFT_PASS);
+static inline PipelineState createPipelineState(u16 shader, u8 cull, u8 blend, u8 depth, u8 compare, u8 topo, u8 type, u8 pass, u8 dynamic) {
+	return	((u64)shader	<< SHIFT_SHADER)   |
+		((u64)cull	<< SHIFT_CULL)     |
+		((u64)blend	<< SHIFT_BLEND)    |
+		((u64)depth	<< SHIFT_DEPTH)    |
+		((u64)topo	<< SHIFT_TOPO)     |
+		((u64)type	<< SHIFT_TYPE)     |
+		((u64)pass	<< SHIFT_PASS)     |
+		((u64)dynamic	<< SHIFT_DYNAMIC)  |
+		((u64)compare	<< SHIFT_COMPARE);
 }
 
 // All settings off
@@ -403,7 +414,6 @@ typedef struct GraphicsContext
 	// ---------------------
 
 	// PBR Pipeline ------------
-	PipelineHandle		pipeline_pbr_handle;
 	ShaderHandle		pbr_shader_handle;
 
 	Texture			default_base_color_texture;
@@ -418,6 +428,8 @@ typedef struct GraphicsContext
 	// ---------------------------------
 
 	// Grid Pipeline ------------
+	ShaderHandle		grid_shader_handle;
+	u64			grid_pipeline_state;
 	VkPipeline		pipeline_grid;
 	GridProperties		grid_properties;
 	// --------------------------

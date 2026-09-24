@@ -107,6 +107,7 @@ Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a)
 		ctx->pbr_shader_handle,
 		CULL_BACK,
 		BLEND_NONE,
+		COMPARE_LESS,
 		DEPTH_RW,
 		TOPO_TRIANGLES,
 		PIPELINE_TYPE_GRAPHICS,
