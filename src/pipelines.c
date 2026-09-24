@@ -84,6 +84,7 @@ VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState
 			depth_stencil.depthTestEnable = VK_FALSE;
 			depth_stencil.depthWriteEnable = VK_FALSE;
 		}
+		depth_stencil.stencilTestEnable = VK_FALSE;
 
 		// --- COLOR BLEND ---
 		VkPipelineColorBlendAttachmentState color_blend_attachment = {0};
@@ -125,8 +126,15 @@ VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState
 
 		// --- TOPOLOGY ---
 		VkPipelineInputAssemblyStateCreateInfo input_assembly = { .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
-		input_assembly.topology = (topo_mode == TOPO_LINES) ? VK_PRIMITIVE_TOPOLOGY_LINE_LIST : 
-			(topo_mode == TOPO_POINTS) ? VK_PRIMITIVE_TOPOLOGY_POINT_LIST : VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		if (topo_mode == TOPO_LINES) {
+			input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+		} else if (topo_mode == TOPO_POINTS) {
+			input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+		} else if (topo_mode == TOPO_TRIANGLE_STRIP) {
+			input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+		} else {
+			input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		}
 
 		// --- BINDLESS VERTEX INPUT (Gloriously Empty!) ---
 		VkPipelineVertexInputStateCreateInfo vertex_input = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };
@@ -196,19 +204,17 @@ VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState
 			rendering_info.depthAttachmentFormat = registry->shadow_depth_format;
 		} 
 		else if (pass_type == PASS_UI) {
-			// Color Only
+			// Color + Depth
 			rendering_info.colorAttachmentCount = 1;
 			rendering_info.pColorAttachmentFormats = &registry->main_color_format;
-			rendering_info.depthAttachmentFormat = VK_FORMAT_UNDEFINED;
+			rendering_info.depthAttachmentFormat = registry->main_depth_format;
 		}
 		else { // PASS_MAIN
 			// Color + Depth
 			rendering_info.colorAttachmentCount = 1;
 			rendering_info.pColorAttachmentFormats = &registry->main_color_format;
 			
-			if (depth_mode != DEPTH_NONE) {
-				rendering_info.depthAttachmentFormat = registry->main_depth_format;
-			}
+			rendering_info.depthAttachmentFormat = registry->main_depth_format;
 		}
 
 		pipeline_info.pNext = &rendering_info;
@@ -352,6 +358,17 @@ void	initPipelineRegistry(PipelineRegistry **reg_out, GraphicsContext *ctx)
 							TOPO_TRIANGLES,
 							PIPELINE_TYPE_GRAPHICS,
 							PASS_MAIN,
+							DYNAMIC_DEPTH_DISABLE
+						);
+	ctx->ui_shader_handle = pipelineRegistryRegisterShader(reg, STRING_LIT("text"), PIPELINE_TYPE_GRAPHICS);
+	ctx->ui_pipeline_state = createPipelineState(ctx->ui_shader_handle,
+							CULL_NONE,
+							BLEND_ALPHA,
+							DEPTH_NONE,
+							COMPARE_LESS,
+							TOPO_TRIANGLE_STRIP,
+							PIPELINE_TYPE_GRAPHICS,
+							PASS_UI,
 							DYNAMIC_DEPTH_DISABLE
 						);
 

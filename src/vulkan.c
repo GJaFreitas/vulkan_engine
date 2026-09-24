@@ -227,82 +227,6 @@ static void	createTEXTPipeline(GraphicsContext *ctx)
 	engine_log(LOG_FILE, "Successfully created text pipeline");
 }
 
-static void	createGRIDPipeline(GraphicsContext *ctx)
-{
-	VkPipelineShaderStageCreateInfo	shader_stages[2] = {0};
-	VkShaderModule	vertex;
-	VkShaderModule	frag;
-	pipelineShaderCreate(ctx, STRING_LIT("grid"), "vertMain", VK_SHADER_STAGE_VERTEX_BIT, &shader_stages[0], &vertex);
-	pipelineShaderCreate(ctx, STRING_LIT("grid"), "fragMain", VK_SHADER_STAGE_FRAGMENT_BIT, &shader_stages[1], &frag);
-
-
-	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-	};
-	VkPipelineInputAssemblyStateCreateInfo	imput_assembly_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
-	};
-	VkPipelineDepthStencilStateCreateInfo	depth_stencil_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.depthTestEnable = VK_TRUE,
-		.depthWriteEnable = VK_FALSE,
-		.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
-		.stencilTestEnable = VK_FALSE
-	};
-	VkPipelineViewportStateCreateInfo	viewport_info = viewportCreate();
-	VkPipelineRasterizationStateCreateInfo	rasterization_info = rasterizationCreate(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
-	VkPipelineMultisampleStateCreateInfo	multisample_info = multisampleCreate();
-	VkPipelineColorBlendAttachmentState	color_blend_attach = colorBlend(true);
-	VkPipelineColorBlendStateCreateInfo	blend_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-		.attachmentCount = 1,
-		.pAttachments = &color_blend_attach
-	};
-	VkDynamicState	dynamic_states[] = {
-		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_SCISSOR
-	};
-	VkPipelineDynamicStateCreateInfo	dynamic_state_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		.dynamicStateCount = sizeofarray(dynamic_states),
-		.pDynamicStates = dynamic_states
-	};
-	VkPipelineRenderingCreateInfo	render_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		.colorAttachmentCount = 1,
-		.pColorAttachmentFormats = &ctx->swapchain_format.format,
-		.depthAttachmentFormat = ctx->swapchain_depth_format
-	};
-	VkGraphicsPipelineCreateInfo	pipeline_info = {
-		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		.pNext = &render_info,
-		.stageCount = sizeofarray(shader_stages),
-		.pStages = shader_stages,
-		.pVertexInputState = &vertex_input_info,
-		.pInputAssemblyState = &imput_assembly_info,
-		.pViewportState = &viewport_info,
-		.pRasterizationState = &rasterization_info,
-		.pMultisampleState = &multisample_info,
-		.pDepthStencilState = &depth_stencil_info,
-		.pColorBlendState = &blend_info,
-		.pDynamicState = &dynamic_state_info,
-		.layout = ctx->pipeline_registry->g_layout,
-		.renderPass = VK_NULL_HANDLE
-	};
-
-	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_grid) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create graphics pipeline\n");
-		exit(1);
-	}
-
-	vkDestroyShaderModule(ctx->device, vertex, NULL);
-	vkDestroyShaderModule(ctx->device, frag, NULL);
-
-	engine_log(LOG_FILE, "Successfully created graphics pipeline");
-}
-
-
 // --- VULKAN API --- //
 
 void	createVkBuffer(GraphicsContext *ctx, const BufferInfo *info, BufferObject *out_buffer)
@@ -1343,7 +1267,6 @@ static void	initVulkan(GraphicsContext *ctx)
 
 	// --- Pipelines --- //
 	createSHADOWPipeline(ctx);
-	createGRIDPipeline(ctx);
 	createTEXTPipeline(ctx);
 
 	ctx->frame_index = 0;
@@ -1665,7 +1588,8 @@ void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, UiRenderInfo info)
 
 	memcpy(resource->text_instance_buffer.mapped, info.render_instances, info.upload_size);
 
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_text);
+	VkPipeline	pipeline = pipelineRegistryGetOrCreate(ctx->pipeline_registry, ctx->ui_pipeline_state);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
 	TextRootConstants push_constants = {
 		.window_size = {ctx->window_width, ctx->window_height},
@@ -1747,7 +1671,7 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 
 				// Build the 64-bit state key for this specific mesh
 				PipelineState desired_state = createPipelineState(
-					ctx->pbr_shader_handle, // Stored globally at startup via pipelineRegistryRegisterShader
+					ctx->pbr_shader_handle,
 					cull_mode,
 					blend_mode,
 					DEPTH_RW,

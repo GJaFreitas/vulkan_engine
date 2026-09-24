@@ -292,6 +292,7 @@ enum DepthMode {
 
 enum TopologyMode {
 	TOPO_TRIANGLES = 0,
+	TOPO_TRIANGLE_STRIP,
 	TOPO_LINES,
 	TOPO_POINTS
 };
@@ -430,11 +431,12 @@ typedef struct GraphicsContext
 	// Grid Pipeline ------------
 	ShaderHandle		grid_shader_handle;
 	u64			grid_pipeline_state;
-	VkPipeline		pipeline_grid;
 	GridProperties		grid_properties;
 	// --------------------------
 
 	// Text Pipeline ------------
+	ShaderHandle		ui_shader_handle;
+	u64			ui_pipeline_state;
 	VkPipeline		pipeline_text;
 	u32			font_atlas_global_index;
 	// --------------------------
