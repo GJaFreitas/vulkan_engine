@@ -108,9 +108,6 @@ int	loop(World world)
 	EntityRenderInfo	entity_info = {};
 	UiRenderInfo		ui_info = {};
 
-	// Entity	*e = loadEntity(world.graphics_ctx, STRING_LIT("data/models/test_scene.glb"), &world.entity_allocator);
-	// vectorAppend(world.entities, &e);
-
 	u64	last_time = SDL_GetPerformanceCounter();
 	while (gameStateQuery(g_game_state, Running))
 	{

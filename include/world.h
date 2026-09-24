@@ -7,12 +7,13 @@
 
 typedef struct Entity
 {
-	Model	*model;
-	bool	active;
-	vec3	pos;
-	versor	rotation;
+	PipelineState	pipeline_state;
+	Model		*model;
+	bool		active;
+	vec3		pos;
+	versor		rotation;
 	
-	float	spin;
+	float		spin;
 }	Entity;
 
 #define MAX_ORBIT_DIST	15.0f

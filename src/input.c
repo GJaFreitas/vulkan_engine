@@ -1,7 +1,5 @@
 #include "world.h"
 
-void	createPBRPipeline(GraphicsContext *ctx);
-
 // TODO: When a main menu is added remember to change this
 EngineMode	g_engine_mode = ENGINE_MODE_GAME;
 InputState	g_input_state;
@@ -165,13 +163,6 @@ void	processEvents(World *world) {
 				if (event.type == SDL_EVENT_KEY_DOWN) {
 					if (event.key.key == SDLK_ESCAPE) {
 						gameStateToggle(&g_game_state, Running);
-					} else if (event.key.key == SDLK_R) {
-						vkDeviceWaitIdle(world->graphics_ctx->device);
-						if (system("make")) {
-							consoleAppend("Error detected recompiling shaders.");
-						} else {
-							createPBRPipeline(world->graphics_ctx);
-						}
 					}
 				}
 				break;

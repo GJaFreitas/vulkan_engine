@@ -239,6 +239,112 @@ typedef struct CascadedShadowMap
 	VkDescriptorSet	descriptor_set;
 }	CascadedShadowMap;
 
+#define MAX_PIPELINES	128
+#define MAX_SHADERS	64
+
+enum PipelineType {
+	PIPELINE_TYPE_GRAPHICS = 0,
+	PIPELINE_TYPE_COMPUTE  = 1
+};
+
+// A lightweight handle to pass around the engine instead of Vulkan pointers.
+typedef u8	PipelineHandle;
+typedef u16	ShaderHandle;
+typedef u64	PipelineState;
+
+// Shifts for the bitmask
+#define SHIFT_SHADER	0	// 16bit	(Bits 0-15)
+#define SHIFT_CULL	16	// 3bit		(Bits 16-18)
+#define SHIFT_BLEND	20	// 3bit		(Bits 20-22)
+#define SHIFT_DEPTH	24	// 3bit		(Bits 24-26)
+#define SHIFT_TOPO	28	// 3bit		(Bits 28-30)
+#define SHIFT_TYPE	31	// 1bit		(Bit 31) 0 = Graphics | 1 = Compute
+#define SHIFT_PASS	32	// 3bit		(Bits 32-34)
+#define SHIFT_DYNAMIC	33	// 1bit		(Bit 35) 0 = Depth bias disabled | 1 = enabled
+
+// ---------------------------------------------------------
+// RENDER STATE ENUMS
+// ---------------------------------------------------------
+enum PassType {
+	PASS_MAIN = 0,		// Color + Depth
+	PASS_SHADOW,		// Depth Only
+	PASS_UI			// Color Only (No Depth)
+};
+
+enum CullMode {
+	CULL_NONE = 0,
+	CULL_BACK,
+	CULL_FRONT
+};
+
+enum BlendMode {
+	BLEND_NONE = 0,
+	BLEND_ALPHA,
+	BLEND_ADDITIVE
+};
+
+enum DepthMode {
+	DEPTH_NONE = 0,
+	DEPTH_READ,
+	DEPTH_RW		// Read and Write
+};
+
+enum TopologyMode {
+	TOPO_TRIANGLES = 0,
+	TOPO_LINES,
+	TOPO_POINTS
+};
+
+enum DynamicMode {
+	DYNAMIC_DEPTH_DISABLE = 0,
+	DYNAMIC_DEPTH_ENABLE
+};
+
+// Helper to pack the state
+static inline PipelineState createPipelineState(u16 shader, u8 cull, u8 blend, u8 depth, u8 topo, u8 type, u8 pass, u8 dynamic) {
+	return	((u64)shader	<< SHIFT_SHADER) |
+		((u64)cull	<< SHIFT_CULL)   |
+		((u64)blend	<< SHIFT_BLEND)  |
+		((u64)depth	<< SHIFT_DEPTH)  |
+		((u64)topo	<< SHIFT_TOPO)   |
+		((u64)type	<< SHIFT_TYPE)   |
+		((u64)pass	<< SHIFT_PASS)   |
+		((u64)dynamic	<< SHIFT_PASS);
+}
+
+// All settings off
+static inline PipelineState createComputeState(u16 shader) {
+	return	((u64)shader			<< SHIFT_SHADER) |
+		((u64)PIPELINE_TYPE_COMPUTE	<< SHIFT_TYPE);
+}
+
+#define MAX_SHADER_STAGES 2
+typedef struct {
+	String					filename;
+	u64					last_modified_time;
+
+	u32					stage_count;
+	char					pNames[MAX_SHADER_STAGES][12];
+	VkPipelineShaderStageCreateInfo		stages[MAX_SHADER_STAGES];
+}	ShaderRecord;
+
+typedef struct {
+	// Vulkan context
+	VkDevice			device;
+	VkPipelineLayout		g_layout;
+	VkFormat			main_color_format;
+	VkFormat			main_depth_format;
+	VkFormat			shadow_depth_format;
+
+	// Shader Base Code Storage
+	ShaderRecord			shaders[MAX_SHADERS];
+	u32				shader_count;
+
+	PipelineState			cached_states[MAX_PIPELINES];
+	VkPipeline			cached_pipelines[MAX_PIPELINES];
+	u32				pipeline_count;
+}	PipelineRegistry;
+
 #define BINDLESS_TEXTURE_COUNT 8192
 typedef struct GraphicsContext
 {
@@ -280,7 +386,8 @@ typedef struct GraphicsContext
 	VkDescriptorSetLayout	shadow_descriptor_layout;
 	VkDescriptorPool	global_descriptor_pool;   // Allocated once for MAX_TEXTURES
 	VkDescriptorSet		global_descriptor_set;    // Bound ONCE at the start of every frame
-	VkPipelineLayout	global_pipeline_layout;   // Shared across ALL pipelines in the engine
+
+	PipelineRegistry	*pipeline_registry;
 
 	// Texture Heap Index Allocators
 	u32			next_free_texture_index;
@@ -296,7 +403,8 @@ typedef struct GraphicsContext
 	// ---------------------
 
 	// PBR Pipeline ------------
-	VkPipeline		pipeline_pbr;
+	PipelineHandle		pipeline_pbr_handle;
+	ShaderHandle		pbr_shader_handle;
 
 	Texture			default_base_color_texture;
 	Texture			default_metallic_texture;
@@ -326,7 +434,7 @@ typedef struct GraphicsContext
 	u32			frame_index;
 	u64			next_signal_value;
 
-} GraphicsContext;
+}	GraphicsContext;
 
 // TODO: Test test test, how many instances are needed? Am i gonna use particles like this later? (2026-07-23)
 #define	MAX_INSTANCES	4096
@@ -418,3 +526,6 @@ Model	*modelCacheAcquire(GraphicsContext *ctx, String path);
 void	modelCacheRelease(Model *model);
 void	modelCacheSweep();
 u32	getModelCountFromCache();
+
+void		initPipelineRegistry(PipelineRegistry **reg_out, GraphicsContext *ctx);
+VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState state);

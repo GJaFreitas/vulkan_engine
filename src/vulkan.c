@@ -5,6 +5,304 @@
 #include "fonts.h"
 #include <stdint.h>
 
+VkShaderModule	createShaderModule(String shader_name, shaderc_shader_kind kind, VkDevice device);
+
+static void	createShaders(GraphicsContext *ctx, StringView shader_name, VkShaderStageFlagBits shader_stage, VkShaderModule *module)
+{
+	if (shader_stage == VK_SHADER_STAGE_VERTEX_BIT)
+		*module = createShaderModule(shader_name, shaderc_vertex_shader, ctx->device);
+	else if (shader_stage == VK_SHADER_STAGE_FRAGMENT_BIT)
+		*module = createShaderModule(shader_name, shaderc_fragment_shader, ctx->device);
+}
+
+static void	pipelineShaderCreate(GraphicsContext *ctx, String shader_name, const char *pName, VkShaderStageFlagBits shader_stage, VkPipelineShaderStageCreateInfo *shader_info, VkShaderModule *module)
+{
+	createShaders(ctx, shader_name, shader_stage, module);
+
+	shader_info->sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shader_info->stage = shader_stage;
+	shader_info->module = *module;
+	shader_info->pName = pName;
+}
+
+
+static VkPipelineViewportStateCreateInfo	viewportCreate(void)
+{
+	VkPipelineViewportStateCreateInfo	viewport_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+		.viewportCount = 1,
+		.pViewports = NULL,
+		.scissorCount = 1,
+		.pScissors = NULL
+	};
+
+	return viewport_info;
+}
+
+static VkPipelineRasterizationStateCreateInfo	rasterizationCreate(VkCullModeFlags cull_mode, VkFrontFace front_face)
+{
+	VkPipelineRasterizationStateCreateInfo	rasterization_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		.polygonMode = VK_POLYGON_MODE_FILL,
+		.cullMode = cull_mode,
+		.frontFace = front_face,
+		.lineWidth = 1.0f
+	};
+	return rasterization_info;
+}
+
+static VkPipelineColorBlendAttachmentState	colorBlend(bool blend)
+{
+	VkBool32	blend_enable;
+	if (blend)	blend_enable = VK_TRUE;
+	else		blend_enable = VK_FALSE;
+
+	VkPipelineColorBlendAttachmentState	color_blend_attach = {
+		.blendEnable = blend_enable,
+		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+		.colorBlendOp = VK_BLEND_OP_ADD,
+		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+		.alphaBlendOp = VK_BLEND_OP_ADD,
+		.colorWriteMask =\
+		VK_COLOR_COMPONENT_R_BIT
+		| VK_COLOR_COMPONENT_G_BIT
+		| VK_COLOR_COMPONENT_B_BIT
+		| VK_COLOR_COMPONENT_A_BIT,
+	};
+	return color_blend_attach;
+}
+
+static VkPipelineMultisampleStateCreateInfo	multisampleCreate(void)
+{
+	VkPipelineMultisampleStateCreateInfo	multisample_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
+	};
+	return multisample_info;
+}
+
+// TODO: Create a helper function for depth stencil
+
+void	createSHADOWPipeline(GraphicsContext *ctx)
+{
+	VkPipelineShaderStageCreateInfo	shader_stages[1] = {0};
+	VkShaderModule	vertex;
+	pipelineShaderCreate(ctx, STRING_LIT("shadows"), "vertMain", VK_SHADER_STAGE_VERTEX_BIT, &shader_stages[0], &vertex);
+
+	VkPipelineVertexInputStateCreateInfo    vertex_input_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+	};
+	VkPipelineInputAssemblyStateCreateInfo    imput_assembly_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+	};
+	VkPipelineDepthStencilStateCreateInfo    depth_stencil_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		.depthTestEnable = VK_TRUE,
+		.depthWriteEnable = VK_TRUE,
+		.depthCompareOp = VK_COMPARE_OP_LESS,
+		.stencilTestEnable = VK_FALSE
+	};
+	VkPipelineViewportStateCreateInfo	viewport = viewportCreate();
+	VkPipelineRasterizationStateCreateInfo	raster_info = rasterizationCreate(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+	raster_info.depthBiasEnable = VK_TRUE;
+	VkPipelineMultisampleStateCreateInfo	multisample_info = multisampleCreate();
+	VkDynamicState    dynamic_states[] = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR,
+		VK_DYNAMIC_STATE_DEPTH_BIAS 
+	};
+	VkPipelineDynamicStateCreateInfo    dynamic_state_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+		.dynamicStateCount = sizeofarray(dynamic_states),
+		.pDynamicStates = dynamic_states
+	};
+	VkPipelineRenderingCreateInfo    render_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+		.colorAttachmentCount = 0,
+		.pColorAttachmentFormats = NULL,
+		.depthAttachmentFormat = ctx->swapchain_depth_format
+	};
+	VkGraphicsPipelineCreateInfo    pipeline_info = {
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext = &render_info,
+		.stageCount = sizeofarray(shader_stages), 
+		.pStages = shader_stages,
+		.pVertexInputState = &vertex_input_info,
+		.pInputAssemblyState = &imput_assembly_info,
+		.pViewportState = &viewport,
+		.pRasterizationState = &raster_info,
+		.pMultisampleState = &multisample_info,
+		.pDepthStencilState = &depth_stencil_info,
+		.pColorBlendState = NULL,
+		.pDynamicState = &dynamic_state_info,
+		.layout = ctx->pipeline_registry->g_layout,
+		.renderPass = VK_NULL_HANDLE
+	};
+
+	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_shadow) != VK_SUCCESS) {
+		engine_error(LOG_FILE, "Failed to create shadow graphics pipeline\n");
+		exit(1);
+	}
+
+	vkDestroyShaderModule(ctx->device, vertex, NULL);
+
+	engine_log(LOG_FILE, "Successfully created shadow graphics pipeline");
+}
+
+static void	createTEXTPipeline(GraphicsContext *ctx)
+{
+	VkPipelineShaderStageCreateInfo	shader_stages[2] = {0};
+	VkShaderModule	vertex;
+	VkShaderModule	frag;
+	pipelineShaderCreate(ctx, STRING_LIT("text"), "vertMain", VK_SHADER_STAGE_VERTEX_BIT, &shader_stages[0], &vertex);
+	pipelineShaderCreate(ctx, STRING_LIT("text"), "fragMain", VK_SHADER_STAGE_FRAGMENT_BIT, &shader_stages[1], &frag);
+
+	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+	};
+	VkPipelineInputAssemblyStateCreateInfo	imput_assembly_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
+	};
+	// For now no depth testing need since this a ui only pipeline
+	VkPipelineDepthStencilStateCreateInfo	depth_stencil_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		.depthTestEnable = VK_FALSE,
+		.depthWriteEnable = VK_FALSE,
+		.depthCompareOp = VK_COMPARE_OP_LESS,
+		.stencilTestEnable = VK_FALSE
+	};
+	VkPipelineViewportStateCreateInfo	viewport_info = viewportCreate();
+	VkPipelineRasterizationStateCreateInfo	rasterization_info = rasterizationCreate(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+	VkPipelineMultisampleStateCreateInfo	multisample_info = multisampleCreate();
+	VkPipelineColorBlendAttachmentState color_blend_attach = colorBlend(true);
+	VkPipelineColorBlendStateCreateInfo	blend_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		.attachmentCount = 1,
+		.pAttachments = &color_blend_attach
+	};
+	VkDynamicState	dynamic_states[] = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR
+	};
+	VkPipelineDynamicStateCreateInfo	dynamic_state_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+		.dynamicStateCount = sizeofarray(dynamic_states),
+		.pDynamicStates = dynamic_states
+	};
+	VkPipelineRenderingCreateInfo	render_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+		.colorAttachmentCount = 1,
+		.pColorAttachmentFormats = &ctx->swapchain_format.format,
+		.depthAttachmentFormat = ctx->swapchain_depth_format
+	};
+	VkGraphicsPipelineCreateInfo	pipeline_info = {
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext = &render_info,
+		.stageCount = sizeofarray(shader_stages),
+		.pStages = shader_stages,
+		.pVertexInputState = &vertex_input_info,
+		.pInputAssemblyState = &imput_assembly_info,
+		.pViewportState = &viewport_info,
+		.pRasterizationState = &rasterization_info,
+		.pMultisampleState = &multisample_info,
+		.pDepthStencilState = &depth_stencil_info,
+		.pColorBlendState = &blend_info,
+		.pDynamicState = &dynamic_state_info,
+		.layout = ctx->pipeline_registry->g_layout,
+		.renderPass = VK_NULL_HANDLE
+	};
+
+	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_text) != VK_SUCCESS) {
+		engine_error(LOG_FILE, "Failed to create text pipeline\n");
+		exit(1);
+	}
+
+	vkDestroyShaderModule(ctx->device, vertex, NULL);
+	vkDestroyShaderModule(ctx->device, frag, NULL);
+
+	engine_log(LOG_FILE, "Successfully created text pipeline");
+}
+
+static void	createGRIDPipeline(GraphicsContext *ctx)
+{
+	VkPipelineShaderStageCreateInfo	shader_stages[2] = {0};
+	VkShaderModule	vertex;
+	VkShaderModule	frag;
+	pipelineShaderCreate(ctx, STRING_LIT("grid"), "vertMain", VK_SHADER_STAGE_VERTEX_BIT, &shader_stages[0], &vertex);
+	pipelineShaderCreate(ctx, STRING_LIT("grid"), "fragMain", VK_SHADER_STAGE_FRAGMENT_BIT, &shader_stages[1], &frag);
+
+
+	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+	};
+	VkPipelineInputAssemblyStateCreateInfo	imput_assembly_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+	};
+	VkPipelineDepthStencilStateCreateInfo	depth_stencil_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		.depthTestEnable = VK_TRUE,
+		.depthWriteEnable = VK_FALSE,
+		.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+		.stencilTestEnable = VK_FALSE
+	};
+	VkPipelineViewportStateCreateInfo	viewport_info = viewportCreate();
+	VkPipelineRasterizationStateCreateInfo	rasterization_info = rasterizationCreate(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+	VkPipelineMultisampleStateCreateInfo	multisample_info = multisampleCreate();
+	VkPipelineColorBlendAttachmentState	color_blend_attach = colorBlend(true);
+	VkPipelineColorBlendStateCreateInfo	blend_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		.attachmentCount = 1,
+		.pAttachments = &color_blend_attach
+	};
+	VkDynamicState	dynamic_states[] = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR
+	};
+	VkPipelineDynamicStateCreateInfo	dynamic_state_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+		.dynamicStateCount = sizeofarray(dynamic_states),
+		.pDynamicStates = dynamic_states
+	};
+	VkPipelineRenderingCreateInfo	render_info = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+		.colorAttachmentCount = 1,
+		.pColorAttachmentFormats = &ctx->swapchain_format.format,
+		.depthAttachmentFormat = ctx->swapchain_depth_format
+	};
+	VkGraphicsPipelineCreateInfo	pipeline_info = {
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext = &render_info,
+		.stageCount = sizeofarray(shader_stages),
+		.pStages = shader_stages,
+		.pVertexInputState = &vertex_input_info,
+		.pInputAssemblyState = &imput_assembly_info,
+		.pViewportState = &viewport_info,
+		.pRasterizationState = &rasterization_info,
+		.pMultisampleState = &multisample_info,
+		.pDepthStencilState = &depth_stencil_info,
+		.pColorBlendState = &blend_info,
+		.pDynamicState = &dynamic_state_info,
+		.layout = ctx->pipeline_registry->g_layout,
+		.renderPass = VK_NULL_HANDLE
+	};
+
+	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_grid) != VK_SUCCESS) {
+		engine_error(LOG_FILE, "Failed to create graphics pipeline\n");
+		exit(1);
+	}
+
+	vkDestroyShaderModule(ctx->device, vertex, NULL);
+	vkDestroyShaderModule(ctx->device, frag, NULL);
+
+	engine_log(LOG_FILE, "Successfully created graphics pipeline");
+}
+
+
 // --- VULKAN API --- //
 
 void	createVkBuffer(GraphicsContext *ctx, const BufferInfo *info, BufferObject *out_buffer)
@@ -592,150 +890,6 @@ static void	createSwapchain(GraphicsContext *ctx, u32 width, u32 height)
 	ctx->render_complete_sequence_semaphores = semaphores;
 }
 
-static VkShaderModule	createShaderModule(String filename, shaderc_shader_kind kind, GraphicsContext *ctx)
-{
-
-	StringView	extension = filename;
-
-	// extension is at '.'
-	strViewJumpToChar(&extension, '.');
-	// extension after '.'
-	strViewAdvance(&extension, 1);
-
-	String shader_code = readFile(filename);
-	engine_log(LOG_FILE, "Compiling shader: %S", filename);
-
-	u64	shader_size;
-	u32	*shader_data;
-
-	// Shader is already compiled
-	if (strEq(extension, STRING_LIT("spv"))) {
-		shader_data = (u32 *)shader_code.data;
-		shader_size = shader_code.count;
-	} else {
-		// TODO: Give this an allocator
-		char	*filename_cstring = strToCstring(filename, NULL);
-
-		shaderc_compiler_t		compiler = shaderc_compiler_initialize();
-		shaderc_compile_options_t	opts = shaderc_compile_options_initialize();
-		shaderc_compile_options_set_target_env(opts, shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_4);
-		shaderc_compile_options_set_target_spirv(opts, shaderc_spirv_version_1_6);
-		shaderc_compile_options_set_optimization_level(opts, shaderc_optimization_level_performance);
-		shaderc_compilation_result_t result = shaderc_compile_into_spv(compiler, (char *)shader_code.data, shader_code.count, kind, filename_cstring, "main", opts);
-		if (shaderc_result_get_compilation_status(result) != shaderc_compilation_status_success) {
-			engine_error(LOG_FILE, "Shader compilation error: %s\n", shaderc_result_get_error_message(result));
-			exit(1);
-		}
-		free(filename_cstring);
-
-		shader_size = shaderc_result_get_length(result);
-		shader_data = (u32 *)shaderc_result_get_bytes(result);
-	}
-
-	VkShaderModuleCreateInfo	shader_info = {
-		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-		.codeSize = shader_size,
-		.pCode = shader_data,
-	};
-	VkShaderModule	module;
-	if (vkCreateShaderModule(ctx->device, &shader_info, NULL, &module) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create shader module: %S\n", filename);
-		exit(1);
-	}
-	return module;
-}
-
-// --- PIPELINE CREATION --- //
-
-static void	createShaders(GraphicsContext *ctx, StringView shader_name, VkShaderStageFlagBits shader_stage, VkShaderModule *module)
-{
-	u8	buf[128] = "shaders/compiled/";
-	String	shader = { .data = buf, .count = 17 };
-	// full shader path: shaders/compiled/
-
-	memcpy(buf + shader.count, shader_name.data, shader_name.count);
-	shader.count += shader_name.count;
-	// full shader path: shaders/compiled/{shader_name}
-
-	memcpy(buf + shader.count, ".spv", 4);
-	shader.count += 4;
-	// full shader path: shaders/compiled/{shader_name}.spv
-
-	if (shader_stage == VK_SHADER_STAGE_VERTEX_BIT)
-		*module = createShaderModule(shader, shaderc_vertex_shader, ctx);
-	else if (shader_stage == VK_SHADER_STAGE_FRAGMENT_BIT)
-		*module = createShaderModule(shader, shaderc_fragment_shader, ctx);
-}
-
-static void	pipelineShaderCreate(GraphicsContext *ctx, String shader_name, const char *pName, VkShaderStageFlagBits shader_stage, VkPipelineShaderStageCreateInfo *shader_info, VkShaderModule *module)
-{
-	createShaders(ctx, shader_name, shader_stage, module);
-
-	shader_info->sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	shader_info->stage = shader_stage;
-	shader_info->module = *module;
-	shader_info->pName = pName;
-}
-
-static VkPipelineViewportStateCreateInfo	viewportCreate(void)
-{
-	VkPipelineViewportStateCreateInfo	viewport_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-		.viewportCount = 1,
-		.pViewports = NULL,
-		.scissorCount = 1,
-		.pScissors = NULL
-	};
-
-	return viewport_info;
-}
-
-static VkPipelineRasterizationStateCreateInfo	rasterizationCreate(VkCullModeFlags cull_mode, VkFrontFace front_face)
-{
-	VkPipelineRasterizationStateCreateInfo	rasterization_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		.polygonMode = VK_POLYGON_MODE_FILL,
-		.cullMode = cull_mode,
-		.frontFace = front_face,
-		.lineWidth = 1.0f
-	};
-	return rasterization_info;
-}
-
-static VkPipelineColorBlendAttachmentState	colorBlend(bool blend)
-{
-	VkBool32	blend_enable;
-	if (blend)	blend_enable = VK_TRUE;
-	else		blend_enable = VK_FALSE;
-
-	VkPipelineColorBlendAttachmentState	color_blend_attach = {
-		.blendEnable = blend_enable,
-		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-		.colorBlendOp = VK_BLEND_OP_ADD,
-		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-		.alphaBlendOp = VK_BLEND_OP_ADD,
-		.colorWriteMask =\
-		VK_COLOR_COMPONENT_R_BIT
-		| VK_COLOR_COMPONENT_G_BIT
-		| VK_COLOR_COMPONENT_B_BIT
-		| VK_COLOR_COMPONENT_A_BIT,
-	};
-	return color_blend_attach;
-}
-
-static VkPipelineMultisampleStateCreateInfo	multisampleCreate(void)
-{
-	VkPipelineMultisampleStateCreateInfo	multisample_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
-	};
-	return multisample_info;
-}
-
-// TODO: Create a helper function for depth stencil
-
 static void    createShadowResources(GraphicsContext *ctx)
 {
 	// 1. Single Sampler for shadow lookup
@@ -852,298 +1006,6 @@ static void    createShadowResources(GraphicsContext *ctx)
 	}
 
 	engine_log(LOG_FILE, "Successfully created shadow resources");
-}
-
-void	createSHADOWPipeline(GraphicsContext *ctx)
-{
-	VkPipelineShaderStageCreateInfo	shader_stages[1] = {0};
-	VkShaderModule	vertex;
-	pipelineShaderCreate(ctx, STRING_LIT("shadows"), "vertMain", VK_SHADER_STAGE_VERTEX_BIT, &shader_stages[0], &vertex);
-
-	VkPipelineVertexInputStateCreateInfo    vertex_input_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-	};
-	VkPipelineInputAssemblyStateCreateInfo    imput_assembly_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
-	};
-	VkPipelineDepthStencilStateCreateInfo    depth_stencil_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.depthTestEnable = VK_TRUE,
-		.depthWriteEnable = VK_TRUE,
-		.depthCompareOp = VK_COMPARE_OP_LESS,
-		.stencilTestEnable = VK_FALSE
-	};
-	VkPipelineViewportStateCreateInfo	viewport = viewportCreate();
-	VkPipelineRasterizationStateCreateInfo	raster_info = rasterizationCreate(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
-	raster_info.depthBiasEnable = VK_TRUE;
-	VkPipelineMultisampleStateCreateInfo	multisample_info = multisampleCreate();
-	VkDynamicState    dynamic_states[] = {
-		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_SCISSOR,
-		VK_DYNAMIC_STATE_DEPTH_BIAS 
-	};
-	VkPipelineDynamicStateCreateInfo    dynamic_state_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		.dynamicStateCount = sizeofarray(dynamic_states),
-		.pDynamicStates = dynamic_states
-	};
-	VkPipelineRenderingCreateInfo    render_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		.colorAttachmentCount = 0,
-		.pColorAttachmentFormats = NULL,
-		.depthAttachmentFormat = ctx->swapchain_depth_format
-	};
-	VkGraphicsPipelineCreateInfo    pipeline_info = {
-		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		.pNext = &render_info,
-		.stageCount = sizeofarray(shader_stages), 
-		.pStages = shader_stages,
-		.pVertexInputState = &vertex_input_info,
-		.pInputAssemblyState = &imput_assembly_info,
-		.pViewportState = &viewport,
-		.pRasterizationState = &raster_info,
-		.pMultisampleState = &multisample_info,
-		.pDepthStencilState = &depth_stencil_info,
-		.pColorBlendState = NULL,
-		.pDynamicState = &dynamic_state_info,
-		.layout = ctx->global_pipeline_layout,
-		.renderPass = VK_NULL_HANDLE
-	};
-
-	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_shadow) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create shadow graphics pipeline\n");
-		exit(1);
-	}
-
-	vkDestroyShaderModule(ctx->device, vertex, NULL);
-
-	engine_log(LOG_FILE, "Successfully created shadow graphics pipeline");
-}
-
-void	createPBRPipeline(GraphicsContext *ctx)
-{
-	VkPipelineShaderStageCreateInfo	shader_stages[2] = {0};
-	VkShaderModule	vertex;
-	VkShaderModule	frag;
-	pipelineShaderCreate(ctx, STRING_LIT("pbr"), "vertMain", VK_SHADER_STAGE_VERTEX_BIT, &shader_stages[0], &vertex);
-	pipelineShaderCreate(ctx, STRING_LIT("pbr"), "fragMain", VK_SHADER_STAGE_FRAGMENT_BIT, &shader_stages[1], &frag);
-
-	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-	};
-	VkPipelineInputAssemblyStateCreateInfo	imput_assembly_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
-	};
-
-	VkPipelineDepthStencilStateCreateInfo	depth_stencil_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.depthTestEnable = VK_TRUE,
-		.depthWriteEnable = VK_TRUE,
-		.depthCompareOp = VK_COMPARE_OP_LESS,
-		.stencilTestEnable = VK_FALSE
-	};
-
-	VkPipelineRasterizationStateCreateInfo	rasterization_info = rasterizationCreate(
-		VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
-
-	VkPipelineViewportStateCreateInfo	viewport_info = viewportCreate();
-	VkPipelineMultisampleStateCreateInfo	multisample_info = multisampleCreate();
-	VkPipelineColorBlendAttachmentState	color_blend_attach = colorBlend(true);
-	VkPipelineColorBlendStateCreateInfo	blend_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-		.attachmentCount = 1,
-		.pAttachments = &color_blend_attach
-	};
-	VkDynamicState	dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
-	VkPipelineDynamicStateCreateInfo	dynamic_state_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		.dynamicStateCount = sizeofarray(dynamic_states),
-		.pDynamicStates = dynamic_states
-	};
-	VkPipelineRenderingCreateInfo	render_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		.colorAttachmentCount = 1,
-		.pColorAttachmentFormats = &ctx->swapchain_format.format,
-		.depthAttachmentFormat = ctx->swapchain_depth_format
-	};
-	VkGraphicsPipelineCreateInfo	pipeline_info = {
-		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		.pNext = &render_info,
-		.stageCount = sizeofarray(shader_stages),
-		.pStages = shader_stages,
-		.pVertexInputState = &vertex_input_info,
-		.pInputAssemblyState = &imput_assembly_info,
-		.pViewportState = &viewport_info,
-		.pRasterizationState = &rasterization_info,
-		.pMultisampleState = &multisample_info,
-		.pDepthStencilState = &depth_stencil_info,
-		.pColorBlendState = &blend_info,
-		.pDynamicState = &dynamic_state_info,
-		.layout = ctx->global_pipeline_layout,
-		.renderPass = VK_NULL_HANDLE
-	};
-
-	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_pbr) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create graphics pipeline\n");
-		exit(1);
-	}
-
-	vkDestroyShaderModule(ctx->device, vertex, NULL);
-	vkDestroyShaderModule(ctx->device, frag, NULL);
-
-	engine_log(LOG_FILE, "Successfully created graphics pipeline");
-}
-
-static void	createTEXTPipeline(GraphicsContext *ctx)
-{
-	VkPipelineShaderStageCreateInfo	shader_stages[2] = {0};
-	VkShaderModule	vertex;
-	VkShaderModule	frag;
-	pipelineShaderCreate(ctx, STRING_LIT("text"), "vertMain", VK_SHADER_STAGE_VERTEX_BIT, &shader_stages[0], &vertex);
-	pipelineShaderCreate(ctx, STRING_LIT("text"), "fragMain", VK_SHADER_STAGE_FRAGMENT_BIT, &shader_stages[1], &frag);
-
-	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-	};
-	VkPipelineInputAssemblyStateCreateInfo	imput_assembly_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
-	};
-	// For now no depth testing need since this a ui only pipeline
-	VkPipelineDepthStencilStateCreateInfo	depth_stencil_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.depthTestEnable = VK_FALSE,
-		.depthWriteEnable = VK_FALSE,
-		.depthCompareOp = VK_COMPARE_OP_LESS,
-		.stencilTestEnable = VK_FALSE
-	};
-	VkPipelineViewportStateCreateInfo	viewport_info = viewportCreate();
-	VkPipelineRasterizationStateCreateInfo	rasterization_info = rasterizationCreate(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
-	VkPipelineMultisampleStateCreateInfo	multisample_info = multisampleCreate();
-	VkPipelineColorBlendAttachmentState color_blend_attach = colorBlend(true);
-	VkPipelineColorBlendStateCreateInfo	blend_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-		.attachmentCount = 1,
-		.pAttachments = &color_blend_attach
-	};
-	VkDynamicState	dynamic_states[] = {
-		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_SCISSOR
-	};
-	VkPipelineDynamicStateCreateInfo	dynamic_state_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		.dynamicStateCount = sizeofarray(dynamic_states),
-		.pDynamicStates = dynamic_states
-	};
-	VkPipelineRenderingCreateInfo	render_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		.colorAttachmentCount = 1,
-		.pColorAttachmentFormats = &ctx->swapchain_format.format,
-		.depthAttachmentFormat = ctx->swapchain_depth_format
-	};
-	VkGraphicsPipelineCreateInfo	pipeline_info = {
-		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		.pNext = &render_info,
-		.stageCount = sizeofarray(shader_stages),
-		.pStages = shader_stages,
-		.pVertexInputState = &vertex_input_info,
-		.pInputAssemblyState = &imput_assembly_info,
-		.pViewportState = &viewport_info,
-		.pRasterizationState = &rasterization_info,
-		.pMultisampleState = &multisample_info,
-		.pDepthStencilState = &depth_stencil_info,
-		.pColorBlendState = &blend_info,
-		.pDynamicState = &dynamic_state_info,
-		.layout = ctx->global_pipeline_layout,
-		.renderPass = VK_NULL_HANDLE
-	};
-
-	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_text) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create text pipeline\n");
-		exit(1);
-	}
-
-	vkDestroyShaderModule(ctx->device, vertex, NULL);
-	vkDestroyShaderModule(ctx->device, frag, NULL);
-
-	engine_log(LOG_FILE, "Successfully created text pipeline");
-}
-
-static void	createGRIDPipeline(GraphicsContext *ctx)
-{
-	VkPipelineShaderStageCreateInfo	shader_stages[2] = {0};
-	VkShaderModule	vertex;
-	VkShaderModule	frag;
-	pipelineShaderCreate(ctx, STRING_LIT("grid"), "vertMain", VK_SHADER_STAGE_VERTEX_BIT, &shader_stages[0], &vertex);
-	pipelineShaderCreate(ctx, STRING_LIT("grid"), "fragMain", VK_SHADER_STAGE_FRAGMENT_BIT, &shader_stages[1], &frag);
-
-
-	VkPipelineVertexInputStateCreateInfo	vertex_input_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-	};
-	VkPipelineInputAssemblyStateCreateInfo	imput_assembly_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
-	};
-	VkPipelineDepthStencilStateCreateInfo	depth_stencil_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.depthTestEnable = VK_TRUE,
-		.depthWriteEnable = VK_FALSE,
-		.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
-		.stencilTestEnable = VK_FALSE
-	};
-	VkPipelineViewportStateCreateInfo	viewport_info = viewportCreate();
-	VkPipelineRasterizationStateCreateInfo	rasterization_info = rasterizationCreate(VK_CULL_MODE_NONE, VK_FRONT_FACE_COUNTER_CLOCKWISE);
-	VkPipelineMultisampleStateCreateInfo	multisample_info = multisampleCreate();
-	VkPipelineColorBlendAttachmentState	color_blend_attach = colorBlend(true);
-	VkPipelineColorBlendStateCreateInfo	blend_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-		.attachmentCount = 1,
-		.pAttachments = &color_blend_attach
-	};
-	VkDynamicState	dynamic_states[] = {
-		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_SCISSOR
-	};
-	VkPipelineDynamicStateCreateInfo	dynamic_state_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		.dynamicStateCount = sizeofarray(dynamic_states),
-		.pDynamicStates = dynamic_states
-	};
-	VkPipelineRenderingCreateInfo	render_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		.colorAttachmentCount = 1,
-		.pColorAttachmentFormats = &ctx->swapchain_format.format,
-		.depthAttachmentFormat = ctx->swapchain_depth_format
-	};
-	VkGraphicsPipelineCreateInfo	pipeline_info = {
-		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		.pNext = &render_info,
-		.stageCount = sizeofarray(shader_stages),
-		.pStages = shader_stages,
-		.pVertexInputState = &vertex_input_info,
-		.pInputAssemblyState = &imput_assembly_info,
-		.pViewportState = &viewport_info,
-		.pRasterizationState = &rasterization_info,
-		.pMultisampleState = &multisample_info,
-		.pDepthStencilState = &depth_stencil_info,
-		.pColorBlendState = &blend_info,
-		.pDynamicState = &dynamic_state_info,
-		.layout = ctx->global_pipeline_layout,
-		.renderPass = VK_NULL_HANDLE
-	};
-
-	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_grid) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create graphics pipeline\n");
-		exit(1);
-	}
-
-	vkDestroyShaderModule(ctx->device, vertex, NULL);
-	vkDestroyShaderModule(ctx->device, frag, NULL);
-
-	engine_log(LOG_FILE, "Successfully created graphics pipeline");
 }
 
 static void	createFrameResources(GraphicsContext *ctx)
@@ -1343,7 +1205,7 @@ static void	createGlobalDescriptorLayout(GraphicsContext *ctx)
 		.pPushConstantRanges = &pushConstant
 	};
 
-	vkCreatePipelineLayout(ctx->device, &pipelineLayoutInfo, NULL, &ctx->global_pipeline_layout);
+	vkCreatePipelineLayout(ctx->device, &pipelineLayoutInfo, NULL, &ctx->pipeline_registry->g_layout);
 }
 
 static void	createGlobalDescriptorPoolAndSet(GraphicsContext *ctx)
@@ -1468,6 +1330,7 @@ static void	initVulkan(GraphicsContext *ctx)
 	}
 	createSwapchain(ctx, ctx->window_width, ctx->window_height);
 	// End of vulkan boilerplate -------
+	initPipelineRegistry(&ctx->pipeline_registry, ctx);
 
 	createGlobalDescriptorLayout(ctx);
 	createGlobalDescriptorPoolAndSet(ctx);
@@ -1480,7 +1343,6 @@ static void	initVulkan(GraphicsContext *ctx)
 
 	// --- Pipelines --- //
 	createSHADOWPipeline(ctx);
-	createPBRPipeline(ctx);
 	createGRIDPipeline(ctx);
 	createTEXTPipeline(ctx);
 
@@ -1678,6 +1540,7 @@ static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 	memcpy(resource->uniform_buffer.mapped, &ubo, sizeof(UniformBufferObject));
 }
 
+
 // »speed
 // Cache instance data instead of recalculating in pbr pass
 void SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources *resource, u8 frame_idx)
@@ -1769,7 +1632,7 @@ void SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResourc
 						.cascade_index = c
 					};
 
-					vkCmdPushConstants(resource->cmd_buf, ctx->global_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ShadowRootConstants), &push_constants);
+					vkCmdPushConstants(resource->cmd_buf, ctx->pipeline_registry->g_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ShadowRootConstants), &push_constants);
 					vkCmdBindIndexBuffer(resource->cmd_buf, mesh->gpu_index_data.handle, 0, mesh->index_type);
 					vkCmdDrawIndexed(resource->cmd_buf, mesh->index_count, run_count, 0, 0, first_instance);
 				}
@@ -1800,22 +1663,19 @@ void	TEXTPass(GraphicsContext *ctx, FrameResources *resource, UiRenderInfo info)
 {
 	const VkCommandBuffer cmd = resource->cmd_buf;
 
-	// CPU Upload
 	memcpy(resource->text_instance_buffer.mapped, info.render_instances, info.upload_size);
 
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_text);
 
-	// Populate Push Constants
 	TextRootConstants push_constants = {
 		.window_size = {ctx->window_width, ctx->window_height},
 		.px_range = info.px_range,
 		.instance_addr = resource->text_instance_buffer.device_address,
-		.atlas_tex_idx = ctx->font_atlas_global_index // Set when you load the font!
+		.atlas_tex_idx = ctx->font_atlas_global_index
 	};
 
-	vkCmdPushConstants(cmd, ctx->global_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TextRootConstants), &push_constants);
+	vkCmdPushConstants(cmd, ctx->pipeline_registry->g_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TextRootConstants), &push_constants);
 
-	// Draw without binding vertex buffers or descriptors
 	vkCmdDraw(cmd, 6, info.instance_count, 0, 0);
 }
 
@@ -1831,7 +1691,7 @@ void	GRIDPass(GraphicsContext *ctx, FrameResources *resource)
 	};
 
 	// Need both Vertex (for UBO ptr) and Fragment (for properties) stages
-	vkCmdPushConstants(resource->cmd_buf, ctx->global_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GridRootConstants), &push_constants);
+	vkCmdPushConstants(resource->cmd_buf, ctx->pipeline_registry->g_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(GridRootConstants), &push_constants);
 
 	// Grid is usually drawn as a full-screen quad or large plane without vertex buffers
 	vkCmdDraw(resource->cmd_buf, 3, 1, 0, 0);
@@ -1847,8 +1707,10 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 	const u64 ubo_addr = resource->uniform_buffer.device_address;
 	const u64 instance_addr = resource->instance_buffer.device_address;
 
-	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_pbr);
-	vkCmdBindDescriptorSets(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->global_pipeline_layout, 1, 1, &ctx->shadow_maps[frame_idx].descriptor_set, 0, NULL);
+	vkCmdBindDescriptorSets(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_registry->g_layout, 1, 1, &ctx->shadow_maps[frame_idx].descriptor_set, 0, NULL);
+
+	// Track the currently bound pipeline state to avoid redundant Vulkan calls
+	PipelineState current_state = 0xFFFFFFFFFFFFFFFF;
 
 	u32 e_idx = 0;
 	while (e_idx < total_entity_count) {
@@ -1868,6 +1730,42 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 
 				if (mesh->vertex_count == 0) continue;
 
+				// -------------------------------------------------------------
+				// 1. PIPELINE STATE EVALUATION & BINDING
+				// -------------------------------------------------------------
+				u8 cull_mode = CULL_BACK;
+				u8 blend_mode = BLEND_NONE;
+
+				if (mesh->material_index >= 0) {
+					Material *mat = &model->materials[mesh->material_index];
+					// Example: if your glTF/Material struct supports double-sided rendering
+					// if (mat->double_sided) cull_mode = CULL_NONE;
+					
+					// Example: if your material has a blend mode flag
+					// if (mat->alpha_mode == ALPHA_MODE_BLEND) blend_mode = BLEND_ALPHA;
+				}
+
+				// Build the 64-bit state key for this specific mesh
+				PipelineState desired_state = createPipelineState(
+					ctx->pbr_shader_handle, // Stored globally at startup via pipelineRegistryRegisterShader
+					cull_mode,
+					blend_mode,
+					DEPTH_RW,
+					TOPO_TRIANGLES,
+					PIPELINE_TYPE_GRAPHICS,
+					PASS_MAIN,
+					DYNAMIC_DEPTH_DISABLE
+				);
+
+				// Only invoke Vulkan and the Registry if the state actually changed!
+				if (desired_state != current_state) {
+					current_state = desired_state;
+					VkPipeline pipeline = pipelineRegistryGetOrCreate(ctx->pipeline_registry, current_state);
+					
+					vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+				}
+				// -------------------------------------------------------------
+
 				u32 first_instance = instance_cursor;
 				for (u32 r = 0; r < run_count; r++) {
 					EntityRenderData *e_data = &entity_info.data[run_start + r];
@@ -1875,7 +1773,7 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 					instance_cursor++;
 				}
 
-				// 1. Initialize the Root Constants with BDA pointers and default material values
+				// 2. Initialize the Root Constants with BDA pointers and default material values
 				PBRRootConstants push_constants = {
 					.ubo_addr = ubo_addr,
 					.instance_addr = instance_addr,
@@ -1893,7 +1791,7 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 					.alpha_cutoff = 0.5f
 				};
 
-				// 2. Populate Bindless Texture Indices and Factors
+				// 3. Populate Bindless Texture Indices and Factors
 				if (mesh->material_index >= 0) {
 					Material *mat = &model->materials[mesh->material_index];
 
@@ -1909,12 +1807,12 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 					glm_vec4_ucopy(mat->base_color_factor, push_constants.base_color_factor);
 				}
 
-				// 3. Push to BOTH Vertex (for pointers) and Fragment (for textures/factors) stages
-				vkCmdPushConstants(resource->cmd_buf, ctx->global_pipeline_layout, 
+				// 4. Push to BOTH Vertex (for pointers) and Fragment (for textures/factors) stages
+				vkCmdPushConstants(resource->cmd_buf, ctx->pipeline_registry->g_layout, 
 						VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 
 						0, sizeof(PBRRootConstants), &push_constants);
 
-				// 4. Bind Index Buffer and Draw
+				// 5. Bind Index Buffer and Draw
 				vkCmdBindIndexBuffer(resource->cmd_buf, mesh->gpu_index_data.handle, 0, mesh->index_type);
 				vkCmdDrawIndexed(resource->cmd_buf, mesh->index_count, run_count, 0, 0, first_instance);
 			}
@@ -2056,7 +1954,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, 
 
 	// ---- Shadow Pass ------------------ //
 	vkCmdBindDescriptorSets(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, 
-			 ctx->global_pipeline_layout, // (See note below!)
+			 ctx->pipeline_registry->g_layout,
 			 0, 1, &ctx->global_descriptor_set, 
 			 0, NULL);
 

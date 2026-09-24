@@ -102,6 +102,20 @@ Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a)
 	e->rotation[Y] = 0;
 	e->rotation[Z] = 0;
 	e->rotation[W] = 1;
+
+	PipelineState	default_pbr_state = createPipelineState(
+		ctx->pbr_shader_handle,
+		CULL_BACK,
+		BLEND_NONE,
+		DEPTH_RW,
+		TOPO_TRIANGLES,
+		PIPELINE_TYPE_GRAPHICS,
+		PASS_MAIN,
+		DYNAMIC_DEPTH_DISABLE
+	);
+
+	// Assign it to your entity
+	e->pipeline_state = default_pbr_state;
 	return e;
 }
 
