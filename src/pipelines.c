@@ -9,7 +9,6 @@
 #define STATE_GET_TOPO(s)	((u8) ((s >> SHIFT_TOPO)   & 0x000F))
 #define STATE_GET_TYPE(s)	(((s) >> SHIFT_TYPE) & 1U)
 #define STATE_GET_PASS(s)	((u8) (((s) >> SHIFT_PASS) & 0x000F))
-#define STATE_GET_DYNAMIC(s)	((u8) ((s >> SHIFT_DYNAMIC) & 1U))
 #define STATE_GET_COMPARE(s)	((u8) (((s) >> SHIFT_COMPARE) & 0x000F))
 
 VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState state)
@@ -50,7 +49,6 @@ VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState
 		enum CompareMode	compare_mode = STATE_GET_COMPARE(state);
 		enum TopologyMode	topo_mode = STATE_GET_TOPO(state);
 		enum PassType		pass_type = STATE_GET_PASS(state);
-		u8			dynamic_type = STATE_GET_DYNAMIC(state);
 
 
 		// --- RASTERIZER ---
@@ -60,6 +58,9 @@ VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState
 			(cull_mode == CULL_FRONT) ? VK_CULL_MODE_FRONT_BIT : VK_CULL_MODE_NONE;
 		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+		if (pass_type == PASS_SHADOW) {
+			rasterizer.depthBiasEnable = VK_TRUE;
+		}
 
 		// --- DEPTH STENCIL ---
 		VkPipelineDepthStencilStateCreateInfo depth_stencil = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
@@ -142,8 +143,7 @@ VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState
 		vertex_input.vertexAttributeDescriptionCount = 0;
 
 		// --- DYNAMIC STATES ---
-		u32	dynamic_state_count = 2;
-		if (dynamic_type) dynamic_state_count++;
+		u32	dynamic_state_count = 3;
 		VkDynamicState dynamic_states[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_DEPTH_BIAS };
 		VkPipelineDynamicStateCreateInfo dynamic_state = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
 		dynamic_state.dynamicStateCount = dynamic_state_count;
@@ -299,7 +299,7 @@ VkShaderModule	createShaderModule(String shader_name, shaderc_shader_kind kind, 
 	return module;
 }
 
-ShaderHandle	pipelineRegistryRegisterShader(PipelineRegistry *registry, String shader_name, enum PipelineType type)
+ShaderHandle	pipelineRegistryRegisterShader(PipelineRegistry *registry, String shader_name, enum PipelineType type, VkShaderStageFlagBits stage_flags)
 {
 	for (u32 i = 0; i < registry->shader_count; ++i) {
 		ShaderRecord *record = &registry->shaders[i];
@@ -324,13 +324,19 @@ ShaderHandle	pipelineRegistryRegisterShader(PipelineRegistry *registry, String s
 		memcpy(shader_rec->pNames[0], "computeMain", 12);
 		shader_rec->stage_count = 1;
 	} else {
-		shader_rec->stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-		shader_rec->stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-		shader_rec->stages[0].module = createShaderModule(shader_rec->filename, shaderc_vertex_shader, registry->device);
-		shader_rec->stages[1].module = createShaderModule(shader_rec->filename, shaderc_fragment_shader, registry->device);
-		memcpy(shader_rec->pNames[0], "vertMain", 9);
-		memcpy(shader_rec->pNames[1], "fragMain", 9);
-		shader_rec->stage_count = 2;
+
+		if (stage_flags & VK_SHADER_STAGE_VERTEX_BIT) {
+			shader_rec->stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+			shader_rec->stages[0].module = createShaderModule(shader_rec->filename, shaderc_vertex_shader, registry->device);
+			memcpy(shader_rec->pNames[0], "vertMain", 9);
+			shader_rec->stage_count += 1;
+		}
+		if (stage_flags & VK_SHADER_STAGE_FRAGMENT_BIT) {
+			shader_rec->stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+			shader_rec->stages[1].module = createShaderModule(shader_rec->filename, shaderc_fragment_shader, registry->device);
+			memcpy(shader_rec->pNames[1], "fragMain", 9);
+			shader_rec->stage_count += 1;
+		}
 	}
 
 	ShaderHandle	handle = registry->shader_count;
@@ -348,8 +354,10 @@ void	initPipelineRegistry(PipelineRegistry **reg_out, GraphicsContext *ctx)
 	reg->main_color_format = ctx->swapchain_format.format;
 	reg->main_depth_format = ctx->swapchain_depth_format;
 	reg->shadow_depth_format = ctx->swapchain_depth_format;
-	ctx->pbr_shader_handle = pipelineRegistryRegisterShader(reg, STRING_LIT("pbr"), PIPELINE_TYPE_GRAPHICS);
-	ctx->grid_shader_handle = pipelineRegistryRegisterShader(reg, STRING_LIT("grid"), PIPELINE_TYPE_GRAPHICS);
+	ctx->pbr_shader_handle = pipelineRegistryRegisterShader(reg, STRING_LIT("pbr"), PIPELINE_TYPE_GRAPHICS, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+	ctx->grid_shader_handle = pipelineRegistryRegisterShader(reg, STRING_LIT("grid"), PIPELINE_TYPE_GRAPHICS, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+	ctx->ui_shader_handle = pipelineRegistryRegisterShader(reg, STRING_LIT("text"), PIPELINE_TYPE_GRAPHICS, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+	ctx->shadow_shader_handle = pipelineRegistryRegisterShader(reg, STRING_LIT("shadows"), PIPELINE_TYPE_GRAPHICS, VK_SHADER_STAGE_VERTEX_BIT);
 	ctx->grid_pipeline_state = createPipelineState(ctx->grid_shader_handle,
 							CULL_NONE,
 							BLEND_ALPHA,
@@ -357,10 +365,8 @@ void	initPipelineRegistry(PipelineRegistry **reg_out, GraphicsContext *ctx)
 							COMPARE_LESS_OR_EQUAL,
 							TOPO_TRIANGLES,
 							PIPELINE_TYPE_GRAPHICS,
-							PASS_MAIN,
-							DYNAMIC_DEPTH_DISABLE
+							PASS_MAIN
 						);
-	ctx->ui_shader_handle = pipelineRegistryRegisterShader(reg, STRING_LIT("text"), PIPELINE_TYPE_GRAPHICS);
 	ctx->ui_pipeline_state = createPipelineState(ctx->ui_shader_handle,
 							CULL_NONE,
 							BLEND_ALPHA,
@@ -368,8 +374,16 @@ void	initPipelineRegistry(PipelineRegistry **reg_out, GraphicsContext *ctx)
 							COMPARE_LESS,
 							TOPO_TRIANGLE_STRIP,
 							PIPELINE_TYPE_GRAPHICS,
-							PASS_UI,
-							DYNAMIC_DEPTH_DISABLE
+							PASS_UI
+						);
+	ctx->shadow_pipeline_state = createPipelineState(ctx->shadow_shader_handle,
+							CULL_BACK,
+							BLEND_ALPHA,
+							DEPTH_RW,
+							COMPARE_LESS,
+							TOPO_TRIANGLES,
+							PIPELINE_TYPE_GRAPHICS,
+							PASS_SHADOW
 						);
 
 	*reg_out = reg;

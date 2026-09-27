@@ -5,152 +5,7 @@
 #include "fonts.h"
 #include <stdint.h>
 
-VkShaderModule	createShaderModule(String shader_name, shaderc_shader_kind kind, VkDevice device);
-
-static void	createShaders(GraphicsContext *ctx, StringView shader_name, VkShaderStageFlagBits shader_stage, VkShaderModule *module)
-{
-	if (shader_stage == VK_SHADER_STAGE_VERTEX_BIT)
-		*module = createShaderModule(shader_name, shaderc_vertex_shader, ctx->device);
-	else if (shader_stage == VK_SHADER_STAGE_FRAGMENT_BIT)
-		*module = createShaderModule(shader_name, shaderc_fragment_shader, ctx->device);
-}
-
-static void	pipelineShaderCreate(GraphicsContext *ctx, String shader_name, const char *pName, VkShaderStageFlagBits shader_stage, VkPipelineShaderStageCreateInfo *shader_info, VkShaderModule *module)
-{
-	createShaders(ctx, shader_name, shader_stage, module);
-
-	shader_info->sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	shader_info->stage = shader_stage;
-	shader_info->module = *module;
-	shader_info->pName = pName;
-}
-
-
-static VkPipelineViewportStateCreateInfo	viewportCreate(void)
-{
-	VkPipelineViewportStateCreateInfo	viewport_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-		.viewportCount = 1,
-		.pViewports = NULL,
-		.scissorCount = 1,
-		.pScissors = NULL
-	};
-
-	return viewport_info;
-}
-
-static VkPipelineRasterizationStateCreateInfo	rasterizationCreate(VkCullModeFlags cull_mode, VkFrontFace front_face)
-{
-	VkPipelineRasterizationStateCreateInfo	rasterization_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		.polygonMode = VK_POLYGON_MODE_FILL,
-		.cullMode = cull_mode,
-		.frontFace = front_face,
-		.lineWidth = 1.0f
-	};
-	return rasterization_info;
-}
-
-static VkPipelineColorBlendAttachmentState	colorBlend(bool blend)
-{
-	VkBool32	blend_enable;
-	if (blend)	blend_enable = VK_TRUE;
-	else		blend_enable = VK_FALSE;
-
-	VkPipelineColorBlendAttachmentState	color_blend_attach = {
-		.blendEnable = blend_enable,
-		.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-		.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-		.colorBlendOp = VK_BLEND_OP_ADD,
-		.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-		.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-		.alphaBlendOp = VK_BLEND_OP_ADD,
-		.colorWriteMask =\
-		VK_COLOR_COMPONENT_R_BIT
-		| VK_COLOR_COMPONENT_G_BIT
-		| VK_COLOR_COMPONENT_B_BIT
-		| VK_COLOR_COMPONENT_A_BIT,
-	};
-	return color_blend_attach;
-}
-
-static VkPipelineMultisampleStateCreateInfo	multisampleCreate(void)
-{
-	VkPipelineMultisampleStateCreateInfo	multisample_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
-	};
-	return multisample_info;
-}
-
 // TODO: Create a helper function for depth stencil
-
-void	createSHADOWPipeline(GraphicsContext *ctx)
-{
-	VkPipelineShaderStageCreateInfo	shader_stages[1] = {0};
-	VkShaderModule	vertex;
-	pipelineShaderCreate(ctx, STRING_LIT("shadows"), "vertMain", VK_SHADER_STAGE_VERTEX_BIT, &shader_stages[0], &vertex);
-
-	VkPipelineVertexInputStateCreateInfo    vertex_input_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-	};
-	VkPipelineInputAssemblyStateCreateInfo    imput_assembly_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
-	};
-	VkPipelineDepthStencilStateCreateInfo    depth_stencil_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.depthTestEnable = VK_TRUE,
-		.depthWriteEnable = VK_TRUE,
-		.depthCompareOp = VK_COMPARE_OP_LESS,
-		.stencilTestEnable = VK_FALSE
-	};
-	VkPipelineViewportStateCreateInfo	viewport = viewportCreate();
-	VkPipelineRasterizationStateCreateInfo	raster_info = rasterizationCreate(VK_CULL_MODE_BACK_BIT, VK_FRONT_FACE_COUNTER_CLOCKWISE);
-	raster_info.depthBiasEnable = VK_TRUE;
-	VkPipelineMultisampleStateCreateInfo	multisample_info = multisampleCreate();
-	VkDynamicState    dynamic_states[] = {
-		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_SCISSOR,
-		VK_DYNAMIC_STATE_DEPTH_BIAS 
-	};
-	VkPipelineDynamicStateCreateInfo    dynamic_state_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		.dynamicStateCount = sizeofarray(dynamic_states),
-		.pDynamicStates = dynamic_states
-	};
-	VkPipelineRenderingCreateInfo    render_info = {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		.colorAttachmentCount = 0,
-		.pColorAttachmentFormats = NULL,
-		.depthAttachmentFormat = ctx->swapchain_depth_format
-	};
-	VkGraphicsPipelineCreateInfo    pipeline_info = {
-		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		.pNext = &render_info,
-		.stageCount = sizeofarray(shader_stages), 
-		.pStages = shader_stages,
-		.pVertexInputState = &vertex_input_info,
-		.pInputAssemblyState = &imput_assembly_info,
-		.pViewportState = &viewport,
-		.pRasterizationState = &raster_info,
-		.pMultisampleState = &multisample_info,
-		.pDepthStencilState = &depth_stencil_info,
-		.pColorBlendState = NULL,
-		.pDynamicState = &dynamic_state_info,
-		.layout = ctx->pipeline_registry->g_layout,
-		.renderPass = VK_NULL_HANDLE
-	};
-
-	if (vkCreateGraphicsPipelines(ctx->device, NULL, 1, &pipeline_info, NULL, &ctx->pipeline_shadow) != VK_SUCCESS) {
-		engine_error(LOG_FILE, "Failed to create shadow graphics pipeline\n");
-		exit(1);
-	}
-
-	vkDestroyShaderModule(ctx->device, vertex, NULL);
-
-	engine_log(LOG_FILE, "Successfully created shadow graphics pipeline");
-}
 
 // --- VULKAN API --- //
 
@@ -1190,9 +1045,6 @@ static void	initVulkan(GraphicsContext *ctx)
 
 	createDefaultTextures(ctx);
 
-	// --- Pipelines --- //
-	createSHADOWPipeline(ctx);
-
 	ctx->frame_index = 0;
 	ctx->next_signal_value = ctx->frames_in_flight_count + 1;
 }
@@ -1407,6 +1259,10 @@ void SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResourc
 	cmdTransitionImage(resource->cmd_buf, &pre_transition);
 
 	// --- 2. RENDER SETUP ---
+
+	VkPipeline pipeline = pipelineRegistryGetOrCreate(ctx->pipeline_registry, ctx->shadow_pipeline_state);
+	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
 	const u32 total_entity_count = entity_info.entity_count;
 	EntityInstanceData *instance_data_buf = (EntityInstanceData *)resource->instance_buffer.mapped;
 
@@ -1414,7 +1270,6 @@ void SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResourc
 	const u64 ubo_addr = resource->uniform_buffer.device_address;
 	const u64 instance_addr = resource->instance_buffer.device_address;
 
-	vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_shadow);
 
 	VkViewport viewport = {0.0f, 0.0f, (float)SHADOW_MAP_RESOLUTION, (float)SHADOW_MAP_RESOLUTION, 0.0f, 1.0f};
 	VkRect2D scissor = {{0, 0}, {SHADOW_MAP_RESOLUTION, SHADOW_MAP_RESOLUTION}};
@@ -1602,8 +1457,7 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 					COMPARE_LESS,
 					TOPO_TRIANGLES,
 					PIPELINE_TYPE_GRAPHICS,
-					PASS_MAIN,
-					DYNAMIC_DEPTH_DISABLE
+					PASS_MAIN
 				);
 
 				// Only invoke Vulkan and the Registry if the state actually changed!
@@ -1810,20 +1664,27 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, 
 	SHADOWPass(ctx, entity_info, resource, frame_res_index);
 	vkCmdBeginRendering(resource->cmd_buf, &render_info);
 	{
-
-		VkViewport	viewport = {
-			.x = 0, .y = 0,
-			.width = ctx->swapchain_width,
-			.height = ctx->swapchain_height,
+		VkViewport viewport = {
+			.x	  = ctx->viewport_offset[X],
+			.y	  = ctx->viewport_offset[Y],
+			.width	  = ctx->viewport_extent[X],
+			.height	  = ctx->viewport_extent[Y],
 			.minDepth = 0.0f,
-			.maxDepth = 1.0f,
+			.maxDepth = 1.0f
 		};
-		vkCmdSetViewport(resource->cmd_buf, 0, 1, &viewport);
 
-		VkRect2D	scissor = {
-			.offset = {0, 0},
-			.extent = { .width = ctx->swapchain_width, .height = ctx->swapchain_height, }
+		VkRect2D scissor = {
+			.offset = {
+				.x = ctx->viewport_offset[X],
+				.y = ctx->viewport_offset[Y]
+			},
+			.extent = {
+				.width  = ctx->viewport_extent[X],
+				.height = ctx->viewport_extent[Y]
+			}
 		};
+
+		vkCmdSetViewport(resource->cmd_buf, 0, 1, &viewport);
 		vkCmdSetScissor(resource->cmd_buf, 0, 1, &scissor);
 
 		// ---- GRID Pass ------------------ //
@@ -1831,6 +1692,20 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, 
 
 		// ---- PBR Pass --------------- //
 		PBRPass(ctx, entity_info, resource, frame_res_index);
+
+
+		viewport.x = 0;
+		viewport.y = 0;
+		viewport.width = ctx->swapchain_width;
+		viewport.height = ctx->swapchain_height;
+
+		scissor.offset.x = 0;
+		scissor.offset.y = 0;
+		scissor.extent.width = ctx->swapchain_width;
+		scissor.extent.height = ctx->swapchain_height;
+
+		vkCmdSetViewport(resource->cmd_buf, 0, 1, &viewport);
+		vkCmdSetScissor(resource->cmd_buf, 0, 1, &scissor);
 
 		// ---- TEXT Pass --------------- //
 		TEXTPass(ctx, resource, text_info);
