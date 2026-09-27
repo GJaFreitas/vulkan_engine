@@ -1210,7 +1210,7 @@ static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 {
 	UniformBufferObject ubo = {0}; // Ensure zero initialization
 
-	f32	aspect_ratio = (float)ctx->swapchain_width / (float)ctx->swapchain_height;
+	f32	aspect_ratio = (float)ctx->viewport_extent[X] / (float)ctx->viewport_extent[Y];
 
 	getViewMatrix(ubo.view, cam);
 	getProjectionMatrix(ubo.proj, cam, aspect_ratio, cam->near_z, cam->far_z);
