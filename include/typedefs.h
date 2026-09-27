@@ -46,6 +46,16 @@ typedef float		float3[3];
 typedef float		float4[4];
 typedef float4		float4x4[4];
 
+
+typedef int		int2[2];
+typedef int		int3[3];
+typedef int		int4[4];
+
+typedef u32		uint;
+typedef uint		uint2[2];
+typedef uint		uint3[3];
+typedef uint		uint4[4];
+
 // This can represent binary data or typical string
 // This structure OWNS memory. If it is deleted data must
 // be freed.

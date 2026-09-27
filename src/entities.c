@@ -111,8 +111,7 @@ Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a)
 		DEPTH_RW,
 		TOPO_TRIANGLES,
 		PIPELINE_TYPE_GRAPHICS,
-		PASS_MAIN,
-		DYNAMIC_DEPTH_DISABLE
+		PASS_MAIN
 	);
 
 	// Assign it to your entity
@@ -134,14 +133,17 @@ void	updatePlayer(Player *p, double dt, SDL_Window *window)
 
 	Camera	*camera = &p->camera;
 	bool	noclip = gameStateQuery(g_game_state, NoClip);
+	bool	editor_mode = g_engine_mode == ENGINE_MODE_EDITOR;
 
 	// 1. Process mouse look FIRST so movement is relative to the updated view
 	float	xrel, yrel;
 	SDL_GetRelativeMouseState(&xrel, &yrel);
 
-	camera->yaw	+= xrel * camera->mouseSensitivity;
-	camera->pitch	-= yrel * camera->mouseSensitivity;
-	camera->pitch	= glm_clamp(camera->pitch, -89.0f, 89.0f);
+	if (!editor_mode || (mouseHeld(SDL_BUTTON_RIGHT))) {
+		camera->yaw	+= xrel * camera->mouseSensitivity;
+		camera->pitch	-= yrel * camera->mouseSensitivity;
+		camera->pitch	= glm_clamp(camera->pitch, -89.0f, 89.0f);
+	}
 
 	// Recalculate camera vectors from yaw/pitch
 	vec3	front;
@@ -188,12 +190,12 @@ void	updatePlayer(Player *p, double dt, SDL_Window *window)
 	vec3	move_dir = GLM_VEC3_ZERO_INIT;
 	bool	moved = false;
 
-	if (key_held(g_keybinds[ACTION_MOVE_FORWARD]))	{ glm_vec3_add(move_dir, move_front, move_dir); moved = true; }
-	if (key_held(g_keybinds[ACTION_MOVE_BACKWARD]))	{ glm_vec3_sub(move_dir, move_front, move_dir); moved = true; }
-	if (key_held(g_keybinds[ACTION_MOVE_LEFT]))	{ glm_vec3_sub(move_dir, move_right, move_dir); moved = true; }
-	if (key_held(g_keybinds[ACTION_MOVE_RIGHT]))	{ glm_vec3_add(move_dir, move_right, move_dir); moved = true; }
-	if (key_held(g_keybinds[ACTION_JUMP]))		{ glm_vec3_add(move_dir, move_up, move_dir); moved = true; }
-	if (key_held(g_keybinds[ACTION_SHIFT]))		{ glm_vec3_sub(move_dir, move_up, move_dir); moved = true; }
+	if (keyHeld(g_keybinds[ACTION_MOVE_FORWARD]))	{ glm_vec3_add(move_dir, move_front, move_dir); moved = true; }
+	if (keyHeld(g_keybinds[ACTION_MOVE_BACKWARD]))	{ glm_vec3_sub(move_dir, move_front, move_dir); moved = true; }
+	if (keyHeld(g_keybinds[ACTION_MOVE_LEFT]))	{ glm_vec3_sub(move_dir, move_right, move_dir); moved = true; }
+	if (keyHeld(g_keybinds[ACTION_MOVE_RIGHT]))	{ glm_vec3_add(move_dir, move_right, move_dir); moved = true; }
+	if (keyHeld(g_keybinds[ACTION_JUMP]))		{ glm_vec3_add(move_dir, move_up, move_dir); moved = true; }
+	if (keyHeld(g_keybinds[ACTION_SHIFT]))		{ glm_vec3_sub(move_dir, move_up, move_dir); moved = true; }
 
 	// 5. Apply movement
 	if (moved) {

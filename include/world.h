@@ -80,6 +80,9 @@ typedef struct InputState
 	bool		last[NUM_KEYS];
 	SDL_Keymod	mod;
 	float		mouse_wheel_y;
+	vec2		mouse_pos;
+	u32		mouse_state;
+	u32		last_mouse_state;
 }	InputState;
 
 typedef enum {
@@ -123,10 +126,18 @@ extern EngineMode	g_engine_mode;
 extern InputState	g_input_state;
 extern SDL_Scancode	g_keybinds[ACTION_MAX_ENUM];
 
-static inline bool key_held(SDL_Scancode sc)       { return g_input_state.current[sc]; }
-static inline bool key_pressed(SDL_Scancode sc)     { return g_input_state.current[sc] && !g_input_state.last[sc]; }
-static inline bool key_released(SDL_Scancode sc)    { return !g_input_state.current[sc] && g_input_state.last[sc]; }
-static inline bool mod_held(SDL_Keymod m)           { return (g_input_state.mod & m) != 0; }
+static inline bool mouseReleased(SDL_MouseButtonFlags mouse_button)
+{
+	bool	was_pressed = g_input_state.last_mouse_state & mouse_button;
+	bool	is_pressed = g_input_state.mouse_state & mouse_button;
+	return (was_pressed && !is_pressed);
+}
+static inline bool mouseHeld(SDL_MouseButtonFlags mouse_button)	{ return g_input_state.mouse_state & mouse_button; }
+
+static inline bool keyHeld(SDL_Scancode sc)			{ return g_input_state.current[sc]; }
+static inline bool keyPressed(SDL_Scancode sc)			{ return g_input_state.current[sc] && !g_input_state.last[sc]; }
+static inline bool keyReleased(SDL_Scancode sc)			{ return !g_input_state.current[sc] && g_input_state.last[sc]; }
+static inline bool modHeld(SDL_Keymod m)			{ return (g_input_state.mod & m) != 0; }
 
 // ------------------------------- //
 // --- Player/Entity Functions --- //

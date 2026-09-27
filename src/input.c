@@ -41,7 +41,9 @@ void	inputEndFrame(void)
 
 static void resolveMouseState(SDL_Window *window) {
 	bool	should_lock = false;
+	u32	mouse_state = SDL_GetMouseState(&g_input_state.mouse_pos[X], &g_input_state.mouse_pos[Y]);
 
+	g_input_state.mouse_state = mouse_state;
 	// 1. Highest Priority: Overlays
 	if (gameStateQuery(g_game_state, ShowConsole)) {
 		should_lock = false; // Free mouse for text selection / UI
@@ -52,8 +54,7 @@ static void resolveMouseState(SDL_Window *window) {
 	} 
 	else if (g_engine_mode == ENGINE_MODE_EDITOR) {
 		// Hybrid Editor Mouse: Lock only while Right Mouse Button is held
-		u32	mouse_state = SDL_GetMouseState(NULL, NULL);
-		if (mouse_state & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) {
+		if (mouseHeld(SDL_BUTTON_RIGHT)) {
 			should_lock = true;
 		} else {
 			should_lock = false;

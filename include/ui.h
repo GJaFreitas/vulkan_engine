@@ -26,13 +26,6 @@ enum ComponentShapeFillType
 	TRANSPARENT,
 };
 
-typedef u8	UiSizeMode;
-enum {
-	UI_SIZE_FIXED,
-	UI_SIZE_AUTO,
-};
-
-
 typedef u8	UiPrimitiveType;
 enum {
 	UI_PRIMITIVE_TEXT_GLYPH,
@@ -82,7 +75,6 @@ typedef struct UiComponent
 	UiPrimitiveType	primitive_type;
 	UiLayoutType	layout_type;	// How I arrange my children
 	UiAnchor	anchor;		// How I attach to my parent (if absolute)
-	UiSizeMode	size_mode[2];	// X and Y size policies
 
 	vec2		offset;		// My manual X/Y nudge
 	vec2		fixed_size;	// My requested width/height
@@ -123,7 +115,6 @@ typedef struct PanelSpec
 	UiPrimitiveType	primitive_type;	// Type of panel (Rectangle/Elipse)
 	UiLayoutType	layout_type;	// How I arrange my children
 	UiAnchor	anchor;		// How I attach to my parent (if absolute)
-	UiSizeMode	size_mode[2];	// X and Y size policies
 
 	vec2		offset;		// My manual X/Y nudge
 	vec2		fixed_size;	// My requested width/height (UI_SIZE_FIXED)
@@ -133,6 +124,7 @@ typedef struct PanelSpec
 	f32		border_width;	// Size of border
 	f32		corner_radius;	// Rounded corners
 	f32		padding;	// The padding (left and right)
+	f32		spacing;	// Space between children inside this panel
 }	PanelSpec;
 
 typedef struct TextSpec
@@ -146,23 +138,40 @@ typedef struct TextSpec
 	u32		flags;
 }	TextSpec;
 
+typedef struct ButtonSpec
+{
+	Font	*font;
+	u8	font_size;
+	f32	padding;
+	f32	corner_radius;
+	vec4	color_idle;
+	vec4	color_hover;
+	vec4	color_active;
+	vec4	text_color;
+}	ButtonSpec;
+
+typedef enum ButtonState {
+	NONE,
+	LEFT_CLICK,
+	RIGHT_CLICK,
+}	ButtonState;
+
 void	initUi(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm);
 
 
-void	imguiBeginPanel(u16 parent_node, PanelSpec spec);
-bool	imguiButton(StringView text);
-void	imguiEndPanel(void);
-u16	imguiAllocateComponent(void);
-void	imguiResetFrame(void);
-void	imguiText(TextSpec spec, Allocator *frame_arena, const char *fmt, ...);
+void		imguiBeginPanel(PanelSpec spec);
+ButtonState	imguiButton(StringView text_view, ButtonSpec spec);
+void		imguiText(TextSpec spec, const char *fmt, ...);
+void		imguiEndPanel(void);
+void		imguiResetFrame(void);
 
 u16	setShape(enum ComponentShapeType shape);
 u16	setShapeFill(enum ComponentShapeFillType fill);
 
-UiRenderInfo	buildUiRenderInfo(u16 rm_root_node, Allocator *frame_arena);
-void		uiCalculateLayout(f32 screen_w, f32 screen_h, Allocator *frame_arena);
+UiRenderInfo	buildUiRenderInfo(u16 rm_root_node);
 
-void	openConsole(u32 screen_w, u32 screen_h, Font *font, u8 console_font_size, Allocator *frame_arena);
-void	showFps(u16 imgui_root, Font *font, double fps, Allocator *frame_arena);
+void	openConsole(u32 screen_w, u32 screen_h, Font *font, u8 console_font_size);
+void	showFps(Font *font, double fps);
+void	drawEditorUI(GraphicsContext *ctx, Font *font);
 
 String	consoleBackend(void);

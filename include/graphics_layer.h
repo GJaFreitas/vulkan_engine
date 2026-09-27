@@ -312,7 +312,7 @@ enum CompareMode {
 };
 
 // Helper to pack the state
-static inline PipelineState createPipelineState(u16 shader, u8 cull, u8 blend, u8 depth, u8 compare, u8 topo, u8 type, u8 pass, u8 dynamic) {
+static inline PipelineState createPipelineState(u16 shader, u8 cull, u8 blend, u8 depth, u8 compare, u8 topo, u8 type, u8 pass) {
 	return	((u64)shader	<< SHIFT_SHADER)   |
 		((u64)cull	<< SHIFT_CULL)     |
 		((u64)blend	<< SHIFT_BLEND)    |
@@ -320,7 +320,6 @@ static inline PipelineState createPipelineState(u16 shader, u8 cull, u8 blend, u
 		((u64)topo	<< SHIFT_TOPO)     |
 		((u64)type	<< SHIFT_TYPE)     |
 		((u64)pass	<< SHIFT_PASS)     |
-		((u64)dynamic	<< SHIFT_DYNAMIC)  |
 		((u64)compare	<< SHIFT_COMPARE);
 }
 
@@ -390,6 +389,8 @@ typedef struct GraphicsContext
 	VkSemaphore		*render_complete_sequence_semaphores;
 	u32			swapchain_width;
 	u32			swapchain_height;
+	uint2			viewport_extent;
+	int2			viewport_offset;
 	bool			swapchain_require_recreate;
 
 	VkCommandPool		single_time_pool;
@@ -411,7 +412,8 @@ typedef struct GraphicsContext
 	// Shadow Pipeline ------------
 	CascadedShadowMap	shadow_maps[MAX_FRAMES_IN_FLIGHT];
 	VkSampler		shadow_sampler;
-	VkPipeline		pipeline_shadow;
+	ShaderHandle		shadow_shader_handle;
+	u64			shadow_pipeline_state;
 	// ---------------------
 
 	// PBR Pipeline ------------

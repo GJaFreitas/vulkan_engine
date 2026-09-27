@@ -51,34 +51,6 @@ void	createRandomEntity(World world)
 	initializeRandomVec(e->pos, 3, -1, 1);
 }
 
-static inline void resolveMouseState(SDL_Window *window) {
-	bool	should_lock = false;
-
-	// 1. Highest Priority: Overlays
-	if (gameStateQuery(g_game_state, ShowConsole)) {
-		should_lock = false; // Free mouse for text selection / UI
-	} 
-	// 2. Base Modes
-	else if (g_engine_mode == ENGINE_MODE_GAME) {
-		should_lock = true;  // Always locked in gameplay
-	} 
-	else if (g_engine_mode == ENGINE_MODE_EDITOR) {
-		// Hybrid Editor Mouse: Lock only while Right Mouse Button is held
-		u32	mouse_state = SDL_GetMouseState(NULL, NULL);
-		if (mouse_state & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) {
-			should_lock = true;
-		} else {
-			should_lock = false;
-		}
-	} 
-	else if (g_engine_mode == ENGINE_MODE_MAIN_MENU) {
-		should_lock = false; // Always free in menus
-	}
-
-	// SDL internally checks if the state is already set, so this is safe to call per-frame
-	SDL_SetWindowRelativeMouseMode(window, should_lock);
-}
-
 static inline void beginFrame(World *world) {
 	inputBeginFrame();
 	do_callbacks();
@@ -99,7 +71,6 @@ int	loop(World world)
 	const u32	screen_h = world.graphics_ctx->window_height;
 
 	Font	*font = &world.fonts.fonts[0];
-	Allocator	*frame_arena = &g_frame_arena;
 
 	u64	frames = 0;
 	double	fps = 0;
@@ -119,17 +90,25 @@ int	loop(World world)
 		beginFrame(&world);
 
 		if (gameStateQuery(g_game_state, ShowConsole)) {
-			openConsole(screen_w, screen_h, font, 12, frame_arena);
+			openConsole(screen_w, screen_h, font, 12);
 		}
 		if (gameStateQuery(g_game_state, ShowFps)) {
-			showFps(world.ui->imgui_root, font, fps, frame_arena);
+			showFps(font, fps);
+		}
+		if (g_engine_mode == ENGINE_MODE_EDITOR) {
+			drawEditorUI(world.graphics_ctx, font);
+		} else {
+			// Fullscreen 3D Viewport for Game Mode
+			world.graphics_ctx->viewport_offset[X] = 0;
+			world.graphics_ctx->viewport_offset[Y] = 0;
+			world.graphics_ctx->viewport_extent[X] = world.graphics_ctx->swapchain_width;
+			world.graphics_ctx->viewport_extent[Y] = world.graphics_ctx->swapchain_height;
 		}
 
 		// --- RENDERING ---
 		if (getModelCountFromCache())
 			entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &g_frame_arena);
-		uiCalculateLayout(world.graphics_ctx->window_width, world.graphics_ctx->window_height, &g_frame_arena);
-		ui_info = buildUiRenderInfo(world.ui->rmgui_root, &g_frame_arena);
+		ui_info = buildUiRenderInfo(world.ui->rmgui_root);
 
 		render(world.graphics_ctx, &world.player->camera, entity_info, ui_info);
 
