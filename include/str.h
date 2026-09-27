@@ -28,7 +28,7 @@ void	strViewSkipChar(StringView *sv, const char c);
 bool	strViewSkip(StringView *sv, StringView skip);
 i64	strToLong(StringView _sv);
 // Basic implementation;
-float32	strToFloat(StringView _sv);
+f32	strToFloat(StringView _sv);
 void	strCopy(StringView dst, StringView src);
 String	subStr(StringView sv, u64 size, Allocator *a);
 StringView	strViewChr(String s, const char c);

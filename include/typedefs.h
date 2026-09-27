@@ -32,14 +32,8 @@ typedef uint16_t	u16;
 typedef uint32_t	u32;
 typedef uint64_t	u64;
 
-typedef float		float32;
-typedef float		real32;
-
 typedef float		f32;
 typedef double		f64;
-
-typedef double		float64;
-typedef double		real64;
 
 typedef float		float2[2];
 typedef float		float3[3];
