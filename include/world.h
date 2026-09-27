@@ -50,13 +50,15 @@ static inline bool	gameStateQuery(GameState state, enum GameStateField field) {
 	return (state & (1U << field));
 }
 
+typedef Vector(Entity)	EntityVector;
+
 typedef struct World
 {
 	GraphicsContext	*graphics_ctx;
 
 	// TODO: Implement sim regions?
 	Allocator	entity_allocator;
-	Vector		*entities;
+	EntityVector	entities;
 
 	Player		*player;
 
@@ -137,5 +139,5 @@ void	updatePlayer(Player *p, double dt, SDL_Window *window);
 void	spawnCommand(int argc, String *argv);
 void	unloadEntity(Entity *e, Allocator *a);
 Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a);
-void	updateEntities(Vector *entities, double dt);
-EntityRenderInfo	buildEntityRenderInfo(Vector *entity_vector, u32 model_count, Allocator *a);
+void	updateEntities(EntityVector *entities, double dt);
+EntityRenderInfo	buildEntityRenderInfo(EntityVector *entity_vector, u32 model_count, Allocator *a);
