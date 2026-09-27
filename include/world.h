@@ -128,11 +128,16 @@ extern SDL_Scancode	g_keybinds[ACTION_MAX_ENUM];
 
 static inline bool mouseReleased(SDL_MouseButtonFlags mouse_button)
 {
-	bool	was_pressed = g_input_state.last_mouse_state & mouse_button;
-	bool	is_pressed = g_input_state.mouse_state & mouse_button;
+	u32	mask = SDL_BUTTON_MASK(mouse_button);
+	bool	was_pressed = g_input_state.last_mouse_state & mask;
+	bool	is_pressed = g_input_state.mouse_state & mask;
 	return (was_pressed && !is_pressed);
 }
-static inline bool mouseHeld(SDL_MouseButtonFlags mouse_button)	{ return g_input_state.mouse_state & mouse_button; }
+static inline bool mouseHeld(SDL_MouseButtonFlags mouse_button)
+{
+	u32	mask = SDL_BUTTON_MASK(mouse_button);
+	return (g_input_state.mouse_state & mask) != 0;
+}
 
 static inline bool keyHeld(SDL_Scancode sc)			{ return g_input_state.current[sc]; }
 static inline bool keyPressed(SDL_Scancode sc)			{ return g_input_state.current[sc] && !g_input_state.last[sc]; }

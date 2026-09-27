@@ -151,9 +151,9 @@ typedef struct ButtonSpec
 }	ButtonSpec;
 
 typedef enum ButtonState {
-	NONE,
-	LEFT_CLICK,
-	RIGHT_CLICK,
+	BUTTON_NONE,
+	BUTTON_LEFT_CLICK,
+	BUTTON_RIGHT_CLICK,
 }	ButtonState;
 
 void	initUi(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm);

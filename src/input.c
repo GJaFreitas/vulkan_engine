@@ -22,13 +22,21 @@ SDL_Scancode	g_keybinds[ACTION_MAX_ENUM] = {
 
 void	inputBeginFrame(void)
 {
-	int		numkeys;
+	int	numkeys;
 	const bool	*state = SDL_GetKeyboardState(&numkeys);
 
 	// 1. Backup the last frame for key_pressed / key_released logic
 	memcpy(g_input_state.last, g_input_state.current, NUM_KEYS);
 	// 2. Overwrite the current frame with the true OS physical state
 	memcpy(g_input_state.current, state, (numkeys < NUM_KEYS) ? numkeys : NUM_KEYS);
+
+	// --- 3. UPDATE MOUSE STATE ---
+	g_input_state.last_mouse_state = g_input_state.mouse_state;
+	float	mx, my;
+	g_input_state.mouse_state = SDL_GetMouseState(&mx, &my);
+	g_input_state.mouse_pos[X] = (f32)mx;
+	g_input_state.mouse_pos[Y] = (f32)my;
+	// -----------------------------
 
 	// Reset scroll every frame so it doesn't spin forever
 	g_input_state.mouse_wheel_y = 0.0f;
@@ -41,9 +49,7 @@ void	inputEndFrame(void)
 
 static void resolveMouseState(SDL_Window *window) {
 	bool	should_lock = false;
-	u32	mouse_state = SDL_GetMouseState(&g_input_state.mouse_pos[X], &g_input_state.mouse_pos[Y]);
 
-	g_input_state.mouse_state = mouse_state;
 	// 1. Highest Priority: Overlays
 	if (gameStateQuery(g_game_state, ShowConsole)) {
 		should_lock = false; // Free mouse for text selection / UI

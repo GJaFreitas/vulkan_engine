@@ -146,11 +146,17 @@ u16	imguiAllocateComponent(void)
 
 void	imguiResetFrame(void)
 {
-	pool.imgui_count = 0; 
+	// 1. Reset component allocation index
+	pool.imgui_count = 0;	
+
+	// 2. Clear layout/cursor stack
 	g_ui_ctx.layout_stack_count = 0;
 
-	// Sever the links so RMGUI forgets about the wiped IMGUI nodes!
-	UiComponent *imgui_root = uiGet(g_ui_ctx.imgui_root);
+	// 3. Clear hover state so highlights disappear when mouse moves off items
+	g_ui_ctx.hot_item_hash = 0;
+
+	// 4. Sever the tree links so RMGUI forgets about last frame's IMGUI nodes
+	UiComponent	*imgui_root = uiGet(g_ui_ctx.imgui_root);
 	imgui_root->first_child = UI_NULL_INDEX;
 	imgui_root->last_child  = UI_NULL_INDEX;
 }
@@ -237,6 +243,15 @@ void	uiAppendChild(u16 parent, u16 new_idx)
 	new_node->prev_sibling = last_child;
 }
 
+static inline void	appendToParent(u16 idx) {
+	u16		parent_node = g_ui_ctx.imgui_root;
+	if (g_ui_ctx.layout_stack_count > 0) {
+		UiLayoutState	*parent_layout = &g_ui_ctx.layout_stack[g_ui_ctx.layout_stack_count - 1];
+		parent_node = parent_layout->component_idx;
+	}
+	uiAppendChild(parent_node, idx);
+}
+
 void	imguiText(TextSpec spec, const char *fmt, ...)
 {
 	if (g_ui_ctx.layout_stack_count == 0) {
@@ -263,6 +278,7 @@ void	imguiText(TextSpec spec, const char *fmt, ...)
 	// 3. Allocate and populate the UI Component
 	u16	text_idx = imguiAllocateComponent();
 	UiComponent	*text = uiGet(text_idx);
+	appendToParent(text_idx);
 	
 	text->primitive_type = UI_PRIMITIVE_TEXT_GLYPH;
 	text->font = spec.font;
@@ -296,14 +312,21 @@ void	imguiText(TextSpec spec, const char *fmt, ...)
 
 void imguiBeginPanel(PanelSpec spec)
 {
-	u16 panel_idx = imguiAllocateComponent();
-	UiComponent *panel = uiGet(panel_idx);
+	u16		panel_idx = imguiAllocateComponent();
+	UiComponent	*panel = uiGet(panel_idx);
+	appendToParent(panel_idx);
 	
-	// Copy styling...
 	panel->primitive_type = spec.primitive_type;
+	panel->layout_type = spec.layout_type;
+	panel->anchor = spec.anchor;
+	glm_vec2_copy(spec.offset, panel->offset);
+	glm_vec2_copy(spec.fixed_size, panel->fixed_size);
+	glm_vec4_copy(spec.outer_color, panel->outer_color);
 	glm_vec4_copy(spec.inner_color, panel->inner_color);
+	panel->border_width = spec.border_width;
+	panel->corner_radius = spec.corner_radius;
 	panel->padding = spec.padding;
-	// ... (copy other visual specs) ...
+
 
 	// 1. Where does this panel start?
 	f32 start_x = spec.offset[X];
@@ -319,6 +342,31 @@ void imguiBeginPanel(PanelSpec spec)
 	// Set our absolute position immediately
 	panel->final_screen_pos[X] = start_x;
 	panel->final_screen_pos[Y] = start_y;
+	panel->final_screen_size[X] = spec.fixed_size[X];
+	panel->final_screen_size[Y] = spec.fixed_size[Y];
+
+	// --- CLIP RECT LOGIC ---
+	if (g_ui_ctx.layout_stack_count > 0) {
+		UiLayoutState	*parent_layout = &g_ui_ctx.layout_stack[g_ui_ctx.layout_stack_count - 1];
+		UiComponent	*parent_panel = uiGet(parent_layout->component_idx);
+		
+		// 1. Inherit the parent's clip rect
+		glm_vec4_copy(parent_panel->clip_rect, panel->clip_rect);
+
+		// 2. If this panel has a fixed size, we can restrict the clip rect further
+		if (spec.fixed_size[X] > 0.0f && spec.fixed_size[Y] > 0.0f) {
+			panel->clip_rect[0] = MAX(panel->clip_rect[0], panel->final_screen_pos[X]);
+			panel->clip_rect[1] = MAX(panel->clip_rect[1], panel->final_screen_pos[Y]);
+			panel->clip_rect[2] = MIN(panel->clip_rect[2], panel->final_screen_pos[X] + spec.fixed_size[X]);
+			panel->clip_rect[3] = MIN(panel->clip_rect[3], panel->final_screen_pos[Y] + spec.fixed_size[Y]);
+		}
+	} else {
+		// Root panels get bounds based on their fixed size, or infinity if auto-sized
+		panel->clip_rect[0] = panel->final_screen_pos[X];
+		panel->clip_rect[1] = panel->final_screen_pos[Y];
+		panel->clip_rect[2] = spec.fixed_size[X] > 0.0f ? panel->final_screen_pos[X] + spec.fixed_size[X] : 99999.0f;
+		panel->clip_rect[3] = spec.fixed_size[Y] > 0.0f ? panel->final_screen_pos[Y] + spec.fixed_size[Y] : 99999.0f;
+	}
 	
 	// We DON'T know our size yet if we aren't fixed!
 	panel->final_screen_size[X] = spec.fixed_size[X]; 
@@ -386,7 +434,7 @@ ButtonState	imguiButton(StringView text_view, ButtonSpec spec)
 
 	// 3. Interaction Logic
 	u32	id = hashString32(text_view);
-	ButtonState	btn_state = NONE;
+	ButtonState	btn_state = BUTTON_NONE;
 	
 	f32	mx = g_input_state.mouse_pos[X];
 	f32	my = g_input_state.mouse_pos[Y];
@@ -395,13 +443,19 @@ ButtonState	imguiButton(StringView text_view, ButtonSpec spec)
 	bool	mouse_right_down = mouseHeld(SDL_BUTTON_RIGHT);
 	bool	mouse_right_released = mouseReleased(SDL_BUTTON_RIGHT);
 
+	bool	is_hovered = (mx >= pos_x && mx <= pos_x + btn_width && 
+	                      my >= pos_y && my <= pos_y + btn_height);
+
+	if (is_hovered) {
+		printf("HOVERING BUTTON! Mouse: (%.1f, %.1f) | Box: (%.1f, %.1f, %.1f, %.1f)\n", 
+			mx, my, pos_x, pos_y, btn_width, btn_height);
+	}
+
 	// Is mouse inside button?
-	if (mx >= pos_x && mx <= pos_x + btn_width && 
-	    my >= pos_y && my <= pos_y + btn_height) 
+	if (is_hovered) 
 	{
 		// Yes it is
 		g_ui_ctx.hot_item_hash = id;
-		
 
 		// Is the button clicked?
 		if ((mouse_left_down || mouse_right_down) && g_ui_ctx.active_item_hash == 0) {
@@ -410,25 +464,18 @@ ButtonState	imguiButton(StringView text_view, ButtonSpec spec)
 		}
 	}
 
-	// Was this button originally clicked?
-	if (g_ui_ctx.active_item_hash == id) {
-		// Yes, is the mouse button still on the button?
-		if (g_ui_ctx.hot_item_hash == id) {
-			// Yes it is, was it the left or right button?
-			if (mouse_left_released) {
-				btn_state = LEFT_CLICK;
-			} else if (mouse_right_released) {
-				btn_state = RIGHT_CLICK;
-			}
-
-			// Button was clicked
-			g_ui_ctx.active_item_hash = 0;
+	// Resolve Clicks on Release
+	if (g_ui_ctx.active_item_hash == id && (mouse_left_released || mouse_right_released)) {
+		if (is_hovered) {
+			btn_state = mouse_left_released ? BUTTON_LEFT_CLICK : BUTTON_RIGHT_CLICK;
 		}
+		g_ui_ctx.active_item_hash = 0;
 	}
 
 	// 4. Create Background Component
 	u16	btn_idx = imguiAllocateComponent();
 	UiComponent	*btn = uiGet(btn_idx);
+	appendToParent(btn_idx);
 	
 	btn->primitive_type = UI_PRIMITIVE_RECTANGLE;
 	btn->final_screen_pos[X] = pos_x;
@@ -451,6 +498,7 @@ ButtonState	imguiButton(StringView text_view, ButtonSpec spec)
 	// 5. Create Text Component
 	u16	text_idx = imguiAllocateComponent();
 	UiComponent	*text = uiGet(text_idx);
+	appendToParent(text_idx);
 	
 	text->primitive_type = UI_PRIMITIVE_TEXT_GLYPH;
 	text->font = spec.font;
@@ -782,7 +830,7 @@ void	showFps(Font *font, double fps)
 	imguiEndPanel();
 }
 
-void drawEditorUI(GraphicsContext *ctx, Font *font)
+void	drawEditorUI(GraphicsContext *ctx, Font *font)
 {
 	const f32 screen_w = (f32)ctx->swapchain_width;
 	const f32 screen_h = (f32)ctx->swapchain_height;
@@ -827,7 +875,8 @@ void drawEditorUI(GraphicsContext *ctx, Font *font)
 	});
 	
 	// We can wire this button directly to your game state!
-	if (imguiButton(STRING_LIT("Play (Game Mode)"), btn_spec)) {
+	if (imguiButton(STRING_LIT("Play (Game Mode)"), btn_spec) == BUTTON_LEFT_CLICK) {
+		print("Button clicked\n");
 		gameStateSet(&g_game_state, NoClip, 0);
 		g_engine_mode = ENGINE_MODE_GAME;
 	}
