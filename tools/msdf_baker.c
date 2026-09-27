@@ -3,6 +3,8 @@
 #include "stb_sprintf.h"
 #include "base_layer.h"
 
+typedef Vector(GlyphInfo)	GlyphInfoVector;
+
 static inline u32	big_endian_u32(const u8* p) {
 	return (u32) p[0] << 24 | (u32) p[1] << 16 | (u32) p[2] <<  8 | (u32) p[3] <<  0;
 }
@@ -32,7 +34,7 @@ u32	readRGBAData(String rgba_file_path, String *data, Allocator *a)
 	return width;
 }
 
-void	readGlyphInfoCSV(String csv_file_path, Vector *glyph_vec, u32 atlas_size, FT_Face face)
+void	readGlyphInfoCSV(String csv_file_path, GlyphInfoVector *glyph_vec, u32 atlas_size, FT_Face face)
 {
 	// CSV columns
 	//
@@ -92,7 +94,7 @@ void	readGlyphInfoCSV(String csv_file_path, Vector *glyph_vec, u32 atlas_size, F
 		strViewJumpToChar(&line, ',');
 		strViewAdvance(&line, 1);
 
-		vectorAppend(glyph_vec, &glyph);
+		vectorPush(glyph_vec, &glyph);
 	}
 	destroyFile(csv);
 }
@@ -107,7 +109,8 @@ int	main(int argc, char **argv) {
 	FT_Init_FreeType(&ft_lib);
 
 	Allocator	a = newArenaAllocator(MB(20), NULL, DEFAULT_ALIGN);
-	Vector		*glyph_vec = vectorCreate(512, sizeof(GlyphInfo), &a);
+	GlyphInfoVector	glyph_vec;
+	vectorInit(&glyph_vec, &a, 512);
 
 	char		**font_paths = argv + 1;
 	char		*out_path = argv[argc - 1];
@@ -146,7 +149,7 @@ int	main(int argc, char **argv) {
 
 
 		char	command[512];
-		stbsp_snprintf(command, 512, "tools/msdf-atlas-gen/build/bin/msdf-atlas-gen -charset %S -font %s -format rgba -imageout %S -csv %S -type mtsdf -square -minsize 24 -pxrange 8.0 -angle 3.0 -miterlimit 1 -threads 0 -yorigin top", char_set, font_path, rgba_output, csv_output);
+		vsprint(command, 512, "tools/msdf-atlas-gen/build/bin/msdf-atlas-gen -charset %S -font %s -format rgba -imageout %S -csv %S -type mtsdf -square -minsize 24 -pxrange 8.0 -angle 3.0 -miterlimit 1 -threads 0 -yorigin top", char_set, font_path, rgba_output, csv_output);
 
 		{
 			FILE	*pipe = popen(command, "r");
@@ -163,24 +166,24 @@ int	main(int argc, char **argv) {
 		String	rgba_data;
 		u32	atlas_size = readRGBAData(rgba_output, &rgba_data, &a);
 		print("Atlas size: %ux%u\n", atlas_size, atlas_size);
-		readGlyphInfoCSV(csv_output, glyph_vec, atlas_size, face);
-		print("Glyph count: %zu\n", glyph_vec->used);
+		readGlyphInfoCSV(csv_output, &glyph_vec, atlas_size, face);
+		print("Glyph count: %zu\n", vectorCount(&glyph_vec));
 
-		fheader.glyph_count = glyph_vec->used;
+		fheader.glyph_count = vectorCount(&glyph_vec);
 		fheader.atlas_height = atlas_size;
 		fheader.atlas_width = atlas_size;
 		fheader.px_range = 4;
 		memcpy(fheader.path, font_path, strlen(font_path));
 
 		fwrite(&fheader, sizeof(FontHeader), 1, outfile);
-		fwrite(glyph_vec->elems, sizeof(GlyphInfo), glyph_vec->used, outfile);
+		fwrite(vectorElements(&glyph_vec), sizeof(GlyphInfo), vectorCount(&glyph_vec), outfile);
 		fwrite(rgba_data.data, 1, rgba_data.count, outfile);
 
 		// Yes im leaking the memory, no i dont care at all
 		if (!remove(strToCstring(rgba_output, &a))) { print("Failed to remove file: %S", rgba_output); }
 		if (!remove(strToCstring(csv_output, &a))) { print("Failed to remove file: %S", csv_output); }
 
-		vectorReset(glyph_vec);
+		vectorReset(&glyph_vec);
 	}
 
 	return 0;

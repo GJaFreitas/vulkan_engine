@@ -3,17 +3,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 
-#define STRINGIFY_IMPL(x) #x
-#define STRINGIFY(x) STRINGIFY_IMPL(x)
-#ifndef RELEASE
-	#define DEBUG_ASSERT(x) \
-	    if (!(x)) { \
-		write(1, STRINGIFY(x), sizeof(STRINGIFY(x))); \
-		exit(1); \
-	    }
-#else
-	#define DEBUG_ASSERT(x)
+#ifdef RELEASE
+	#define assert(x)
 #endif
 
 #define KB(n) ((n) * 1024ULL)
