@@ -1,204 +1,165 @@
 #include "vector.h"
 
-static void	_increaseCapacity(Vector *v, u32 number_additions)
-{
-	const u32	cur_capacity = v->capacity;
-	const u32	needed_capacity = v->capacity + number_additions;
+void	_vector_init_internal(Vector *v, Allocator *allocator, u64 elem_size, u64 cap) {
+	assert(v != NULL);
+	assert(elem_size > 0);
+	assert(allocator != NULL);
+	assert(cap > 0);
 
-	u32	new_capacity = cur_capacity;
-	while (new_capacity < needed_capacity) {
-		new_capacity *= 2;
-
-		// OVERFLOW
-		if (new_capacity <= cur_capacity) {
-			new_capacity = UINT32_MAX;
-			break ;
-		}
-	}
-
-	if (new_capacity < needed_capacity) {
-		fprintf(stderr, "Well shit vector exceeded capacity for u32, change to u64\n");
-		exit(2);
-	}
-
-	void	*new_ptr = v->allocator->fp_allocation(v->allocator, v->elem_size * new_capacity, DEFAULT_ALIGN);
-	memcpy(new_ptr, v->elems, v->elem_size * v->used);
-	v->allocator->fp_free(v->allocator, v->elems);
-	v->elems = new_ptr;
-	v->capacity = new_capacity;
-}
-
-void	*vectorGet(Vector *v, u32 idx)
-{
-	if (idx > v->used) {
-		fprintf(stderr, "vectorGet() called with invalid index, crashing\n");
-		exit(2);
-	}
-
-	u8	*arr = (u8 *)v->elems;
-	void	*elem = &arr[v->elem_size * idx];
-	return (elem);
-}
-
-Vector	*vectorCreate(u32 initial_capacity, u64 elem_size, Allocator *a)
-{
-	Vector	*v = a->fp_allocation(a, sizeof(Vector), DEFAULT_ALIGN);
-
-	*v = (Vector) {
-		.allocator = a,
+	*v = (Vector){
+		.allocator = allocator,
 		.elems = NULL,
 		.elem_size = elem_size,
-		.capacity = initial_capacity,
+		.capacity = (u32)cap,
 		.used = 0,
 	};
 
-	v->elems = a->fp_allocation(a, elem_size * initial_capacity, DEFAULT_ALIGN);
-	return (v);
+	v->elems = allocator->fp_allocation(allocator, elem_size * cap, DEFAULT_ALIGN);
 }
 
-// Doesnt check if the pointer passed in is correct, copies v->elem_size data
-void	vectorAppend(Vector *v, void *elem)
-{
-	// No capacity left in vector
-	if (v->used + 1 == v->capacity) {
-		_increaseCapacity(v, 1);
-	}
+void	*_vector_get_internal(Vector *v, u32 index) {
+	assert(v != NULL);
+	assert(index < v->used && "Vector index out of bounds");
 
-	// NOTE: There is no check for if the pointer passed as 'elem' is the correct size and v->elem_size bytes are copied,
-	// this can be a source of bugs if the wrong type is passed (2026-07-23)
-	memcpy(vectorGet(v, v->used), elem, v->elem_size);
-	v->used += 1;
+	return (u8 *)v->elems + (index * v->elem_size);
 }
 
-void	vectorAppendMultiple(Vector *v, u32 num_elems, void *elems)
-{
-	if (v->used + num_elems == v->capacity) {
-		_increaseCapacity(v, 1);
+void	*_vector_push_internal(Vector *v, const void *elem) {
+	assert(v != NULL);
+	assert(elem != NULL);
+
+	if (v->used >= v->capacity) {
+		u32 new_cap = (v->capacity == 0) ? 8 : (v->capacity * 2);
+		u64 old_bytes = v->elem_size * v->capacity;
+		u64 new_bytes = v->elem_size * new_cap;
+
+		v->elems = v->allocator->fp_reallocation(v->allocator, v->elems, old_bytes, new_bytes, DEFAULT_ALIGN);
+		assert(v->elems != NULL && "Reallocation failed");
+		v->capacity = new_cap;
 	}
 
-	memcpy(vectorGet(v, v->used), elems, v->elem_size * num_elems);
+	u8 *dst = (u8 *)v->elems + (v->used * v->elem_size);
+	memcpy(dst, elem, v->elem_size);
+	v->used++;
+
+	return dst;
+}
+
+void	_vector_append_multiple_internal(Vector *v, u32 num_elems, const void *elems) {
+	assert(v != NULL);
+	assert(elems != NULL);
+
+	u32 req_cap = v->used + num_elems;
+	if (req_cap > v->capacity) {
+		u32 new_cap = (v->capacity == 0) ? 8 : v->capacity;
+		while (new_cap < req_cap) {
+			new_cap *= 2;
+		}
+
+		u64 old_bytes = v->elem_size * v->capacity;
+		u64 new_bytes = v->elem_size * new_cap;
+
+		v->elems = v->allocator->fp_reallocation(v->allocator, v->elems, old_bytes, new_bytes, DEFAULT_ALIGN);
+		assert(v->elems != NULL && "Reallocation failed");
+		v->capacity = new_cap;
+	}
+
+	u8 *dst = (u8 *)v->elems + (v->used * v->elem_size);
+	memcpy(dst, elems, num_elems * v->elem_size);
 	v->used += num_elems;
 }
 
-void	*vectorPopLast(Vector *v)
-{
-	if (v->used == 0) {
-		return (NULL);
-	}
+void	*_vector_pop_last_internal(Vector *v) {
+	assert(v != NULL);
+	assert(v->used > 0 && "Vector underflow on pop");
 
-	void	*elem = vectorGet(v, v->used - 1);
-	v->used -= 1;
-	return (elem);
+	v->used--;
+	return (u8 *)v->elems + (v->used * v->elem_size);
 }
 
-void	vectorDestroy(Vector *v)
-{
+void	_vector_destroy_internal(Vector *v) {
+	assert(v != NULL);
+	assert(v->elems != NULL);
+
 	v->allocator->fp_free(v->allocator, v->elems);
-	v->allocator->fp_free(v->allocator, v);
-}
-
-// Executes the passed function for every element in the vector
-void	vectorExec(Vector *v, void *udata, void (*FP_VectorExecFunc)(void *elem, void *udata))
-{
-	for (u32 i = 0; i < v->used; i++) {
-		void	*elem = vectorGet(v, i);
-		FP_VectorExecFunc(elem, udata);
-	}
-}
-
-void	vectorInsertIndex(Vector *v, void *elem, u32 idx)
-{
-	if (idx > v->used) {
-		return ;
-	}
-
-	void	*array_pos = vectorGet(v, idx);
-	memcpy(array_pos, elem, v->elem_size);
-}
-
-void	vectorResize(Vector *v, u64 size)
-{
-	u64	new_capacity;
-	if (v->used > size) {
-		new_capacity = v->used;
-	} else {
-		new_capacity = size;
-	}
-	void	*new_ptr = v->allocator->fp_allocation(v->allocator, v->elem_size * new_capacity, DEFAULT_ALIGN);
-	memcpy(new_ptr, v->elems, v->elem_size * v->used);
-	v->allocator->fp_free(v->allocator, v->elems);
-	v->elems = new_ptr;
-	v->capacity = new_capacity;
-}
-
-bool	vectorIsEmpty(Vector *v)
-{
-	return (v->used == 0);
-}
-
-void	vectorReset(Vector *v)
-{
+	v->elems = NULL;
+	v->capacity = 0;
 	v->used = 0;
 }
 
-void	printFunc(void *elem, void *udata)
-{
-	(void)udata;
-	u64	*n_cast = elem;
-	printf("Number: %zu\n", *n_cast);
+void	_vector_exec_internal(Vector *v, void *udata, void (*FP_VectorExecFunc)(void *elem, void *udata)) {
+	assert(v != NULL);
+	assert(FP_VectorExecFunc != NULL);
+
+	u8 *curr = (u8 *)v->elems;
+	u64 stride = v->elem_size;
+	u32 count = v->used;
+
+	for (u32 i = 0; i < count; i++) {
+		FP_VectorExecFunc(curr, udata);
+		curr += stride;
+	}
 }
 
-void	testVector(void)
-{
-	u64	n1 = UINT16_MAX;
-	u64	n2 = 428917481;
-	u64	n3 = 0;
+void	_vector_insert_index_internal(Vector *v, const void *elem, u32 idx) {
+	assert(v != NULL);
+	assert(elem != NULL);
+	assert(idx <= v->used && "Index out of bounds");
 
-	Allocator	a = newArenaAllocator(1 << 17, NULL, DEFAULT_ALIGN);
-	Vector		*v = vectorCreate(16, sizeof(u64), &a);
+	if (v->used >= v->capacity) {
+		u32 new_cap = (v->capacity == 0) ? 8 : (v->capacity * 2);
+		u64 old_bytes = v->elem_size * v->capacity;
+		u64 new_bytes = v->elem_size * new_cap;
 
-	vectorAppend(v, &n1);
-	vectorAppend(v, &n2);
-	vectorAppend(v, &n3);
-
-	printf("First Print:\n");
-	vectorExec(v, NULL, printFunc);
-	printf("End Print\n");
-
-	u64	numbers[6] = {1, 2, 3, 4, 5, 6};
-
-	vectorAppendMultiple(v, sizeofarray(numbers), numbers);
-
-	printf("Second Print:\n");
-	vectorExec(v, NULL, printFunc);
-	printf("End Print\n");
-
-	u64	over_capacity = 666999;
-
-	vectorAppend(v, &over_capacity);
-
-	printf("Third Print:\n");
-	vectorExec(v, NULL, printFunc);
-	printf("End Print\n");
-
-	u64	number = 256;
-	for (u32 i = 20; v->used < i;) {
-		vectorAppend(v, &number);
+		v->elems = v->allocator->fp_reallocation(v->allocator, v->elems, old_bytes, new_bytes, DEFAULT_ALIGN);
+		assert(v->elems != NULL && "Reallocation failed");
+		v->capacity = new_cap;
 	}
 
-	u64	final_num = UINT64_MAX;
-	vectorAppend(v, &final_num);
+	u8 *base = (u8 *)v->elems;
+	u8 *src = base + (idx * v->elem_size);
+	u8 *dst = src + v->elem_size;
+	u32 move_count = v->used - idx;
 
-	printf("4th Print:\n");
-	vectorExec(v, NULL, printFunc);
-	printf("End Print\n");
+	if (move_count > 0) {
+		memmove(dst, src, move_count * v->elem_size);
+	}
 
-	vectorPopLast(v);
-	vectorInsertIndex(v, &final_num, 1);
-	vectorInsertIndex(v, &final_num, 2);
-	vectorInsertIndex(v, &final_num, 3);
+	memcpy(src, elem, v->elem_size);
+	v->used++;
+}
 
-	printf("5th Print:\n");
-	vectorExec(v, NULL, printFunc);
-	printf("End Print\n");
+void	_vector_resize_internal(Vector *v, u64 size) {
+	assert(v != NULL);
+
+	u32 new_cap = (u32)size;
+	if (new_cap != v->capacity) {
+		u64 old_bytes = v->elem_size * v->capacity;
+		u64 new_bytes = v->elem_size * new_cap;
+
+		if (new_cap == 0) {
+			if (v->elems) {
+				v->allocator->fp_free(v->allocator, v->elems);
+				v->elems = NULL;
+			}
+		} else {
+			v->elems = v->allocator->fp_reallocation(v->allocator, v->elems, old_bytes, new_bytes, DEFAULT_ALIGN);
+			assert(v->elems != NULL && "Reallocation failed");
+		}
+
+		v->capacity = new_cap;
+		if (v->used > new_cap) {
+			v->used = new_cap;
+		}
+	}
+}
+
+void	_vector_reset_internal(Vector *v) {
+	assert(v != NULL);
+	v->used = 0;
+}
+
+bool	_vector_is_empty_internal(Vector *v) {
+	assert(v != NULL);
+	return v->used == 0;
 }

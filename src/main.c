@@ -43,7 +43,7 @@ void	createRandomEntity(World world)
 {
 	u32	model = rand() % sizeofarray(models);
 	Entity	*e = loadEntity(world.graphics_ctx, models[model], &world.entity_allocator);
-	vectorAppend(world.entities, &e);
+	vectorPush(&world.entities, e);
 
 	e->spin = glm_rad(randomFloat(0, 90));
 	initializeRandomVec(e->rotation, 4, 0, 1);
@@ -107,14 +107,12 @@ int	loop(World world)
 
 		// --- RENDERING ---
 		if (getModelCountFromCache())
-			entity_info = buildEntityRenderInfo(world.entities, getModelCountFromCache(), &g_frame_arena);
-		ui_info = buildUiRenderInfo(world.ui->rmgui_root);
-
+			entity_info = buildEntityRenderInfo(&world.entities, getModelCountFromCache(), &g_frame_arena);
 		render(world.graphics_ctx, &world.player->camera, entity_info, ui_info);
 
 		// --- UPDATES ---
 		updatePlayer(world.player, world.dt_ms, world.graphics_ctx->window);
-		updateEntities(world.entities, world.dt_ms);
+		updateEntities(&world.entities, world.dt_ms);
 
 		// --- End of frame ---
 		endFrame(world);
@@ -161,7 +159,7 @@ int	main(void)
 	g_frame_arena = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
 	g_perm_arena = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
 	world.entity_allocator = newHeapAllocator(MB(2), NULL, DEFAULT_ALIGN);
-	world.entities = vectorCreate(16, sizeof(Entity *), &world.entity_allocator);
+	vectorInit(&world.entities, &world.entity_allocator, 16);
 	updateGridProperties(&world);
 
 	startGraphics(world.graphics_ctx);
@@ -169,7 +167,7 @@ int	main(void)
 	consoleInit(&g_perm_arena);
 
 	Entity	*player = loadEntity(world.graphics_ctx, STRING_LIT("data/models/rabbit.glb"), &world.entity_allocator);
-	vectorAppend(world.entities, &player);
+	vectorPush(&world.entities, player);
 
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);
 	initPlayer(world.player, &world);

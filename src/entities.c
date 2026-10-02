@@ -8,7 +8,7 @@ void	spawnCommand(int argc, String *argv)
 	consoleAppend("To be implemented");
 }
 
-void	updateEntities(Vector *entities, double dt)
+void	updateEntities(EntityVector *entities, double dt)
 {
 	(void)entities;
 	(void)dt;
@@ -43,9 +43,9 @@ static i16	linearSearch(Model **models, Model *cur, i16 model_count)
 	return (-1);
 }
 
-EntityRenderInfo	buildEntityRenderInfo(Vector *entity_vector, u32 model_count, Allocator *a)
+EntityRenderInfo	buildEntityRenderInfo(EntityVector *entity_vector, u32 model_count, Allocator *a)
 {
-	const u64	entity_count = entity_vector->used;
+	const u64	entity_count = vectorCount(entity_vector);
 
 	EntityRenderInfo	entity_info = {};
 
@@ -57,8 +57,7 @@ EntityRenderInfo	buildEntityRenderInfo(Vector *entity_vector, u32 model_count, A
 	u32	render_idx = 0;
 
 	for (u64 i = 0; i < entity_count; i++) {
-		Entity	**ent_ptr = vectorGet(entity_vector, i);
-		Entity	*ent = *ent_ptr;
+		Entity	*ent = vectorGet(entity_vector, i);
 
 		if (!ent->active) continue;
 		// »speed
@@ -231,8 +230,7 @@ void	updatePlayer(Player *p, double dt, SDL_Window *window)
 void	initPlayer(Player *p, World *world)
 {
 	p->movSpeed = 0.1f;
-	Entity	**e = vectorGet(world->entities, 0);
-	p->p_entity = *e;
+	p->p_entity = vectorGet(&world->entities, 0);
 
 	Camera	*camera = &p->camera;
 	glm_vec3_copy((vec3){0.0f,1.0f,4.0f},  camera->position);
