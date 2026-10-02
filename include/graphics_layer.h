@@ -456,7 +456,10 @@ typedef struct GraphicsContext
 typedef struct EntityRenderData
 {
 	EntityInstanceData	instance_data;
-	i16		model_idx;
+	// TODO: See if this is is needed in the entity struct itself or if i can build it
+	// in buildEntityRenderInfo
+	u64			pipeline_state;
+	i16			model_idx;
 }	EntityRenderData;
 
 typedef struct EntityRenderInfo

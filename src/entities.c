@@ -30,8 +30,8 @@ static int	compare_func(const void *p1, const void * p2)
 	const EntityRenderData	*data1 = p1;
 	const EntityRenderData	*data2 = p2;
 
-	if (data1->model_idx < data2->model_idx) return -1;
-	if (data1->model_idx > data2->model_idx) return 1;
+	if (data1->pipeline_state < data2->pipeline_state) return -1;
+	if (data1->pipeline_state > data2->pipeline_state) return 1;
 	return 0;
 }
 
@@ -73,6 +73,7 @@ EntityRenderInfo	buildEntityRenderInfo(EntityVector *entity_vector, u32 model_co
 		}
 
 		entity_info.data[render_idx].model_idx = model_idx;
+		entity_info.data[render_idx].pipeline_state = ent->pipeline_state;
 		modelMatFromPosDir(ent->pos, ent->rotation, entity_info.data[render_idx].instance_data.model_mat);
 		render_idx++;
 	}
