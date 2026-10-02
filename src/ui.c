@@ -252,6 +252,14 @@ static inline void	appendToParent(u16 idx) {
 	uiAppendChild(parent_node, idx);
 }
 
+static inline u16	initComponent(UiComponent **component_ptr) {
+	u16	idx = imguiAllocateComponent();
+	*component_ptr = uiGet(idx);
+	appendToParent(idx);
+	return	(idx);
+}
+
+// TODO: Implement modifiable text box
 void	imguiText(TextSpec spec, const char *fmt, ...)
 {
 	if (g_ui_ctx.layout_stack_count == 0) {
@@ -276,9 +284,8 @@ void	imguiText(TextSpec spec, const char *fmt, ...)
 	TextMeasurement	measurement = uiShapeText(spec.font, spec.font_size, (const char *)text_data, len);
 
 	// 3. Allocate and populate the UI Component
-	u16	text_idx = imguiAllocateComponent();
-	UiComponent	*text = uiGet(text_idx);
-	appendToParent(text_idx);
+	UiComponent	*text;
+	initComponent(&text);
 	
 	text->primitive_type = UI_PRIMITIVE_TEXT_GLYPH;
 	text->font = spec.font;
@@ -310,11 +317,10 @@ void	imguiText(TextSpec spec, const char *fmt, ...)
 	}
 }
 
-void imguiBeginPanel(PanelSpec spec)
+void	imguiBeginPanel(PanelSpec spec)
 {
-	u16		panel_idx = imguiAllocateComponent();
-	UiComponent	*panel = uiGet(panel_idx);
-	appendToParent(panel_idx);
+	UiComponent	*panel;
+	u16		panel_idx = initComponent(&panel);
 	
 	panel->primitive_type = spec.primitive_type;
 	panel->layout_type = spec.layout_type;
@@ -342,8 +348,6 @@ void imguiBeginPanel(PanelSpec spec)
 	// Set our absolute position immediately
 	panel->final_screen_pos[X] = start_x;
 	panel->final_screen_pos[Y] = start_y;
-	panel->final_screen_size[X] = spec.fixed_size[X];
-	panel->final_screen_size[Y] = spec.fixed_size[Y];
 
 	// --- CLIP RECT LOGIC ---
 	if (g_ui_ctx.layout_stack_count > 0) {
@@ -446,11 +450,6 @@ ButtonState	imguiButton(StringView text_view, ButtonSpec spec)
 	bool	is_hovered = (mx >= pos_x && mx <= pos_x + btn_width && 
 	                      my >= pos_y && my <= pos_y + btn_height);
 
-	if (is_hovered) {
-		printf("HOVERING BUTTON! Mouse: (%.1f, %.1f) | Box: (%.1f, %.1f, %.1f, %.1f)\n", 
-			mx, my, pos_x, pos_y, btn_width, btn_height);
-	}
-
 	// Is mouse inside button?
 	if (is_hovered) 
 	{
@@ -473,9 +472,8 @@ ButtonState	imguiButton(StringView text_view, ButtonSpec spec)
 	}
 
 	// 4. Create Background Component
-	u16	btn_idx = imguiAllocateComponent();
-	UiComponent	*btn = uiGet(btn_idx);
-	appendToParent(btn_idx);
+	UiComponent	*btn;
+	initComponent(&btn);
 	
 	btn->primitive_type = UI_PRIMITIVE_RECTANGLE;
 	btn->final_screen_pos[X] = pos_x;
@@ -496,9 +494,8 @@ ButtonState	imguiButton(StringView text_view, ButtonSpec spec)
 	}
 
 	// 5. Create Text Component
-	u16	text_idx = imguiAllocateComponent();
-	UiComponent	*text = uiGet(text_idx);
-	appendToParent(text_idx);
+	UiComponent	*text;
+	initComponent(&text);
 	
 	text->primitive_type = UI_PRIMITIVE_TEXT_GLYPH;
 	text->font = spec.font;
@@ -528,6 +525,63 @@ ButtonState	imguiButton(StringView text_view, ButtonSpec spec)
 	}
 
 	return btn_state;
+}
+
+// Returns -1 if nothing is pressed, else it returns the index of pressed button
+i32	imguiMenu(StringView menu_name, MenuButton *btn_list, u32 btn_count, MenuSpec spec)
+{
+	if (g_ui_ctx.layout_stack_count == 0) {
+		engine_error(LOG_FILE, "imguiButton called without an active panel!");
+		return false;
+	}
+
+	// --- MENU PANEL --- //
+	imguiBeginPanel((PanelSpec){
+		.primitive_type = UI_PRIMITIVE_RECTANGLE,
+		.layout_type = UI_LAYOUT_VERTICAL,
+		.anchor = UI_ANCHOR_CENTER,
+		.offset = {0},
+		.fixed_size = {0},
+		.outer_color = {0.8, 0.8, 0.8, 1.0},
+		.inner_color = {0.7, 0.7, 0.7, 1.0},
+		.border_width = 1,
+		.corner_radius = 0,
+		.padding = 4,
+		.spacing = spec.spacing
+	});
+
+	if (imguiButton(menu_name, (ButtonSpec){
+		.font = spec.font,
+		.font_size = spec.font_size,
+		.padding = spec.padding,
+		.corner_radius = 0,
+		.color_idle    = {0.3f, 0.3f, 0.3f, 1.0f},
+		.color_hover   = {0.5f, 0.5f, 0.5f, 1.0f},
+		.color_active  = {0.1f, 0.1f, 0.1f, 1.0f},
+		.text_color    = {1.0f, 1.0f, 1.0f, 1.0f},
+	})) {
+		*(spec.open) = !*(spec.open);
+	}
+
+	if (!*(spec.open)) {
+		imguiEndPanel();
+		return -1;
+	}
+
+	UiComponent	*menu;
+	initComponent(&menu);
+
+	i32	pressed = -1;
+	for (u32 i = 0; i < btn_count; i++) {
+		const String		btn_name = btn_list[i].btn_name;
+		const ButtonSpec	btn_spec = btn_list[i].spec;
+
+		if (imguiButton(btn_name, btn_spec)) pressed = i;
+	}
+
+	imguiEndPanel();
+	// --- MENU PANEL END --- //
+	return pressed;
 }
 
 // --- INIT CODE ---
@@ -828,108 +882,4 @@ void	showFps(Font *font, double fps)
 	}, "FPS: %.1f", fps);
 	
 	imguiEndPanel();
-}
-
-void	drawEditorUI(GraphicsContext *ctx, Font *font)
-{
-	const f32 screen_w = (f32)ctx->swapchain_width;
-	const f32 screen_h = (f32)ctx->swapchain_height;
-
-	// 1. Define our panel dimensions
-	const f32 toolbar_h     = 40.0f;
-	const f32 left_panel_w  = 250.0f;
-	const f32 right_panel_w = 300.0f;
-
-	// 2. Calculate and apply the 3D Viewport boundaries for the Grid/PBR passes!
-	ctx->viewport_offset[X] = (int)left_panel_w;
-	ctx->viewport_offset[Y] = (int)toolbar_h;
-	ctx->viewport_extent[X] = (uint)(screen_w - left_panel_w - right_panel_w);
-	ctx->viewport_extent[Y] = (uint)(screen_h - toolbar_h);
-
-	ButtonSpec btn_spec = {
-		.font          = font,
-		.font_size     = 14,
-		.padding       = 6.0f,
-		.corner_radius = 2.0f,
-		.color_idle    = {0.3f, 0.3f, 0.3f, 1.0f},
-		.color_hover   = {0.5f, 0.5f, 0.5f, 1.0f},
-		.color_active  = {0.2f, 0.2f, 0.2f, 1.0f},
-		.text_color    = {1.0f, 1.0f, 1.0f, 1.0f}
-	};
-
-	TextSpec header_text = {
-		.font       = font,
-		.font_size  = 16,
-		.text_color = {1.0f, 1.0f, 1.0f, 1.0f}
-	};
-
-	// --- TOP TOOLBAR ---
-	imguiBeginPanel((PanelSpec){
-		.primitive_type = UI_PRIMITIVE_RECTANGLE,
-		.layout_type    = UI_LAYOUT_HORIZONTAL,
-		.offset         = {0.0f, 0.0f}, // Dock to Top-Left
-		.fixed_size     = {screen_w, toolbar_h},
-		.inner_color    = {0.15f, 0.15f, 0.15f, 1.0f},
-		.padding        = 8.0f,
-		.spacing        = 10.0f
-	});
-	
-	// We can wire this button directly to your game state!
-	if (imguiButton(STRING_LIT("Play (Game Mode)"), btn_spec) == BUTTON_LEFT_CLICK) {
-		print("Button clicked\n");
-		gameStateSet(&g_game_state, NoClip, 0);
-		g_engine_mode = ENGINE_MODE_GAME;
-	}
-	imguiButton(STRING_LIT("Save Scene"), btn_spec);
-	imguiButton(STRING_LIT("Settings"), btn_spec);
-	
-	imguiEndPanel(); // Pop Toolbar
-
-	// --- LEFT PANEL (Hierarchy) ---
-	imguiBeginPanel((PanelSpec){
-		.primitive_type = UI_PRIMITIVE_RECTANGLE,
-		.layout_type    = UI_LAYOUT_VERTICAL,
-		.offset         = {0.0f, toolbar_h}, // Start right below the toolbar
-		.fixed_size     = {left_panel_w, screen_h - toolbar_h},
-		.inner_color    = {0.2f, 0.2f, 0.2f, 1.0f},
-		.padding        = 10.0f,
-		.spacing        = 4.0f
-	});
-	
-	imguiText(header_text, "Scene Hierarchy");
-	imguiText((TextSpec){.font=font, .font_size=14, .text_color={0.7f, 0.7f, 0.7f, 1.0f}}, " - Main Camera");
-	imguiText((TextSpec){.font=font, .font_size=14, .text_color={0.7f, 0.7f, 0.7f, 1.0f}}, " - Directional Light");
-	imguiButton(STRING_LIT("Player Entity"), btn_spec);
-	
-	imguiEndPanel(); // Pop Left Panel
-
-	// --- RIGHT PANEL (Inspector) ---
-	imguiBeginPanel((PanelSpec){
-		.primitive_type = UI_PRIMITIVE_RECTANGLE,
-		.layout_type    = UI_LAYOUT_VERTICAL,
-		.offset         = {screen_w - right_panel_w, toolbar_h}, // Dock to Right edge
-		.fixed_size     = {right_panel_w, screen_h - toolbar_h},
-		.inner_color    = {0.2f, 0.2f, 0.2f, 1.0f},
-		.padding        = 10.0f,
-		.spacing        = 15.0f
-	});
-
-	imguiText(header_text, "Inspector");
-	
-	// Nested Panel for a "Component" block (Auto-height shrink-wrapping!)
-	imguiBeginPanel((PanelSpec){
-		.primitive_type = UI_PRIMITIVE_RECTANGLE,
-		.layout_type    = UI_LAYOUT_VERTICAL,
-		.fixed_size     = {right_panel_w - 20.0f, 0.0f}, // 0.0f height = Auto shrink-wrap
-		.inner_color    = {0.25f, 0.25f, 0.25f, 1.0f},
-		.padding        = 8.0f,
-		.spacing        = 6.0f
-	});
-	
-	imguiText((TextSpec){.font=font, .font_size=14, .text_color={0.9f, 0.9f, 0.9f, 1.0f}}, "Transform");
-	imguiButton(STRING_LIT("Reset Position"), btn_spec);
-	// (Future float sliders go here!)
-	
-	imguiEndPanel(); // Pop Component Block
-	imguiEndPanel(); // Pop Right Panel
 }

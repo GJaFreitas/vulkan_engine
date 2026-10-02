@@ -156,12 +156,35 @@ typedef enum ButtonState {
 	BUTTON_RIGHT_CLICK,
 }	ButtonState;
 
+typedef void (*FP_ButtonFunction)(void);
+
+typedef struct MenuButton {
+	ButtonSpec		spec;
+	StringView		btn_name;
+}	MenuButton;
+
+typedef struct MenuSpec
+{
+	Font	*font;
+	u8	font_size;
+	u8	item_font_size;
+	f32	padding;
+	f32	corner_radius;
+	vec4	color_idle;
+	vec4	color_hover;
+	vec4	color_active;
+	vec4	text_color;
+	f32	spacing;	// Space between children inside this panel
+	bool	*open;
+}	MenuSpec;
+
 void	initUi(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm);
 
 
 void		imguiBeginPanel(PanelSpec spec);
 ButtonState	imguiButton(StringView text_view, ButtonSpec spec);
 void		imguiText(TextSpec spec, const char *fmt, ...);
+i32		imguiMenu(StringView menu_name, MenuButton *btn_list, u32 btn_count, MenuSpec spec);
 void		imguiEndPanel(void);
 void		imguiResetFrame(void);
 

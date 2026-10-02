@@ -7,6 +7,7 @@
 
 typedef struct Entity
 {
+	u64		id;
 	PipelineState	pipeline_state;
 	Model		*model;
 	bool		active;
