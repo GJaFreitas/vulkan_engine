@@ -6,26 +6,13 @@ void	_test_func(void) {
 	print("Hi from button\n");
 }
 
-typedef struct
-{
-	f32 toolbar_h;
-	f32 left_panel_w;
-	f32 right_panel_w;
-}	EditorContext;
-
-static EditorContext	g_editor_ctx = {
-	.toolbar_h = 40.0f,
-	.left_panel_w = 250.0f,
-	.right_panel_w = 300.0f,
-};
-
-void	drawEditorUI(GraphicsContext *ctx, Font *font)
+void	drawEditorUI(EditorContext ectx, UiContext uictx, ComponentPool *pool, GraphicsContext *ctx, Font *font)
 {
 	const f32 screen_w = (f32)ctx->swapchain_width;
 	const f32 screen_h = (f32)ctx->swapchain_height;
-	const f32 toolbar_h = g_editor_ctx.toolbar_h;
-	const f32 left_panel_w = g_editor_ctx.left_panel_w;
-	const f32 right_panel_w = g_editor_ctx.right_panel_w;
+	const f32 toolbar_h = ectx.toolbar_h;
+	const f32 left_panel_w = ectx.left_panel_w;
+	const f32 right_panel_w = ectx.right_panel_w;
 
 	// 2. Calculate and apply the 3D Viewport boundaries for the Grid/PBR passes
 	ctx->viewport_offset[X] = (int)left_panel_w;
@@ -51,7 +38,7 @@ void	drawEditorUI(GraphicsContext *ctx, Font *font)
 	};
 
 	// --- TOP TOOLBAR ---
-	imguiBeginPanel((PanelSpec){
+	imguiBeginPanel(uictx, pool, (PanelSpec){
 		.primitive_type = UI_PRIMITIVE_RECTANGLE,
 		.layout_type    = UI_LAYOUT_HORIZONTAL,
 		.offset         = {0.0f, 0.0f}, // Dock to Top-Left
@@ -62,16 +49,16 @@ void	drawEditorUI(GraphicsContext *ctx, Font *font)
 	});
 	
 	// We can wire this button directly to your game state!
-	if (imguiButton(STRING_LIT("Play (Game Mode)"), default_btn_spec) == BUTTON_LEFT_CLICK) {
+	if (imguiButton(uictx, pool, STRING_LIT("Play (Game Mode)"), default_btn_spec) == BUTTON_LEFT_CLICK) {
 		print("Button clicked\n");
 		gameStateSet(&g_game_state, NoClip, 0);
 		g_engine_mode = ENGINE_MODE_GAME;
 	}
 	
-	imguiEndPanel(); // Pop Toolbar
+	imguiEndPanel(uictx, pool); // Pop Toolbar
 
 	// --- LEFT PANEL ---
-	imguiBeginPanel((PanelSpec){
+	imguiBeginPanel(uictx, pool, (PanelSpec){
 		.primitive_type = UI_PRIMITIVE_RECTANGLE,
 		.layout_type    = UI_LAYOUT_VERTICAL,
 		.offset         = {0.0f, toolbar_h}, // Start right below the toolbar
@@ -81,7 +68,7 @@ void	drawEditorUI(GraphicsContext *ctx, Font *font)
 		.spacing        = 4.0f
 	});
 	
-	imguiText(header_text, "LEFT PANEL!!");
+	imguiText(uictx, pool, header_text, "LEFT PANEL!!");
 
 	static bool	menu_open = false;
 
@@ -97,6 +84,7 @@ void	drawEditorUI(GraphicsContext *ctx, Font *font)
 		.text_color    = {1.0f, 1.0f, 1.0f, 1.0f},
 		.spacing = 2.0f,
 		.open = &menu_open,
+		.max_size = {5, 5},
 	};
 
 	MenuButton	menu_buttons[] = {
@@ -104,7 +92,7 @@ void	drawEditorUI(GraphicsContext *ctx, Font *font)
 		{default_btn_spec, STRING_LIT("Button 2")},
 	};
 
-	i32 pressed = imguiMenu(STRING_LIT("Menu name!!!11!"), menu_buttons, sizeofarray(menu_buttons), menu_spec);
+	i32 pressed = imguiMenu(uictx, pool, STRING_LIT("Menu name!!!11!"), menu_buttons, sizeofarray(menu_buttons), menu_spec);
 	switch (pressed) {
 		case 0: _test_func(); break;
 		case 1: _test_func(); break;
@@ -112,10 +100,10 @@ void	drawEditorUI(GraphicsContext *ctx, Font *font)
 		default: break;
 	}
 
-	imguiEndPanel(); // Pop Left Panel
+	imguiEndPanel(uictx, pool); // Pop Left Panel
 
 	// --- RIGHT PANEL ---
-	imguiBeginPanel((PanelSpec){
+	imguiBeginPanel(uictx, pool, (PanelSpec){
 		.primitive_type = UI_PRIMITIVE_RECTANGLE,
 		.layout_type    = UI_LAYOUT_VERTICAL,
 		.offset         = {screen_w - right_panel_w, toolbar_h}, // Dock to Right edge
@@ -125,8 +113,8 @@ void	drawEditorUI(GraphicsContext *ctx, Font *font)
 		.spacing        = 15.0f
 	});
 
-	imguiText(header_text, "RIGHT PANEL !11!");
+	imguiText(uictx, pool, header_text, "RIGHT PANEL !11!");
 	
-	imguiEndPanel(); // Pop Component Block
-	imguiEndPanel(); // Pop Right Panel
+	imguiEndPanel(uictx, pool); // Pop Component Block
+	imguiEndPanel(uictx, pool); // Pop Right Panel
 }

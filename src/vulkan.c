@@ -1576,7 +1576,7 @@ void	PBRPass(GraphicsContext *ctx, ModelCache *cache, EntityRenderInfo entity_in
 	}
 }
 
-void	Render(GraphicsContext *ctx, ModelCache *cache, Camera *camera, EntityRenderInfo entity_info, UiRenderInfo text_info)
+void	render(GraphicsContext *ctx, ModelCache *cache, Camera *camera, EntityRenderInfo entity_info, UiRenderInfo text_info)
 {
 	if (ctx->swapchain_require_recreate)
 	{

@@ -102,13 +102,6 @@ typedef struct UiComponent
 
 } UiComponent;
 
-// For the RMGUI
-typedef struct UiState
-{
-	u16	rmgui_root;
-	u16	imgui_root;
-}	UiState;
-
 typedef struct PanelSpec
 {
 	// --- LAYOUT DEFINITION ---
@@ -176,25 +169,80 @@ typedef struct MenuSpec
 	vec4	text_color;
 	f32	spacing;	// Space between children inside this panel
 	bool	*open;
+	vec2	max_size;
 }	MenuSpec;
+
+
+
+
+typedef struct ComponentPool
+{
+	u16	hint;
+	u16	free_count;
+	u16	imgui_count;
+
+	bool	*used;
+	u8	*mem;
+}	ComponentPool;
+
+#define IMGUI_STACK_MAX 64
+
+typedef struct UiLayoutState {
+	u16 component_idx;	// The panel we are currently inside
+	f32 cursor_x;		// Current X pen position
+	f32 cursor_y;		// Current Y pen position
+	f32 start_x;		// Where the pen started (so we can calculate total width/height later)
+	f32 start_y;
+	f32 spacing;		// Space between children inside this panel
+	UiLayoutType layout_type;
+} UiLayoutState;
+
+typedef struct UiContext {
+	u16 imgui_root;
+	u16 rmgui_root;
+
+	// Cursor Stack
+	UiLayoutState layout_stack[IMGUI_STACK_MAX];
+	u32           layout_stack_count;
+
+	// Interaction State
+	u32 hot_item_hash;
+	u32 active_item_hash;
+}	UiContext;
+
+typedef struct
+{
+	f32 toolbar_h;
+	f32 left_panel_w;
+	f32 right_panel_w;
+}	EditorContext;
+
+// For the RMGUI
+typedef struct UiState
+{
+	u16		rmgui_root;
+	u16		imgui_root;
+	UiContext	ctx;
+	EditorContext	editor_ctx;
+	ComponentPool	pool;
+}	UiState;
+
 
 void	initUi(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm);
 
+void		imguiBeginPanel(UiContext uictx, ComponentPool *pool, PanelSpec spec);
+ButtonState	imguiButton(UiContext uictx, ComponentPool *pool, StringView text_view, ButtonSpec spec);
+void		imguiText(UiContext uictx, ComponentPool *pool, TextSpec spec, const char *fmt, ...);
+i32		imguiMenu(UiContext uictx, ComponentPool *pool, StringView menu_name, MenuButton *btn_list, u32 btn_count, MenuSpec spec);
+void		imguiEndPanel(UiContext uictx, ComponentPool *pool);
+void		imguiResetFrame(UiContext uictx, ComponentPool *pool);
 
-void		imguiBeginPanel(PanelSpec spec);
-ButtonState	imguiButton(StringView text_view, ButtonSpec spec);
-void		imguiText(TextSpec spec, const char *fmt, ...);
-i32		imguiMenu(StringView menu_name, MenuButton *btn_list, u32 btn_count, MenuSpec spec);
-void		imguiEndPanel(void);
-void		imguiResetFrame(void);
+UiRenderInfo	buildUiRenderInfo(ComponentPool *pool, u16 rm_root_node);
 
-u16	setShape(enum ComponentShapeType shape);
-u16	setShapeFill(enum ComponentShapeFillType fill);
+void	openConsole(UiContext uictx, ComponentPool *pool, u32 screen_w, u32 screen_h, Font *font, u8 console_font_size);
+void	showFps(UiContext uictx, ComponentPool *pool, Font *font, double fps);
+void	drawEditorUI(EditorContext ectx, UiContext uictx, ComponentPool *pool, GraphicsContext *ctx, Font *font);
 
-UiRenderInfo	buildUiRenderInfo(u16 rm_root_node);
-
-void	openConsole(u32 screen_w, u32 screen_h, Font *font, u8 console_font_size);
-void	showFps(Font *font, double fps);
-void	drawEditorUI(GraphicsContext *ctx, Font *font);
+UiRenderInfo	runUi(GraphicsContext *graphics_ctx, UiState *ui, Font *font, double fps);
 
 String	consoleBackend(void);

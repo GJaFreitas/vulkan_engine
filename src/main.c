@@ -4,6 +4,7 @@
 #include "vars.h"
 #include "fonts.h"
 #include "console.h"
+#include <dlfcn.h>
 
 Allocator	g_frame_arena = {0};
 Allocator	g_perm_arena = {0};
@@ -38,15 +39,12 @@ static inline void beginFrame(World *world) {
 static inline void	endFrame(World world) {
 	(void)world;
 	modelCacheTick(&world.model_cache, (u16)world.dt_ms);
-	imguiResetFrame();
+	imguiResetFrame(world.ui->ctx, &world.ui->pool);
 	inputEndFrame();
 }
 
 int	loop(World world)
 {
-	const u32	screen_w = world.graphics_ctx->window_width;
-	const u32	screen_h = world.graphics_ctx->window_height;
-
 	Font	*font = &world.fonts.fonts[0];
 
 	u64	frames = 0;
@@ -66,26 +64,10 @@ int	loop(World world)
 		}
 		beginFrame(&world);
 
-		if (gameStateQuery(g_game_state, ShowConsole)) {
-			openConsole(screen_w, screen_h, font, 12);
-		}
-		if (gameStateQuery(g_game_state, ShowFps)) {
-			showFps(font, fps);
-		}
-		if (g_engine_mode == ENGINE_MODE_EDITOR) {
-			drawEditorUI(world.graphics_ctx, font);
-		} else {
-			// Fullscreen 3D Viewport for Game Mode
-			world.graphics_ctx->viewport_offset[X] = 0;
-			world.graphics_ctx->viewport_offset[Y] = 0;
-			world.graphics_ctx->viewport_extent[X] = world.graphics_ctx->swapchain_width;
-			world.graphics_ctx->viewport_extent[Y] = world.graphics_ctx->swapchain_height;
-		}
-
 		// --- RENDERING ---
+		ui_info = runUi(world.graphics_ctx, world.ui, font, fps);
 		if (modelCacheGetCount(&world.model_cache))
 			entity_info = buildEntityRenderInfo(&world.entity_registry, &g_frame_arena);
-		ui_info = buildUiRenderInfo(world.ui->rmgui_root);
 
 		render(world.graphics_ctx, &world.model_cache, &world.player->camera, entity_info, ui_info);
 
@@ -127,8 +109,11 @@ int	main(void)
 	World		world = {};
 	GraphicsContext	gctx = {};
 	Player		p = {};
-	UiState		ui = {};
-
+	UiState		ui = {.editor_ctx = {
+		.toolbar_h = 40.0f,
+		.left_panel_w = 250.0f,
+		.right_panel_w = 300.0f,
+	}};
 
 	gameStateToggle(&g_game_state, Running);
 	world.player = &p;
