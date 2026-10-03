@@ -1,4 +1,5 @@
 #include "world.h"
+#include "entity.h"
 #include "console.h"
 
 void	spawnCommand(int argc, String *argv)
@@ -8,129 +9,77 @@ void	spawnCommand(int argc, String *argv)
 	consoleAppend("To be implemented");
 }
 
-void	updateEntities(EntityVector *entities, double dt)
-{
-	(void)entities;
-	(void)dt;
-}
-
-static void modelMatFromPosDir(vec3 position, versor rotation, mat4 dest)
-{
-	glm_quat_mat4(rotation, dest);
-
-	dest[3][0] = position[0];
-	dest[3][1] = position[1];
-	dest[3][2] = position[2];
-
-}
-
 // - `__compar_fn_t __compar (aka int (*)(const void *, const void *))`
-static int	compare_func(const void *p1, const void * p2)
+// Sort by pipeline first, then by model index
+static int	compare_func(const void *a, const void *b)
 {
-	const EntityRenderData	*data1 = p1;
-	const EntityRenderData	*data2 = p2;
+	const EntityRenderData	*data_a = (const EntityRenderData *)a;
+	const EntityRenderData	*data_b = (const EntityRenderData *)b;
 
-	if (data1->pipeline_state < data2->pipeline_state) return -1;
-	if (data1->pipeline_state > data2->pipeline_state) return 1;
+	if (data_a->pipeline_state != data_b->pipeline_state) {
+		return (data_a->pipeline_state < data_b->pipeline_state) ? -1 : 1;
+	}
+	
+	if (data_a->model_idx != data_b->model_idx) {
+		return (data_a->model_idx < data_b->model_idx) ? -1 : 1;
+	}
+
 	return 0;
 }
 
-static i16	linearSearch(Model **models, Model *cur, i16 model_count)
+EntityRenderInfo	buildEntityRenderInfo(EntityRegistry *reg, Allocator *a)
 {
-	for (u16 i = 0; i < model_count; i++) {
-		if (models[i] == cur) return i;
-	}
-	return (-1);
-}
+	EntityRenderInfo	entity_info = {0};
 
-EntityRenderInfo	buildEntityRenderInfo(EntityVector *entity_vector, u32 model_count, Allocator *a)
-{
-	const u64	entity_count = vectorCount(entity_vector);
+	entity_info.data = a->fp_allocation(a, sizeof(EntityRenderData) * reg->count, DEFAULT_ALIGN);
+	u32			render_idx = 0;
 
-	EntityRenderInfo	entity_info = {};
-
-	entity_info.models = a->fp_allocation(a, sizeof(Model *) * model_count, DEFAULT_ALIGN);
-	entity_info.data = a->fp_allocation(a, sizeof(EntityRenderData) * entity_count, DEFAULT_ALIGN);
-
-	i16	model_idx;
-	u16	cur_model_count = 0;
-	u32	render_idx = 0;
-
-	for (u64 i = 0; i < entity_count; i++) {
-		Entity	*ent = vectorGet(entity_vector, i);
-
-		if (!ent->active) continue;
-		// »speed
-		// Return -1 if the model isnt in use already
-		// If the model is already in use then we get its index
-		model_idx = linearSearch(entity_info.models, ent->model, cur_model_count);
-
-		if (model_idx == -1) {
-			// New model so add it to the array and increment the model_idx
-			model_idx = cur_model_count;
-			entity_info.models[model_idx] = ent->model;
-			cur_model_count++;
+	for (u32 i = 0; i < reg->count; i++) {
+		
+		if (!reg->hot_data[i].active) {
+			continue;
 		}
 
-		entity_info.data[render_idx].model_idx = model_idx;
-		entity_info.data[render_idx].pipeline_state = ent->pipeline_state;
-		modelMatFromPosDir(ent->pos, ent->rotation, entity_info.data[render_idx].instance_data.model_mat);
+		EntityHotData		*hot = &reg->hot_data[i];
+		EntityRenderData	*packet = &entity_info.data[render_idx];
+
+		packet->pipeline_state = hot->pipeline_state;
+		packet->model_idx = hot->model_handle; 
+
+		// Pure copy - we let the Slang shader build the matrix
+		packet->pos[0] = hot->pos[0];
+		packet->pos[1] = hot->pos[1];
+		packet->pos[2] = hot->pos[2];
+		
+		packet->rotation[0] = hot->rotation[0];
+		packet->rotation[1] = hot->rotation[1];
+		packet->rotation[2] = hot->rotation[2];
+		packet->rotation[3] = hot->rotation[3];
+		
+		packet->scale = hot->scale;
+
 		render_idx++;
 	}
 
-	entity_info.model_count = cur_model_count;
 	entity_info.entity_count = render_idx;
-
 	qsort(entity_info.data, render_idx, sizeof(EntityRenderData), compare_func);
 
 	return entity_info;
 }
 
-void	unloadEntity(Entity *e, Allocator *a)
+static void	movePlayer(vec3 old_pos, vec3 new_pos)
 {
-	modelCacheRelease(e->model);
-	a->fp_free(a, e);
+	old_pos[X] = new_pos[X];
+	old_pos[Y] = new_pos[Y];
+	old_pos[Z] = new_pos[Z];
 }
 
-Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a)
-{
-	Entity	*e = a->fp_allocation(a, sizeof(Entity), DEFAULT_ALIGN);
-
-	e->model = modelCacheAcquire(ctx, model_path);
-	e->active = true;
-	e->rotation[X] = 0;
-	e->rotation[Y] = 0;
-	e->rotation[Z] = 0;
-	e->rotation[W] = 1;
-
-	PipelineState	default_pbr_state = createPipelineState(
-		ctx->pbr_shader_handle,
-		CULL_BACK,
-		BLEND_NONE,
-		COMPARE_LESS,
-		DEPTH_RW,
-		TOPO_TRIANGLES,
-		PIPELINE_TYPE_GRAPHICS,
-		PASS_MAIN
-	);
-
-	// Assign it to your entity
-	e->pipeline_state = default_pbr_state;
-	return e;
-}
-
-static void	movePlayer(Player *p, vec3 new_pos)
-{
-	p->p_entity->pos[X] = new_pos[X];
-	p->p_entity->pos[Y] = new_pos[Y];
-	p->p_entity->pos[Z] = new_pos[Z];
-}
-
-void	updatePlayer(Player *p, double dt, SDL_Window *window)
+void	updatePlayer(Player *p, EntityRegistry *reg, double dt, SDL_Window *window)
 {
 	if (gameStateQuery(g_game_state, ShowConsole)) return;
 	(void)window;
 
+	EntityHotData	*p_ent = getEntityHot(reg, p->p_entity);
 	Camera	*camera = &p->camera;
 	bool	noclip = gameStateQuery(g_game_state, NoClip);
 	bool	editor_mode = g_engine_mode == ENGINE_MODE_EDITOR;
@@ -208,8 +157,8 @@ void	updatePlayer(Player *p, double dt, SDL_Window *window)
 			glm_vec3_add(camera->position, displacement, camera->position);
 		} else {
 			vec3	desired_pos;
-			glm_vec3_add(p->p_entity->pos, displacement, desired_pos);
-			movePlayer(p, desired_pos);
+			glm_vec3_add(p_ent->pos, displacement, desired_pos);
+			movePlayer(p_ent->pos, desired_pos);
 		}
 	}
 
@@ -219,7 +168,7 @@ void	updatePlayer(Player *p, double dt, SDL_Window *window)
 		vec3	offset;
 
 		// Focus on the upper body/head, not the feet
-		glm_vec3_copy(p->p_entity->pos, target_pos);
+		glm_vec3_copy(p_ent->pos, target_pos);
 		target_pos[1] += 1.5f; 
 
 		// Push the camera backward along its own negative front vector using dynamic orbit distance
@@ -228,10 +177,115 @@ void	updatePlayer(Player *p, double dt, SDL_Window *window)
 	}
 }
 
-void	initPlayer(Player *p, World *world)
+EntityHotData	*getEntityHot(EntityRegistry *reg, EntityHandle handle)
+{
+	// 1. Verify the entity hasn't been deleted and replaced
+	if (reg->generations[handle.index] != handle.generation) {
+		return NULL; 
+	}
+
+	// 2. Look up exactly where it currently lives in the dense array
+	u32		dense_idx = reg->sparse_to_dense[handle.index];
+
+	return &reg->hot_data[dense_idx];
+}
+
+EntityColdData	*getEntityCold(EntityRegistry *reg, EntityHandle handle)
+{
+	if (reg->generations[handle.index] != handle.generation) {
+		return NULL;
+	}
+
+	u32		dense_idx = reg->sparse_to_dense[handle.index];
+
+	return &reg->cold_data[dense_idx];
+}
+
+EntityHandle	createEntity(EntityRegistry *reg, ModelCache *cache, GraphicsContext *ctx, String model_path)
+{
+	assert(reg->count < reg->capacity);
+	assert(reg->free_count > 0);
+
+	// 1. Grab a permanent sparse index (the entity's ID)
+	reg->free_count--;
+	u32		sparse_idx = reg->free_indices[reg->free_count];
+
+	// 2. The data will live at the very end of the packed arrays
+	u32		dense_idx = reg->count;
+	reg->count++;
+
+	// 3. Link them together
+	reg->sparse_to_dense[sparse_idx] = dense_idx;
+	reg->dense_to_sparse[dense_idx] = sparse_idx;
+
+	// 4. Invalidate old handles that used this sparse index
+	reg->generations[sparse_idx]++;
+
+	// 5. Initialize Hot Data
+	EntityHotData	*hot = &reg->hot_data[dense_idx];
+	
+	// Default transform
+	hot->pos[0] = 0.0f; hot->pos[1] = 0.0f; hot->pos[2] = 0.0f;
+	hot->rotation[0] = 0.0f; hot->rotation[1] = 0.0f; hot->rotation[2] = 0.0f; hot->rotation[3] = 1.0f;
+	hot->scale = 1.0f;
+
+	// Load the model from the cache!
+	hot->model_handle = modelCacheAcquire(ctx, model_path);
+
+	// Set default pipeline
+	hot->pipeline_state = createPipelineState(
+		ctx->pbr_shader_handle,
+		CULL_BACK,
+		BLEND_NONE,
+		COMPARE_LESS,
+		DEPTH_RW,
+		TOPO_TRIANGLES,
+		PIPELINE_TYPE_GRAPHICS,
+		PASS_MAIN
+	);
+
+	// 6. Initialize Cold Data
+	EntityColdData	*cold = &reg->cold_data[dense_idx];
+	hot->active = true;
+	memcpy(cold->str, "New entity", 11);
+
+	// 7. Return the safe handle
+	EntityHandle	handle;
+	handle.index = sparse_idx;
+	handle.generation = reg->generations[sparse_idx];
+
+	return handle;
+}
+
+void	initEntityRegistry(EntityRegistry *reg, Allocator *a, u32 max_entities)
+{
+	reg->count		= 0;
+	reg->capacity		= max_entities;
+
+	// Dense arrays (packed tightly for the game loop / extraction)
+	reg->hot_data		= a->fp_allocation(a, sizeof(EntityHotData) * max_entities, DEFAULT_ALIGN);
+	reg->cold_data		= a->fp_allocation(a, sizeof(EntityColdData) * max_entities, DEFAULT_ALIGN);
+	reg->dense_to_sparse	= a->fp_allocation(a, sizeof(u32) * max_entities, DEFAULT_ALIGN);
+
+	// Sparse arrays (indexed by handle.index)
+	reg->sparse_to_dense	= a->fp_allocation(a, sizeof(u32) * max_entities, DEFAULT_ALIGN);
+	reg->generations	= a->fp_allocation(a, sizeof(u32) * max_entities, DEFAULT_ALIGN);
+
+	// Freelist for recycling sparse indices
+	reg->free_indices	= a->fp_allocation(a, sizeof(u32) * max_entities, DEFAULT_ALIGN);
+	reg->free_count		= max_entities;
+
+	// Populate freelist backwards so index 0 is popped first
+	for (u32 i = 0; i < max_entities; i++) {
+		reg->free_indices[i] = (max_entities - 1) - i;
+		reg->generations[i] = 0;
+	}
+}
+
+void	initPlayer(Player *p, World *world, String player_model)
 {
 	p->movSpeed = 0.1f;
-	p->p_entity = vectorGet(&world->entities, 0);
+	p->p_entity = createEntity(&world->entity_registry, g_model_cache, world->graphics_ctx, player_model);
 
 	Camera	*camera = &p->camera;
 	glm_vec3_copy((vec3){0.0f,1.0f,4.0f},  camera->position);

@@ -201,22 +201,6 @@ typedef struct GLTFModel
 	Animation	*animations;	u32	animation_count;
 }	Model;
 
-typedef struct ModelCacheEntry
-{
-	Model	*model;
-	String		path;
-
-	// Unloading logic
-	u32		ref_count;
-	bool		pending_unload;
-	u32		frames_since_unload;
-}	ModelCacheEntry;
-
-typedef struct ModelCache
-{
-	Allocator	pool;
-}	ModelCache;
-
 typedef struct FrameResources
 {
 	VkCommandPool	cmd_pool;
@@ -455,21 +439,21 @@ typedef struct GraphicsContext
 #define	MAX_INSTANCES	4096
 typedef struct EntityRenderData
 {
-	EntityInstanceData	instance_data;
+	i16	model_idx;
 	// TODO: See if this is is needed in the entity struct itself or if i can build it
 	// in buildEntityRenderInfo
-	u64			pipeline_state;
-	i16			model_idx;
+	u64	pipeline_state;
+	vec3	pos;
+	versor	rotation;
+	f32	scale;
 }	EntityRenderData;
 
 typedef struct EntityRenderInfo
 {
-	Model			**models;	i16	model_count;
-	EntityRenderData	*data;		u32	entity_count;
-
+	EntityRenderData	*data;
+	u32			entity_count;
 }	EntityRenderInfo;
 
-// TODO: Change all colors to u32
 #define MAX_GLYPH_INSTANCES 1024
 
 typedef struct UiRenderInfo
@@ -526,6 +510,47 @@ static inline u32	allocateBindlessTexture(GraphicsContext *ctx)
 	return ctx->next_free_texture_index++;
 }
 
+// --- MODEL CACHE --- //
+#define UNLOAD_TIME	3 
+#define MAX_MODELS	(1L << 12)
+#define HASH_TABLE_SIZE	(MAX_MODELS << 1)
+#define HASH_EMPTY	0x0000000000000000ull
+#define HASH_TOMBSTONE	0xFFFFFFFFFFFFFFFFull
+#define UNLOAD_DELAY_MS	10000	// 10 seconds
+
+typedef u16	ModelHandle;
+
+typedef struct ModelHashEntry
+{
+	ModelHandle	handle;
+	u64		hash;
+}	ModelHashEntry;
+
+typedef struct ModelCache
+{
+	// Path -> Handle
+	ModelHashEntry		hash_table[HASH_TABLE_SIZE];
+
+	// Data (Indexed by handle)
+	Model		*models[MAX_MODELS];
+	String32	paths[MAX_MODELS];
+	u32		ref_counts[MAX_MODELS];
+	u16		time_to_unload[MAX_MODELS]; // in ms
+
+	// Recycling
+	ModelHandle	free_handles[MAX_MODELS];
+	u32		free_count;
+}	ModelCache;
+
+extern ModelCache		*g_model_cache;
+
+void		initModelCache(void);
+void		modelCacheRelease(ModelHandle handle);
+void		modelCacheTick(u16 delta_ms);
+ModelHandle	modelCacheAcquire(GraphicsContext *ctx, String model_path);
+
+// ------------------- //
+
 void	immediate_submit(GraphicsContext *ctx, void (*fn)(VkCommandBuffer cmd, void *data), void *data);
 void	startGraphics(GraphicsContext *ctx);
 void	endGraphics(GraphicsContext *ctx);
@@ -538,12 +563,6 @@ void	createVkBuffer(GraphicsContext *ctx, const BufferInfo *info, BufferObject *
 void	modelLoad(String filename, GraphicsContext *ctx, Model *model);
 void	gltf_destroy(Model model);
 void	createDefaultTextures(GraphicsContext *ctx);
-
-void	initModelCache(void);
-Model	*modelCacheAcquire(GraphicsContext *ctx, String path);
-void	modelCacheRelease(Model *model);
-void	modelCacheSweep();
-u32	getModelCountFromCache();
 
 void		initPipelineRegistry(PipelineRegistry **reg_out, GraphicsContext *ctx);
 VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState state);

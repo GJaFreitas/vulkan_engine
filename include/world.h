@@ -4,28 +4,18 @@
 #include "graphics_layer.h"
 #include "fonts.h"
 #include "ui.h"
-
-typedef struct Entity
-{
-	u64		id;
-	PipelineState	pipeline_state;
-	Model		*model;
-	bool		active;
-	vec3		pos;
-	versor		rotation;
-	
-	float		spin;
-}	Entity;
+#include "entity.h"
 
 #define MAX_ORBIT_DIST	15.0f
 #define MIN_ORBIT_DIST	1.5f
 
+
 typedef struct Player
 {
-	Entity	*p_entity;
-	Camera	camera;
-	float	movSpeed;
-	float	orbit_dist;
+	EntityHandle	p_entity;
+	Camera		camera;
+	float		movSpeed;
+	float		orbit_dist;
 }	Player;
 
 typedef u32	GameState;
@@ -52,19 +42,15 @@ static inline bool	gameStateQuery(GameState state, enum GameStateField field) {
 	return (state & (1U << field));
 }
 
-typedef Vector(Entity)	EntityVector;
-
 typedef struct World
 {
 	GraphicsContext	*graphics_ctx;
 
 	// TODO: Implement sim regions?
 	Allocator	entity_allocator;
-	EntityVector	entities;
 
 	Player		*player;
-
-
+	EntityRegistry	entity_registry;
 
 	const bool		*key_states;
 
@@ -151,11 +137,8 @@ static inline bool modHeld(SDL_Keymod m)			{ return (g_input_state.mod & m) != 0
 // --- Player/Entity Functions --- //
 // ------------------------------- //
 
-void	initPlayer(Player *p, World *world);
-void	updatePlayer(Player *p, double dt, SDL_Window *window);
+void	initPlayer(Player *p, World *world, String player_model);
+void	updatePlayer(Player *p, EntityRegistry *reg, double dt, SDL_Window *window);
 
 void	spawnCommand(int argc, String *argv);
-void	unloadEntity(Entity *e, Allocator *a);
-Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a);
-void	updateEntities(EntityVector *entities, double dt);
-EntityRenderInfo	buildEntityRenderInfo(EntityVector *entity_vector, u32 model_count, Allocator *a);
+EntityRenderInfo	buildEntityRenderInfo(EntityRegistry *reg, Allocator *a);

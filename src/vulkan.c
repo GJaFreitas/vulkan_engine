@@ -1242,7 +1242,7 @@ static void updateUniformBuffer(GraphicsContext *ctx, FrameResources *resource, 
 
 // »speed
 // Cache instance data instead of recalculating in pbr pass
-void SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources *resource, u8 frame_idx)
+void SHADOWPass(GraphicsContext *ctx, ModelCache *cache, EntityRenderInfo entity_info, FrameResources *resource, u8 frame_idx)
 {
 	// --- 1. PRE-PASS PIPELINE BARRIER ---
 	ImageTransitionInfo pre_transition = {
@@ -1280,7 +1280,7 @@ void SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResourc
 	// --- 3. CASCADE DRAW LOOP ---
 	for (u32 c = 0; c < SHADOW_MAP_CASCADE_COUNT; c++) {
 
-		VkRenderingAttachmentInfo depth_attachment = {
+		VkRenderingAttachmentInfo	depth_attachment = {
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 			.imageView = ctx->shadow_maps[frame_idx].cascade_views[c],
 			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
@@ -1289,7 +1289,7 @@ void SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResourc
 			.clearValue.depthStencil = {1.0f, 0}
 		};
 
-		VkRenderingInfo render_info = {
+		VkRenderingInfo			render_info = {
 			.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
 			.renderArea = scissor,
 			.layerCount = 1,
@@ -1299,42 +1299,69 @@ void SHADOWPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResourc
 
 		vkCmdBeginRendering(resource->cmd_buf, &render_info);
 
-		u32 instance_cursor = 0;
-		u32 e_idx = 0;
+		u32	instance_cursor = 0;
+		u32	e_idx = 0;
 
 		while (e_idx < total_entity_count) {
-			u16 model_idx = entity_info.data[e_idx].model_idx;
-			const Model *model = entity_info.models[model_idx];
+			u16		model_idx = entity_info.data[e_idx].model_idx;
+			
+			// O(1) fetch from the global cache
+			const Model	*model = cache->models[model_idx];
 
-			u32 run_start = e_idx;
-			u32 run_end = e_idx + 1;
-			while (run_end < total_entity_count && model_idx == entity_info.data[run_end].model_idx) run_end++;
-			u32 run_count = run_end - run_start;
+			u32		run_start = e_idx;
+			u32		run_end = e_idx + 1;
+			while (run_end < total_entity_count && model_idx == entity_info.data[run_end].model_idx) {
+				run_end++;
+			}
+			u32		run_count = run_end - run_start;
 
 			for (u32 n = 0; n < model->node_count; n++) {
-				Node *node = &model->linear_nodes[n];
+				Node	*node = &model->linear_nodes[n];
 				for (u32 m = 0; m < node->mesh_count; m++) {
-					const Mesh *mesh = &node->meshes[m];
+					const Mesh	*mesh = &node->meshes[m];
 
 					if (mesh->vertex_count == 0) continue;
 
-					u32 first_instance = instance_cursor;
+					u32	first_instance = instance_cursor;
 
-					for (u32 r = 0; r < run_count; r++) {
-						EntityRenderData *e_data = &entity_info.data[run_start + r];
-						glm_mat4_mul(e_data->instance_data.model_mat, node->world_transform, instance_data_buf[instance_cursor].model_mat);
-						instance_cursor++;
+					// OPTIMIZATION: Only build the mapped GPU buffer on the first cascade.
+					// Subsequent cascades just reuse the data we already packed.
+					if (c == 0) {
+						for (u32 r = 0; r < run_count; r++) {
+							EntityRenderData	*e_data = &entity_info.data[run_start + r];
+							EntityInstanceData	*gpu_data = &instance_data_buf[instance_cursor + r];
+
+							// Pure data copy, no CPU math
+							gpu_data->pos[0] = e_data->pos[0];
+							gpu_data->pos[1] = e_data->pos[1];
+							gpu_data->pos[2] = e_data->pos[2];
+
+							gpu_data->rot[0] = e_data->rotation[0];
+							gpu_data->rot[1] = e_data->rotation[1];
+							gpu_data->rot[2] = e_data->rotation[2];
+							gpu_data->rot[3] = e_data->rotation[3];
+
+							gpu_data->scale = e_data->scale;
+
+							// Static glTF node transform
+							glm_mat4_copy(node->world_transform, gpu_data->node_transform);
+						}
 					}
+					
+					// Advance the cursor regardless of the cascade index
+					instance_cursor += run_count;
 
-					// Populate BDA Push Constants
-					ShadowRootConstants push_constants = {
+					ShadowRootConstants	push_constants = {
 						.ubo_addr = ubo_addr,
 						.instance_addr = instance_addr,
 						.vertex_addr = mesh->gpu_vertex_data.device_address,
 						.cascade_index = c
 					};
 
-					vkCmdPushConstants(resource->cmd_buf, ctx->pipeline_registry->g_layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(ShadowRootConstants), &push_constants);
+					vkCmdPushConstants(resource->cmd_buf, ctx->pipeline_registry->g_layout, 
+						VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 
+						0, sizeof(ShadowRootConstants), &push_constants);
+						
 					vkCmdBindIndexBuffer(resource->cmd_buf, mesh->gpu_index_data.handle, 0, mesh->index_type);
 					vkCmdDrawIndexed(resource->cmd_buf, mesh->index_count, run_count, 0, 0, first_instance);
 				}
@@ -1400,61 +1427,65 @@ void	GRIDPass(GraphicsContext *ctx, FrameResources *resource)
 	vkCmdDraw(resource->cmd_buf, 3, 1, 0, 0);
 }
 
-void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources *resource, u8 frame_idx)
+void	PBRPass(GraphicsContext *ctx, ModelCache *cache, EntityRenderInfo entity_info, FrameResources *resource, u8 frame_idx)
 {
-	const u32 total_entity_count = entity_info.entity_count;
-	EntityInstanceData *instance_data_buf = (EntityInstanceData *)resource->instance_buffer.mapped;
-	u32 instance_cursor = 0;
+	const u32		total_entity_count = entity_info.entity_count;
+	EntityInstanceData	*instance_data_buf = (EntityInstanceData *)resource->instance_buffer.mapped;
+	u32			instance_cursor = 0;
 
 	// Fetch the 64-bit pointers for this frame's global buffers
-	const u64 ubo_addr = resource->uniform_buffer.device_address;
-	const u64 instance_addr = resource->instance_buffer.device_address;
+	const u64		ubo_addr = resource->uniform_buffer.device_address;
+	const u64		instance_addr = resource->instance_buffer.device_address;
 
 	vkCmdBindDescriptorSets(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, ctx->pipeline_registry->g_layout, 1, 1, &ctx->shadow_maps[frame_idx].descriptor_set, 0, NULL);
 
 	// Track the currently bound pipeline state to avoid redundant Vulkan calls
-	PipelineState current_state = 0xFFFFFFFFFFFFFFFF;
+	PipelineState		current_state = 0xFFFFFFFFFFFFFFFF;
 
-	u32 e_idx = 0;
+	u32			e_idx = 0;
 	while (e_idx < total_entity_count) {
-		u16 model_idx = entity_info.data[e_idx].model_idx;
-		const Model *model = entity_info.models[model_idx];
+		u16		model_idx = entity_info.data[e_idx].model_idx;
+		
+		// O(1) lookup directly from the global cache
+		const Model	*model = cache->models[model_idx];
 
-		// Find total number of entities using this model
-		u32 run_start = e_idx;
-		u32 run_end = e_idx + 1;
-		while (run_end < total_entity_count && model_idx == entity_info.data[run_end].model_idx) run_end++;
-		u32 run_count = run_end - run_start;
+		// Find total number of entities using this EXACT same model sequentially
+		u32		run_start = e_idx;
+		u32		run_end = e_idx + 1;
+		while (run_end < total_entity_count && model_idx == entity_info.data[run_end].model_idx) {
+			run_end++;
+		}
+		u32		run_count = run_end - run_start;
 
 		for (u32 n = 0; n < model->node_count; n++) {
-			Node *node = &model->linear_nodes[n];
+			Node	*node = &model->linear_nodes[n];
 			for (u32 m = 0; m < node->mesh_count; m++) {
-				const Mesh *mesh = &node->meshes[m];
+				const Mesh	*mesh = &node->meshes[m];
 
 				if (mesh->vertex_count == 0) continue;
 
 				// -------------------------------------------------------------
 				// 1. PIPELINE STATE EVALUATION & BINDING
 				// -------------------------------------------------------------
-				u8 cull_mode = CULL_BACK;
-				u8 blend_mode = BLEND_NONE;
+				u8	cull_mode = CULL_BACK;
+				u8	blend_mode = BLEND_NONE;
 
 				if (mesh->material_index >= 0) {
-					Material *mat = &model->materials[mesh->material_index];
-					// Example: if your glTF/Material struct supports double-sided rendering
+					Material	*mat = &model->materials[mesh->material_index];
+					// Example: if glTF/Material struct supports double-sided rendering
 					// if (mat->double_sided) cull_mode = CULL_NONE;
 					
-					// Example: if your material has a blend mode flag
+					// Example: if material has a blend mode flag
 					// if (mat->alpha_mode == ALPHA_MODE_BLEND) blend_mode = BLEND_ALPHA;
 				}
 
 				// Build the 64-bit state key for this specific mesh
-				PipelineState desired_state = createPipelineState(
+				PipelineState	desired_state = createPipelineState(
 					ctx->pbr_shader_handle,
 					cull_mode,
 					blend_mode,
-					DEPTH_RW,
 					COMPARE_LESS,
+					DEPTH_RW,
 					TOPO_TRIANGLES,
 					PIPELINE_TYPE_GRAPHICS,
 					PASS_MAIN
@@ -1463,21 +1494,38 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 				// Only invoke Vulkan and the Registry if the state actually changed!
 				if (desired_state != current_state) {
 					current_state = desired_state;
-					VkPipeline pipeline = pipelineRegistryGetOrCreate(ctx->pipeline_registry, current_state);
+					VkPipeline	pipeline = pipelineRegistryGetOrCreate(ctx->pipeline_registry, current_state);
 					
 					vkCmdBindPipeline(resource->cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 				}
 				// -------------------------------------------------------------
 
-				u32 first_instance = instance_cursor;
+				u32	first_instance = instance_cursor;
 				for (u32 r = 0; r < run_count; r++) {
-					EntityRenderData *e_data = &entity_info.data[run_start + r];
-					glm_mat4_mul(e_data->instance_data.model_mat, node->world_transform, instance_data_buf[instance_cursor].model_mat);
+					EntityRenderData	*e_data = &entity_info.data[run_start + r];
+					EntityInstanceData	*gpu_data = &instance_data_buf[instance_cursor];
+
+					// Pure data copy - Matrix math is offloaded to Slang shaders
+					gpu_data->pos[0] = e_data->pos[0];
+					gpu_data->pos[1] = e_data->pos[1];
+					gpu_data->pos[2] = e_data->pos[2];
+
+					gpu_data->rot[0] = e_data->rotation[0];
+					gpu_data->rot[1] = e_data->rotation[1];
+					gpu_data->rot[2] = e_data->rotation[2];
+					gpu_data->rot[3] = e_data->rotation[3];
+
+					gpu_data->scale = e_data->scale;
+
+					// TODO: When skeletal animations are added, this static glTF node transform 
+					// will need to be replaced/multiplied by the animated bone matrices.
+					glm_mat4_copy(node->world_transform, gpu_data->node_transform);
+
 					instance_cursor++;
 				}
 
 				// 2. Initialize the Root Constants with BDA pointers and default material values
-				PBRRootConstants push_constants = {
+				PBRRootConstants	push_constants = {
 					.ubo_addr = ubo_addr,
 					.instance_addr = instance_addr,
 					.vertex_addr = mesh->gpu_vertex_data.device_address,
@@ -1496,7 +1544,7 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 
 				// 3. Populate Bindless Texture Indices and Factors
 				if (mesh->material_index >= 0) {
-					Material *mat = &model->materials[mesh->material_index];
+					Material	*mat = &model->materials[mesh->material_index];
 
 					push_constants.base_color_tex = mat->base_color_tex_idx;
 					push_constants.metallic_roughness_tex = mat->metallic_roughness_tex_idx;
@@ -1512,8 +1560,8 @@ void	PBRPass(GraphicsContext *ctx, EntityRenderInfo entity_info, FrameResources 
 
 				// 4. Push to BOTH Vertex (for pointers) and Fragment (for textures/factors) stages
 				vkCmdPushConstants(resource->cmd_buf, ctx->pipeline_registry->g_layout, 
-						VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 
-						0, sizeof(PBRRootConstants), &push_constants);
+					VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 
+					0, sizeof(PBRRootConstants), &push_constants);
 
 				// 5. Bind Index Buffer and Draw
 				vkCmdBindIndexBuffer(resource->cmd_buf, mesh->gpu_index_data.handle, 0, mesh->index_type);
@@ -1661,7 +1709,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, 
 			 0, 1, &ctx->global_descriptor_set, 
 			 0, NULL);
 
-	SHADOWPass(ctx, entity_info, resource, frame_res_index);
+	SHADOWPass(ctx, g_model_cache, entity_info, resource, frame_res_index);
 	vkCmdBeginRendering(resource->cmd_buf, &render_info);
 	{
 		VkViewport viewport = {
@@ -1691,7 +1739,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, 
 		GRIDPass(ctx, resource);
 
 		// ---- PBR Pass --------------- //
-		PBRPass(ctx, entity_info, resource, frame_res_index);
+		PBRPass(ctx, g_model_cache, entity_info, resource, frame_res_index);
 
 
 		viewport.x = 0;

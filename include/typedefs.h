@@ -67,4 +67,8 @@ typedef struct String
 // to view that memory
 typedef String StringView;
 
-
+typedef struct String32
+{
+	u8	data[32];
+	u8	count;
+}	String32;

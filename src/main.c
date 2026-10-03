@@ -28,29 +28,6 @@ static inline void	getMsAndFps(double *ms, double *fps, double *fps_avg, u64 *la
 	}
 }
 
-const String	models[] = {
-	STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"),
-	STRING_LIT("data/models/DiffuseTransmissionTeacup.glb"),
-};
-
-static void	initializeRandomVec(float *v, u32 count, float min, float max) {
-	for (u32 i = 0; i < count; i++) {
-		v[i] = randomFloat(min, max);
-	}
-}
-
-void	createRandomEntity(World world)
-{
-	u32	model = rand() % sizeofarray(models);
-	Entity	*e = loadEntity(world.graphics_ctx, models[model], &world.entity_allocator);
-	vectorPush(&world.entities, e);
-
-	e->spin = glm_rad(randomFloat(0, 90));
-	initializeRandomVec(e->rotation, 4, 0, 1);
-	glm_quat_normalize(e->rotation);
-	initializeRandomVec(e->pos, 3, -1, 1);
-}
-
 static inline void beginFrame(World *world) {
 	inputBeginFrame();
 	do_callbacks();
@@ -60,7 +37,7 @@ static inline void beginFrame(World *world) {
 
 static inline void	endFrame(World world) {
 	(void)world;
-	modelCacheSweep();
+	modelCacheTick((u16)world.dt_ms);
 	imguiResetFrame();
 	inputEndFrame();
 }
@@ -106,13 +83,12 @@ int	loop(World world)
 		}
 
 		// --- RENDERING ---
-		if (getModelCountFromCache())
-			entity_info = buildEntityRenderInfo(&world.entities, getModelCountFromCache(), &g_frame_arena);
+		entity_info = buildEntityRenderInfo(&world.entity_registry, &g_frame_arena);
 		render(world.graphics_ctx, &world.player->camera, entity_info, ui_info);
 
 		// --- UPDATES ---
-		updatePlayer(world.player, world.dt_ms, world.graphics_ctx->window);
-		updateEntities(&world.entities, world.dt_ms);
+		updatePlayer(world.player, &world.entity_registry, world.dt_ms, world.graphics_ctx->window);
+		// updateEntities(&world.entities, world.dt_ms);
 
 		// --- End of frame ---
 		endFrame(world);
@@ -151,6 +127,7 @@ int	main(void)
 	Player		p = {};
 	UiState		ui = {};
 
+
 	gameStateToggle(&g_game_state, Running);
 	world.player = &p;
 	world.graphics_ctx = &gctx;
@@ -159,18 +136,15 @@ int	main(void)
 	g_frame_arena = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
 	g_perm_arena = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
 	world.entity_allocator = newHeapAllocator(MB(2), NULL, DEFAULT_ALIGN);
-	vectorInit(&world.entities, &world.entity_allocator, 16);
 	updateGridProperties(&world);
 
 	startGraphics(world.graphics_ctx);
 	initUi(&ui, gctx.window_width, gctx.window_height, &g_perm_arena);
 	consoleInit(&g_perm_arena);
-
-	Entity	*player = loadEntity(world.graphics_ctx, STRING_LIT("data/models/rabbit.glb"), &world.entity_allocator);
-	vectorPush(&world.entities, player);
+	initEntityRegistry(&world.entity_registry, &g_perm_arena, 4096);
 
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);
-	initPlayer(world.player, &world);
+	initPlayer(world.player, &world, STRING_LIT("data/models/rabbit.glb"));
 	initFonts(world.graphics_ctx, &world.fonts, &g_perm_arena, &g_frame_arena);
 
 	loop(world);

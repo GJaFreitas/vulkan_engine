@@ -44,7 +44,11 @@ SHARED_STRUCT(Vertex)
 
 SHARED_STRUCT(EntityInstanceData)
 {
-	float4x4 model_mat;
+	float3	pos;
+	float4	rot;
+	f32	scale;
+
+	float4x4 node_transform;
 };
 
 #define MAX_POINT_LIGHTS 16
