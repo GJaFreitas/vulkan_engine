@@ -48,6 +48,7 @@ typedef struct World
 
 	Player		*player;
 	EntityRegistry	entity_registry;
+	ModelCache	model_cache;
 
 	const bool		*key_states;
 

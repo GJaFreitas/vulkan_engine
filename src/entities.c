@@ -230,7 +230,7 @@ EntityHandle	createEntity(EntityRegistry *reg, ModelCache *cache, GraphicsContex
 	hot->scale = 1.0f;
 
 	// Load the model from the cache!
-	hot->model_handle = modelCacheAcquire(ctx, model_path);
+	hot->model_handle = modelCacheAcquire(cache, ctx, model_path);
 
 	// Set default pipeline
 	hot->pipeline_state = createPipelineState(
@@ -285,7 +285,7 @@ void	initEntityRegistry(EntityRegistry *reg, Allocator *a, u32 max_entities)
 void	initPlayer(Player *p, World *world, String player_model)
 {
 	p->movSpeed = 0.1f;
-	p->p_entity = createEntity(&world->entity_registry, g_model_cache, world->graphics_ctx, player_model);
+	p->p_entity = createEntity(&world->entity_registry, &world->model_cache, world->graphics_ctx, player_model);
 
 	Camera	*camera = &p->camera;
 	glm_vec3_copy((vec3){0.0f,1.0f,4.0f},  camera->position);

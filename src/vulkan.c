@@ -1576,7 +1576,7 @@ void	PBRPass(GraphicsContext *ctx, ModelCache *cache, EntityRenderInfo entity_in
 	}
 }
 
-void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, UiRenderInfo text_info)
+void	Render(GraphicsContext *ctx, ModelCache *cache, Camera *camera, EntityRenderInfo entity_info, UiRenderInfo text_info)
 {
 	if (ctx->swapchain_require_recreate)
 	{
@@ -1712,7 +1712,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, 
 			 0, 1, &ctx->global_descriptor_set, 
 			 0, NULL);
 
-	SHADOWPass(ctx, g_model_cache, entity_info, resource, frame_res_index);
+	SHADOWPass(ctx, cache, entity_info, resource, frame_res_index);
 	vkCmdBeginRendering(resource->cmd_buf, &render_info);
 	{
 		VkViewport viewport = {
@@ -1742,7 +1742,7 @@ void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, 
 		GRIDPass(ctx, resource);
 
 		// ---- PBR Pass --------------- //
-		PBRPass(ctx, g_model_cache, entity_info, resource, frame_res_index);
+		PBRPass(ctx, cache, entity_info, resource, frame_res_index);
 
 
 		viewport.x = 0;

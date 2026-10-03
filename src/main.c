@@ -37,7 +37,7 @@ static inline void beginFrame(World *world) {
 
 static inline void	endFrame(World world) {
 	(void)world;
-	modelCacheTick((u16)world.dt_ms);
+	modelCacheTick(&world.model_cache, (u16)world.dt_ms);
 	imguiResetFrame();
 	inputEndFrame();
 }
@@ -83,11 +83,11 @@ int	loop(World world)
 		}
 
 		// --- RENDERING ---
-		if (modelCacheGetCount())
+		if (modelCacheGetCount(&world.model_cache))
 			entity_info = buildEntityRenderInfo(&world.entity_registry, &g_frame_arena);
 		ui_info = buildUiRenderInfo(world.ui->rmgui_root);
 
-		render(world.graphics_ctx, &world.player->camera, entity_info, ui_info);
+		render(world.graphics_ctx, &world.model_cache, &world.player->camera, entity_info, ui_info);
 
 		// --- UPDATES ---
 		updatePlayer(world.player, &world.entity_registry, world.dt_ms, world.graphics_ctx->window);
@@ -123,7 +123,6 @@ int	main(void)
 	set_log_severity(LOG_WARN);
 	init_vars();
 	start_hotload_callbacks();
-	initModelCache();
 
 	World		world = {};
 	GraphicsContext	gctx = {};
@@ -144,6 +143,7 @@ int	main(void)
 	initUi(&ui, gctx.window_width, gctx.window_height, &g_perm_arena);
 	consoleInit(&g_perm_arena);
 	initEntityRegistry(&world.entity_registry, &g_perm_arena, 4096);
+	initModelCache(&world.model_cache);
 
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);
 	initPlayer(world.player, &world, STRING_LIT("data/models/rabbit.glb"));
