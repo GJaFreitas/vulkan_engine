@@ -899,6 +899,11 @@ static Allocator	model_allocator;
 static ModelCache	cache;
 ModelCache		*g_model_cache = &cache;
 
+u32	modelCacheGetCount(void)
+{
+	return (MAX_MODELS - cache.free_count);
+}
+
 void	initModelCache(void)
 {
 	model_allocator = newHeapAllocator(GB(2), NULL, DEFAULT_ALIGN);

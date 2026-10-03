@@ -83,7 +83,10 @@ int	loop(World world)
 		}
 
 		// --- RENDERING ---
-		entity_info = buildEntityRenderInfo(&world.entity_registry, &g_frame_arena);
+		if (modelCacheGetCount())
+			entity_info = buildEntityRenderInfo(&world.entity_registry, &g_frame_arena);
+		ui_info = buildUiRenderInfo(world.ui->rmgui_root);
+
 		render(world.graphics_ctx, &world.player->camera, entity_info, ui_info);
 
 		// --- UPDATES ---

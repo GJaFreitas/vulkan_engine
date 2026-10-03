@@ -503,7 +503,7 @@ typedef struct Camera
 
 static inline u32	allocateBindlessTexture(GraphicsContext *ctx) 
 {
-	assert(ctx->next_free_texture_index >= BINDLESS_TEXTURE_COUNT);
+	assert(ctx->next_free_texture_index < BINDLESS_TEXTURE_COUNT);
 	return ctx->next_free_texture_index++;
 }
 
@@ -542,6 +542,7 @@ typedef struct ModelCache
 extern ModelCache		*g_model_cache;
 
 void		initModelCache(void);
+u32		modelCacheGetCount(void);
 void		modelCacheRelease(ModelHandle handle);
 void		modelCacheTick(u16 delta_ms);
 ModelHandle	modelCacheAcquire(GraphicsContext *ctx, String model_path);
