@@ -902,8 +902,6 @@ ModelCache		*g_model_cache = &cache;
 void	initModelCache(void)
 {
 	model_allocator = newHeapAllocator(GB(2), NULL, DEFAULT_ALIGN);
-
-	memset(cache.hash_table, 0, sizeof(cache.hash_table));
 	
 	cache.free_count = MAX_MODELS;
 	for (u32 i = 0; i < MAX_MODELS; i++) {

@@ -503,10 +503,7 @@ typedef struct Camera
 
 static inline u32	allocateBindlessTexture(GraphicsContext *ctx) 
 {
-	if (ctx->next_free_texture_index >= BINDLESS_TEXTURE_COUNT) {
-		engine_error(LOG_FILE, "Bindless texture heap exhausted!\n");
-		exit(1);
-	}
+	assert(ctx->next_free_texture_index >= BINDLESS_TEXTURE_COUNT);
 	return ctx->next_free_texture_index++;
 }
 

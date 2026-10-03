@@ -135,7 +135,6 @@ int	main(void)
 	world.key_states = SDL_GetKeyboardState(NULL);
 	g_frame_arena = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
 	g_perm_arena = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
-	world.entity_allocator = newHeapAllocator(MB(2), NULL, DEFAULT_ALIGN);
 	updateGridProperties(&world);
 
 	startGraphics(world.graphics_ctx);

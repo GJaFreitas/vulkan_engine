@@ -46,9 +46,6 @@ typedef struct World
 {
 	GraphicsContext	*graphics_ctx;
 
-	// TODO: Implement sim regions?
-	Allocator	entity_allocator;
-
 	Player		*player;
 	EntityRegistry	entity_registry;
 
