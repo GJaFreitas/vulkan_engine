@@ -230,18 +230,18 @@ typedef struct UiState
 
 void	initUi(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm);
 
-void		imguiBeginPanel(UiContext uictx, ComponentPool *pool, PanelSpec spec);
-ButtonState	imguiButton(UiContext uictx, ComponentPool *pool, StringView text_view, ButtonSpec spec);
-void		imguiText(UiContext uictx, ComponentPool *pool, TextSpec spec, const char *fmt, ...);
-i32		imguiMenu(UiContext uictx, ComponentPool *pool, StringView menu_name, MenuButton *btn_list, u32 btn_count, MenuSpec spec);
-void		imguiEndPanel(UiContext uictx, ComponentPool *pool);
-void		imguiResetFrame(UiContext uictx, ComponentPool *pool);
+void		imguiBeginPanel(UiContext *uictx, ComponentPool *pool, PanelSpec spec);
+ButtonState	imguiButton(UiContext *uictx, ComponentPool *pool, StringView text_view, ButtonSpec spec);
+void		imguiText(UiContext *uictx, ComponentPool *pool, TextSpec spec, const char *fmt, ...);
+i32		imguiMenu(UiContext *uictx, ComponentPool *pool, StringView menu_name, MenuButton *btn_list, u32 btn_count, MenuSpec spec);
+void		imguiEndPanel(UiContext *uictx, ComponentPool *pool);
+void		imguiResetFrame(UiContext *uictx, ComponentPool *pool);
 
 UiRenderInfo	buildUiRenderInfo(ComponentPool *pool, u16 rm_root_node);
 
-void	openConsole(UiContext uictx, ComponentPool *pool, u32 screen_w, u32 screen_h, Font *font, u8 console_font_size);
-void	showFps(UiContext uictx, ComponentPool *pool, Font *font, double fps);
-void	drawEditorUI(EditorContext ectx, UiContext uictx, ComponentPool *pool, GraphicsContext *ctx, Font *font);
+void	openConsole(UiContext *uictx, ComponentPool *pool, u32 screen_w, u32 screen_h, Font *font, u8 console_font_size);
+void	showFps(UiContext *uictx, ComponentPool *pool, Font *font, double fps);
+void	drawEditorUI(EditorContext *ectx, UiContext *uictx, ComponentPool *pool, GraphicsContext *ctx, Font *font);
 
 UiRenderInfo	runUi(GraphicsContext *graphics_ctx, UiState *ui, Font *font, double fps);
 

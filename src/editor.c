@@ -6,13 +6,13 @@ void	_test_func(void) {
 	print("Hi from button\n");
 }
 
-void	drawEditorUI(EditorContext ectx, UiContext uictx, ComponentPool *pool, GraphicsContext *ctx, Font *font)
+void	drawEditorUI(EditorContext *ectx, UiContext *uictx, ComponentPool *pool, GraphicsContext *ctx, Font *font)
 {
 	const f32 screen_w = (f32)ctx->swapchain_width;
 	const f32 screen_h = (f32)ctx->swapchain_height;
-	const f32 toolbar_h = ectx.toolbar_h;
-	const f32 left_panel_w = ectx.left_panel_w;
-	const f32 right_panel_w = ectx.right_panel_w;
+	const f32 toolbar_h = ectx->toolbar_h;
+	const f32 left_panel_w = ectx->left_panel_w;
+	const f32 right_panel_w = ectx->right_panel_w;
 
 	// 2. Calculate and apply the 3D Viewport boundaries for the Grid/PBR passes
 	ctx->viewport_offset[X] = (int)left_panel_w;

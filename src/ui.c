@@ -5,8 +5,8 @@ UiRenderInfo	runUi(GraphicsContext *graphics_ctx, UiState *ui, Font *font, doubl
 {
 	const u32	screen_w = graphics_ctx->window_width;
 	const u32	screen_h = graphics_ctx->window_height;
-	UiContext	uictx = ui->ctx;
-	EditorContext	ectx = ui->editor_ctx;
+	UiContext	*uictx = &ui->ctx;
+	EditorContext	*ectx = &ui->editor_ctx;
 	ComponentPool	*pool = &ui->pool;
 
 	if (gameStateQuery(g_game_state, ShowConsole)) {
@@ -131,19 +131,19 @@ u16	imguiAllocateComponent(ComponentPool *pool)
 	return index;
 }
 
-void	imguiResetFrame(UiContext uictx, ComponentPool *pool)
+void	imguiResetFrame(UiContext *uictx, ComponentPool *pool)
 {
 	// 1. Reset component allocation index
 	pool->imgui_count = 0;	
 
 	// 2. Clear layout/cursor stack
-	uictx.layout_stack_count = 0;
+	uictx->layout_stack_count = 0;
 
 	// 3. Clear hover state so highlights disappear when mouse moves off items
-	uictx.hot_item_hash = 0;
+	uictx->hot_item_hash = 0;
 
 	// 4. Sever the tree links so RMGUI forgets about last frame's IMGUI nodes
-	UiComponent	*imgui_root = uiGet(pool, uictx.imgui_root);
+	UiComponent	*imgui_root = uiGet(pool, uictx->imgui_root);
 	imgui_root->first_child = UI_NULL_INDEX;
 	imgui_root->last_child  = UI_NULL_INDEX;
 }
@@ -230,16 +230,16 @@ void	uiAppendChild(ComponentPool *pool, u16 parent, u16 new_idx)
 	new_node->prev_sibling = last_child;
 }
 
-static inline void	appendToParent(UiContext uictx, ComponentPool *pool, u16 idx) {
-	u16		parent_node = uictx.imgui_root;
-	if (uictx.layout_stack_count > 0) {
-		UiLayoutState	*parent_layout = &uictx.layout_stack[uictx.layout_stack_count - 1];
+static inline void	appendToParent(UiContext *uictx, ComponentPool *pool, u16 idx) {
+	u16		parent_node = uictx->imgui_root;
+	if (uictx->layout_stack_count > 0) {
+		UiLayoutState	*parent_layout = &uictx->layout_stack[uictx->layout_stack_count - 1];
 		parent_node = parent_layout->component_idx;
 	}
 	uiAppendChild(pool, parent_node, idx);
 }
 
-static inline u16	initComponent(UiContext uictx, ComponentPool *pool, UiComponent **component_ptr) {
+static inline u16	initComponent(UiContext *uictx, ComponentPool *pool, UiComponent **component_ptr) {
 	u16	idx = imguiAllocateComponent(pool);
 	*component_ptr = uiGet(pool, idx);
 	appendToParent(uictx, pool, idx);
@@ -247,13 +247,13 @@ static inline u16	initComponent(UiContext uictx, ComponentPool *pool, UiComponen
 }
 
 // TODO: Implement modifiable text box
-void	imguiText(UiContext uictx, ComponentPool *pool, TextSpec spec, const char *fmt, ...)
+void	imguiText(UiContext *uictx, ComponentPool *pool, TextSpec spec, const char *fmt, ...)
 {
-	if (uictx.layout_stack_count == 0) {
+	if (uictx->layout_stack_count == 0) {
 		engine_error(LOG_FILE, "imguiText called without an active panel!");
 		return;
 	}
-	UiLayoutState	*layout = &uictx.layout_stack[uictx.layout_stack_count - 1];
+	UiLayoutState	*layout = &uictx->layout_stack[uictx->layout_stack_count - 1];
 
 	// 1. Format the string dynamically
 	va_list	args;
@@ -304,7 +304,7 @@ void	imguiText(UiContext uictx, ComponentPool *pool, TextSpec spec, const char *
 	}
 }
 
-void	imguiBeginPanel(UiContext uictx, ComponentPool *pool, PanelSpec spec)
+void	imguiBeginPanel(UiContext *uictx, ComponentPool *pool, PanelSpec spec)
 {
 	UiComponent	*panel;
 	u16		panel_idx = initComponent(uictx, pool, &panel);
@@ -325,9 +325,9 @@ void	imguiBeginPanel(UiContext uictx, ComponentPool *pool, PanelSpec spec)
 	f32 start_x = spec.offset[X];
 	f32 start_y = spec.offset[Y];
 
-	if (uictx.layout_stack_count > 0) {
+	if (uictx->layout_stack_count > 0) {
 		// We are nested inside another panel! Start at its cursor.
-		UiLayoutState *parent_layout = &uictx.layout_stack[uictx.layout_stack_count - 1];
+		UiLayoutState *parent_layout = &uictx->layout_stack[uictx->layout_stack_count - 1];
 		start_x += parent_layout->cursor_x;
 		start_y += parent_layout->cursor_y;
 	}
@@ -337,8 +337,8 @@ void	imguiBeginPanel(UiContext uictx, ComponentPool *pool, PanelSpec spec)
 	panel->final_screen_pos[Y] = start_y;
 
 	// --- CLIP RECT LOGIC ---
-	if (uictx.layout_stack_count > 0) {
-		UiLayoutState	*parent_layout = &uictx.layout_stack[uictx.layout_stack_count - 1];
+	if (uictx->layout_stack_count > 0) {
+		UiLayoutState	*parent_layout = &uictx->layout_stack[uictx->layout_stack_count - 1];
 		UiComponent	*parent_panel = uiGet(pool, parent_layout->component_idx);
 
 		// 1. Inherit the parent's clip rect
@@ -364,7 +364,7 @@ void	imguiBeginPanel(UiContext uictx, ComponentPool *pool, PanelSpec spec)
 	panel->final_screen_size[Y] = spec.fixed_size[Y];
 
 	// 2. Push our new layout state for our children to use
-	UiLayoutState *layout = &uictx.layout_stack[uictx.layout_stack_count++];
+	UiLayoutState *layout = &uictx->layout_stack[uictx->layout_stack_count++];
 	layout->component_idx = panel_idx;
 	layout->layout_type   = spec.layout_type;
 	layout->start_x       = start_x + spec.padding; // Children start inside the padding
@@ -374,12 +374,12 @@ void	imguiBeginPanel(UiContext uictx, ComponentPool *pool, PanelSpec spec)
 	layout->spacing       = spec.spacing;
 }
 
-void	imguiEndPanel(UiContext uictx, ComponentPool *pool)
+void	imguiEndPanel(UiContext *uictx, ComponentPool *pool)
 {
-	if (uictx.layout_stack_count == 0) return;
+	if (uictx->layout_stack_count == 0) return;
 
 	// 1. Pop the layout stack
-	UiLayoutState *layout = &uictx.layout_stack[--uictx.layout_stack_count];
+	UiLayoutState *layout = &uictx->layout_stack[--uictx->layout_stack_count];
 	UiComponent *panel = uiGet(pool, layout->component_idx);
 
 	// If the user didn't specify a fixed size, we calculate how far the cursor moved.
@@ -391,8 +391,8 @@ void	imguiEndPanel(UiContext uictx, ComponentPool *pool)
 	}
 
 	// 3. If we are nested, we must advance our PARENT'S cursor by our total size!
-	if (uictx.layout_stack_count > 0) {
-		UiLayoutState *parent_layout = &uictx.layout_stack[uictx.layout_stack_count - 1];
+	if (uictx->layout_stack_count > 0) {
+		UiLayoutState *parent_layout = &uictx->layout_stack[uictx->layout_stack_count - 1];
 
 		if (parent_layout->layout_type == UI_LAYOUT_VERTICAL) {
 			parent_layout->cursor_y += panel->final_screen_size[Y] + parent_layout->spacing; // 4px margin
@@ -402,13 +402,13 @@ void	imguiEndPanel(UiContext uictx, ComponentPool *pool)
 	}
 }
 
-ButtonState	imguiButton(UiContext uictx, ComponentPool *pool, StringView text_view, ButtonSpec spec)
+ButtonState	imguiButton(UiContext *uictx, ComponentPool *pool, StringView text_view, ButtonSpec spec)
 {
-	if (uictx.layout_stack_count == 0) {
+	if (uictx->layout_stack_count == 0) {
 		engine_error(LOG_FILE, "imguiButton called without an active panel!");
 		return false;
 	}
-	UiLayoutState	*layout = &uictx.layout_stack[uictx.layout_stack_count - 1];
+	UiLayoutState	*layout = &uictx->layout_stack[uictx->layout_stack_count - 1];
 
 	const char	*text_str = (const char *)text_view.data; 
 	const int	len = text_view.count; 
@@ -441,21 +441,21 @@ ButtonState	imguiButton(UiContext uictx, ComponentPool *pool, StringView text_vi
 	if (is_hovered) 
 	{
 		// Yes it is
-		uictx.hot_item_hash = id;
+		uictx->hot_item_hash = id;
 
 		// Is the button clicked?
-		if ((mouse_left_down || mouse_right_down) && uictx.active_item_hash == 0) {
+		if ((mouse_left_down || mouse_right_down) && uictx->active_item_hash == 0) {
 			// Yes it is
-			uictx.active_item_hash = id;
+			uictx->active_item_hash = id;
 		}
 	}
 
 	// Resolve Clicks on Release
-	if (uictx.active_item_hash == id && (mouse_left_released || mouse_right_released)) {
+	if (uictx->active_item_hash == id && (mouse_left_released || mouse_right_released)) {
 		if (is_hovered) {
 			btn_state = mouse_left_released ? BUTTON_LEFT_CLICK : BUTTON_RIGHT_CLICK;
 		}
-		uictx.active_item_hash = 0;
+		uictx->active_item_hash = 0;
 	}
 
 	// 4. Create Background Component
@@ -472,9 +472,9 @@ ButtonState	imguiButton(UiContext uictx, ComponentPool *pool, StringView text_vi
 	UiComponent	*parent_panel = uiGet(pool, layout->component_idx);
 	glm_vec4_copy(parent_panel->clip_rect, btn->clip_rect);
 
-	if (uictx.active_item_hash == id) {
+	if (uictx->active_item_hash == id) {
 		glm_vec4_copy(spec.color_active, btn->inner_color); 
-	} else if (uictx.hot_item_hash == id) {
+	} else if (uictx->hot_item_hash == id) {
 		glm_vec4_copy(spec.color_hover, btn->inner_color);
 	} else {
 		glm_vec4_copy(spec.color_idle, btn->inner_color);
@@ -515,9 +515,9 @@ ButtonState	imguiButton(UiContext uictx, ComponentPool *pool, StringView text_vi
 }
 
 // Returns -1 if nothing is pressed, else it returns the index of pressed button
-i32	imguiMenu(UiContext uictx, ComponentPool *pool, StringView menu_name, MenuButton *btn_list, u32 btn_count, MenuSpec spec)
+i32	imguiMenu(UiContext *uictx, ComponentPool *pool, StringView menu_name, MenuButton *btn_list, u32 btn_count, MenuSpec spec)
 {
-	if (uictx.layout_stack_count == 0) {
+	if (uictx->layout_stack_count == 0) {
 		engine_error(LOG_FILE, "imguiButton called without an active panel!");
 		return false;
 	}
@@ -781,7 +781,7 @@ UiRenderInfo	buildUiRenderInfo(ComponentPool *pool, u16 rm_root_node)
 }
 
 // --- OTHER STUFF ---
-void	openConsole(UiContext uictx, ComponentPool *pool, u32 screen_w, u32 screen_h, Font *font, u8 console_font_size)
+void	openConsole(UiContext *uictx, ComponentPool *pool, u32 screen_w, u32 screen_h, Font *font, u8 console_font_size)
 {
 	static f32	scroll_y = 0.0f;
 	if (scroll_y < 0.0f) scroll_y = 0.0f;
@@ -854,7 +854,7 @@ void	openConsole(UiContext uictx, ComponentPool *pool, u32 screen_w, u32 screen_
 	imguiEndPanel(uictx, pool); // Pops Main Panel
 }
 
-void	showFps(UiContext uictx, ComponentPool *pool, Font *font, double fps)
+void	showFps(UiContext *uictx, ComponentPool *pool, Font *font, double fps)
 {
 	imguiBeginPanel(uictx, pool, (PanelSpec){
 		.primitive_type = UI_PRIMITIVE_RECTANGLE,

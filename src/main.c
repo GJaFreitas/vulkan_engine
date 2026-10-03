@@ -39,7 +39,7 @@ static inline void beginFrame(World *world) {
 static inline void	endFrame(World world) {
 	(void)world;
 	modelCacheTick(&world.model_cache, (u16)world.dt_ms);
-	imguiResetFrame(world.ui->ctx, &world.ui->pool);
+	imguiResetFrame(&world.ui->ctx, &world.ui->pool);
 	inputEndFrame();
 }
 
