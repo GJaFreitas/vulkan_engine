@@ -1,5 +1,5 @@
-import common;
 #include "shared_structs.h"
+#include "include/common.slang"
 
 [[vk::push_constant]] TextRootConstants root;
 

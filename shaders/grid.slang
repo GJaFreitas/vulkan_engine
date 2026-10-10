@@ -1,5 +1,5 @@
-import common;
 #include "shared_structs.h"
+#include "include/common.slang"
 
 // --- BINDLESS: Push Constants with BDA ---
 [[vk::push_constant]] GridRootConstants root;

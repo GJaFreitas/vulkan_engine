@@ -1,5 +1,4 @@
-#ifndef SHARED_STRUCTS_H
-#define SHARED_STRUCTS_H
+#pragma once
 
 #define GLOBAL_SAMPLER_PBR	0
 #define GLOBAL_SAMPLER_UI	1
@@ -148,5 +147,3 @@ SHARED_STRUCT(GridRootConstants)
 	GridProperties			properties;
 	bool				show_grid;
 };
-
-#endif // SHARED_STRUCTS_H

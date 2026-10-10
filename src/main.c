@@ -8,8 +8,16 @@
 
 Allocator	g_frame_arena = {0};
 Allocator	g_perm_arena = {0};
-
 GameState	g_game_state = 0;
+
+typedef	void (*ModuleRunUi)(GraphicsContext *graphics_ctx, UiState *ui, Font *font, double fps);
+typedef struct ModuleAPI
+{
+	void		*handle;
+	ModuleRunUi	run_ui;
+}	ModuleAPI;
+
+static ModuleAPI	g_module_api;
 
 static inline void	getMsAndFps(double *ms, double *fps, double *fps_avg, u64 *last_time, u64 *frames) {
 	static u32	frame_start = 2000;
@@ -99,12 +107,39 @@ void	updateGridProperties(void *udata)
 
 #define FONT_PATH "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Bold.ttf"
 
+#define MODULE_PATH "build/libgame_module.so"
+void	hotreload_func(void *data)
+{
+	(void)data;
+	ModuleAPI	*api = &g_module_api;
+
+	system("meson compile -C build game_module");
+	api->handle = dlopen(MODULE_PATH, RTLD_NOW | RTLD_LOCAL);
+	if (!api->handle) {
+		engine_error(LOG_FILE, "dlopen() failed.");
+		return ;
+	}
+
+	if ((api->run_ui = dlsym(api->handle, "runUi")) == NULL) {
+		engine_error(LOG_FILE, "Failed to find symbol runUi in module.");
+		goto symbol_error;
+	}
+
+	return;
+
+symbol_error:
+	dlclose(api->handle);
+	api->handle = NULL;
+}
+
 int	main(void)
 {
 	start_logs();
 	set_log_severity(LOG_WARN);
 	init_vars();
 	start_hotload_callbacks();
+
+	register_callback(STRING_LIT("src/modules/ui.c"), hotreload_func, NULL);
 
 	World		world = {};
 	GraphicsContext	gctx = {};
