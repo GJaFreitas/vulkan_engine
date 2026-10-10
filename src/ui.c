@@ -519,33 +519,33 @@ i32	imguiMenu(UiContext *uictx, ComponentPool *pool, StringView menu_name, MenuB
 {
 	if (uictx->layout_stack_count == 0) {
 		engine_error(LOG_FILE, "imguiButton called without an active panel!");
-		return false;
+		return -1;
 	}
 
 	// --- MENU PANEL --- //
 	imguiBeginPanel(uictx, pool, (PanelSpec){
-		.primitive_type = UI_PRIMITIVE_RECTANGLE,
-		.layout_type = UI_LAYOUT_VERTICAL,
-		.anchor = UI_ANCHOR_CENTER,
-		.offset = {0},
-		.fixed_size = {0},
-		.outer_color = {0.8, 0.8, 0.8, 1.0},
-		.inner_color = {0.7, 0.7, 0.7, 1.0},
-		.border_width = 1,
-		.corner_radius = 0,
-		.padding = 4,
-		.spacing = spec.spacing
+		.primitive_type	= UI_PRIMITIVE_RECTANGLE,
+		.layout_type	= UI_LAYOUT_VERTICAL,
+		.anchor		= UI_ANCHOR_CENTER,
+		.offset		= {0},
+		.fixed_size	= {0},
+		.outer_color	= {0.0, 0.0, 0.8, 1.0},
+		.inner_color	= {0.7, 0.0, 0.0, 1.0},
+		.border_width	= 1,
+		.corner_radius	= 0,
+		.padding	= 4,
+		.spacing	= spec.spacing
 	});
 
 	if (imguiButton(uictx, pool, menu_name, (ButtonSpec){
-		.font = spec.font,
-		.font_size = spec.font_size,
-		.padding = spec.padding,
-		.corner_radius = 0,
-		.color_idle    = {0.3f, 0.3f, 0.3f, 1.0f},
-		.color_hover   = {0.5f, 0.5f, 0.5f, 1.0f},
-		.color_active  = {0.1f, 0.1f, 0.1f, 1.0f},
-		.text_color    = {1.0f, 1.0f, 1.0f, 1.0f},
+		.font		= spec.font,
+		.font_size	= spec.font_size,
+		.padding	= spec.padding,
+		.corner_radius	= 0,
+		.color_idle	= {0.3f, 0.3f, 0.3f, 1.0f},
+		.color_hover	= {0.5f, 0.5f, 0.5f, 1.0f},
+		.color_active	= {0.1f, 0.1f, 0.1f, 1.0f},
+		.text_color	= {1.0f, 1.0f, 1.0f, 1.0f},
 	})) {
 		*(spec.open) = !*(spec.open);
 	}
@@ -563,7 +563,10 @@ i32	imguiMenu(UiContext *uictx, ComponentPool *pool, StringView menu_name, MenuB
 		const String		btn_name = btn_list[i].btn_name;
 		const ButtonSpec	btn_spec = btn_list[i].spec;
 
-		if (imguiButton(uictx, pool, btn_name, btn_spec)) pressed = i;
+		if (imguiButton(uictx, pool, btn_name, btn_spec)) {
+			pressed = i;
+			break ;
+		}
 	}
 
 	imguiEndPanel(uictx, pool);

@@ -169,11 +169,9 @@ typedef struct MenuSpec
 	vec4	text_color;
 	f32	spacing;	// Space between children inside this panel
 	bool	*open;
-	vec2	max_size;
+	f32	*scroll_offset;	// Normalized 0.0 - 1.0
+	f32	max_height;
 }	MenuSpec;
-
-
-
 
 typedef struct ComponentPool
 {
@@ -195,7 +193,7 @@ typedef struct UiLayoutState {
 	f32 start_y;
 	f32 spacing;		// Space between children inside this panel
 	UiLayoutType layout_type;
-} UiLayoutState;
+}	UiLayoutState;
 
 typedef struct UiContext {
 	u16 imgui_root;

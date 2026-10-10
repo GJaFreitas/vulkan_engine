@@ -71,6 +71,7 @@ void	drawEditorUI(EditorContext *ectx, UiContext *uictx, ComponentPool *pool, Gr
 	imguiText(uictx, pool, header_text, "LEFT PANEL!!");
 
 	static bool	menu_open = false;
+	static f32	scroll_offset = 0;
 
 	MenuSpec	menu_spec = {
 		.font = font,
@@ -84,7 +85,8 @@ void	drawEditorUI(EditorContext *ectx, UiContext *uictx, ComponentPool *pool, Gr
 		.text_color    = {1.0f, 1.0f, 1.0f, 1.0f},
 		.spacing = 2.0f,
 		.open = &menu_open,
-		.max_size = {5, 5},
+		.max_height = 2,
+		.scroll_offset = &scroll_offset,
 	};
 
 	MenuButton	menu_buttons[] = {
@@ -92,10 +94,14 @@ void	drawEditorUI(EditorContext *ectx, UiContext *uictx, ComponentPool *pool, Gr
 		{default_btn_spec, STRING_LIT("Button 2")},
 	};
 
-	i32 pressed = imguiMenu(uictx, pool, STRING_LIT("Menu name!!!11!"), menu_buttons, sizeofarray(menu_buttons), menu_spec);
-	switch (pressed) {
-		case 0: _test_func(); break;
-		case 1: _test_func(); break;
+	MenuState	menu_state = imguiMenu(uictx, pool, STRING_LIT("Menu name!!!11!"), menu_buttons, sizeofarray(menu_buttons), menu_spec);
+	switch (menu_state) {
+		case MENU_NONE: break;
+		case MENU_HOVERED: break;
+
+		// Button clicks:
+		case 0: _test_func();
+		case 1: _test_func();
 
 		default: break;
 	}
