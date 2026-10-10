@@ -1,3 +1,11 @@
+/build/
+/build-*/
+/subprojects/*
+!/subprojects/*.wrap
+
+# Root-level compilation database
+/compile_commands.json
+
 vcpkg_installed/
 vcpkg_installed
 worktrees/
