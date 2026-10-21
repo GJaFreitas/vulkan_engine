@@ -55,6 +55,7 @@ void	do_callbacks(void)
 		if (last_change != -1 && last_change != cur->last_change) {
 			cur->last_change = last_change;
 			cur->function(cur->user_data);
+			engine_log(LOG_FILE, "Loading file: %S", cur->filename);
 		}
 		cur = cur->next;
 	}

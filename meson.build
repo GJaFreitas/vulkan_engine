@@ -8,6 +8,13 @@ project('vulkan_engine', ['c', 'cpp'],
 
 cc = meson.get_compiler('c')
 
+ignore_override_warnings = cc.get_supported_arguments([
+    '-Wno-override-init',         # GCC
+    '-Wno-initializer-overrides'  # Clang
+])
+
+add_project_arguments(ignore_override_warnings, language: 'c')
+
 # -----------------------------------------------------------------------------
 # Include Directories
 # -----------------------------------------------------------------------------
@@ -157,6 +164,5 @@ executable('engine.out',
   [host_sources, core_sources, cpp_sources, compiled_shaders],
   include_directories: [inc_dirs, vcpkg_inc],
   dependencies: [dl_dep, freetype_dep, harfbuzz_dep, sdl3_dep, vulkan_dep, m_dep, volk_dep, shaderc_dep],
-  # Ensure the host runner builds after the module is compiled
-  link_with: game_module
+  export_dynamic: true # Exposes g_frame_arena
 )

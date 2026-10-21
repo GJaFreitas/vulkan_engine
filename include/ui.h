@@ -151,11 +151,6 @@ typedef enum ButtonState {
 
 typedef void (*FP_ButtonFunction)(void);
 
-typedef struct MenuButton {
-	ButtonSpec		spec;
-	StringView		btn_name;
-}	MenuButton;
-
 typedef struct MenuSpec
 {
 	Font	*font;
@@ -168,8 +163,6 @@ typedef struct MenuSpec
 	vec4	color_active;
 	vec4	text_color;
 	f32	spacing;	// Space between children inside this panel
-	bool	*open;
-	f32	*scroll_offset;	// Normalized 0.0 - 1.0
 	f32	max_height;
 }	MenuSpec;
 
@@ -195,6 +188,12 @@ typedef struct UiLayoutState {
 	UiLayoutType layout_type;
 }	UiLayoutState;
 
+typedef struct {
+	i32	selected;
+	u32	hash_id;
+	f32	scroll_offset;
+}	UiWidgetState;
+
 typedef struct UiContext {
 	u16 imgui_root;
 	u16 rmgui_root;
@@ -206,6 +205,10 @@ typedef struct UiContext {
 	// Interaction State
 	u32 hot_item_hash;
 	u32 active_item_hash;
+
+	// States
+	UiWidgetState	widget_states[256];
+	u32		widget_state_count;
 }	UiContext;
 
 typedef struct
@@ -231,7 +234,7 @@ void	initUi(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm);
 void		imguiBeginPanel(UiContext *uictx, ComponentPool *pool, PanelSpec spec);
 ButtonState	imguiButton(UiContext *uictx, ComponentPool *pool, StringView text_view, ButtonSpec spec);
 void		imguiText(UiContext *uictx, ComponentPool *pool, TextSpec spec, const char *fmt, ...);
-i32		imguiMenu(UiContext *uictx, ComponentPool *pool, StringView menu_name, MenuButton *btn_list, u32 btn_count, MenuSpec spec);
+i32		imguiMenu(UiContext *uictx, ComponentPool *pool, StringView menu_name, String *btn_list, u32 btn_count, ButtonSpec btn_spec, MenuSpec spec);
 void		imguiEndPanel(UiContext *uictx, ComponentPool *pool);
 void		imguiResetFrame(UiContext *uictx, ComponentPool *pool);
 

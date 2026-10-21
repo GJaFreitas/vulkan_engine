@@ -31,6 +31,22 @@ static inline UiComponent*	uiGet(ComponentPool *pool, u16 index) {
 	return (UiComponent*)&pool->mem[index * sizeof(UiComponent)];
 }
 
+UiWidgetState*	uiGetWidgetState(UiContext* ctx, u32 hash_id)
+{
+	for (u32 i = 0; i < ctx->widget_state_count; i++) {
+		if (ctx->widget_states[i].hash_id == hash_id) {
+			return &ctx->widget_states[i];
+		}
+	}
+	
+	// Not found? Initialize it.
+	UiWidgetState* state = &ctx->widget_states[ctx->widget_state_count++];
+	state->hash_id = hash_id;
+	state->selected = false;
+	state->scroll_offset = 0.0f;
+	return state;
+}
+
 // --- SETUP HELPERS ---
 
 static inline u32	hashString32(StringView str)
@@ -515,12 +531,14 @@ ButtonState	imguiButton(UiContext *uictx, ComponentPool *pool, StringView text_v
 }
 
 // Returns -1 if nothing is pressed, else it returns the index of pressed button
-i32	imguiMenu(UiContext *uictx, ComponentPool *pool, StringView menu_name, MenuButton *btn_list, u32 btn_count, MenuSpec spec)
+i32	imguiMenu(UiContext *uictx, ComponentPool *pool, StringView menu_name, String *btn_list, u32 btn_count, ButtonSpec btn_spec, MenuSpec spec)
 {
 	if (uictx->layout_stack_count == 0) {
 		engine_error(LOG_FILE, "imguiButton called without an active panel!");
 		return -1;
 	}
+
+	UiWidgetState	*state = uiGetWidgetState(uictx, hashString32(menu_name));
 
 	// --- MENU PANEL --- //
 	imguiBeginPanel(uictx, pool, (PanelSpec){
@@ -547,10 +565,10 @@ i32	imguiMenu(UiContext *uictx, ComponentPool *pool, StringView menu_name, MenuB
 		.color_active	= {0.1f, 0.1f, 0.1f, 1.0f},
 		.text_color	= {1.0f, 1.0f, 1.0f, 1.0f},
 	})) {
-		*(spec.open) = !*(spec.open);
+		(state->selected) = !(state->selected);
 	}
 
-	if (!*(spec.open)) {
+	if (!(state->selected)) {
 		imguiEndPanel(uictx, pool);
 		return -1;
 	}
@@ -560,8 +578,7 @@ i32	imguiMenu(UiContext *uictx, ComponentPool *pool, StringView menu_name, MenuB
 
 	i32	pressed = -1;
 	for (u32 i = 0; i < btn_count; i++) {
-		const String		btn_name = btn_list[i].btn_name;
-		const ButtonSpec	btn_spec = btn_list[i].spec;
+		const String		btn_name = btn_list[i];
 
 		if (imguiButton(uictx, pool, btn_name, btn_spec)) {
 			pressed = i;

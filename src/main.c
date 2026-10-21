@@ -10,11 +10,15 @@ Allocator	g_frame_arena = {0};
 Allocator	g_perm_arena = {0};
 GameState	g_game_state = 0;
 
-typedef	void (*ModuleRunUi)(GraphicsContext *graphics_ctx, UiState *ui, Font *font, double fps);
+typedef	UiRenderInfo	(*ModuleRunUi)(GraphicsContext *graphics_ctx, UiState *ui, Font *font, double fps);
+typedef	void		(*ModuleUiResetFrame)(UiContext *uictx, ComponentPool *pool);
+typedef	void		(*ModuleInitUi)(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm);
 typedef struct ModuleAPI
 {
-	void		*handle;
-	ModuleRunUi	run_ui;
+	void			*handle;
+	ModuleRunUi		run_ui;
+	ModuleUiResetFrame	reset_frame;
+	ModuleInitUi		init_ui;
 }	ModuleAPI;
 
 static ModuleAPI	g_module_api;
@@ -47,7 +51,7 @@ static inline void beginFrame(World *world) {
 static inline void	endFrame(World world) {
 	(void)world;
 	modelCacheTick(&world.model_cache, (u16)world.dt_ms);
-	imguiResetFrame(&world.ui->ctx, &world.ui->pool);
+	g_module_api.reset_frame(&world.ui->ctx, &world.ui->pool);
 	inputEndFrame();
 }
 
@@ -73,7 +77,7 @@ int	loop(World world)
 		beginFrame(&world);
 
 		// --- RENDERING ---
-		ui_info = runUi(world.graphics_ctx, world.ui, font, fps);
+		ui_info = g_module_api.run_ui(world.graphics_ctx, world.ui, font, fps);
 		if (modelCacheGetCount(&world.model_cache))
 			entity_info = buildEntityRenderInfo(&world.entity_registry, &g_frame_arena);
 
@@ -111,12 +115,14 @@ void	updateGridProperties(void *udata)
 void	hotreload_func(void *data)
 {
 	(void)data;
+	const char* dlsym_err;
 	ModuleAPI	*api = &g_module_api;
 
 	system("meson compile -C build game_module");
 	api->handle = dlopen(MODULE_PATH, RTLD_NOW | RTLD_LOCAL);
 	if (!api->handle) {
 		engine_error(LOG_FILE, "dlopen() failed.");
+		printf("ERROR opening file %s\n", dlerror());
 		return ;
 	}
 
@@ -124,10 +130,22 @@ void	hotreload_func(void *data)
 		engine_error(LOG_FILE, "Failed to find symbol runUi in module.");
 		goto symbol_error;
 	}
+	if ((api->init_ui = dlsym(api->handle, "initUi")) == NULL) {
+		engine_error(LOG_FILE, "Failed to find symbol initUi in module.");
+		goto symbol_error;
+	}
+	if ((api->reset_frame = dlsym(api->handle, "imguiResetFrame")) == NULL) {
+		engine_error(LOG_FILE, "Failed to find symbol imguiResetFrame in module.");
+		goto symbol_error;
+	}
 
 	return;
 
 symbol_error:
+	dlsym_err = dlerror();
+	if (dlsym_err) {
+		printf("ERROR loading symbol: %s\n", dlsym_err);
+	}
 	dlclose(api->handle);
 	api->handle = NULL;
 }
@@ -135,11 +153,12 @@ symbol_error:
 int	main(void)
 {
 	start_logs();
-	set_log_severity(LOG_WARN);
+	set_log_severity(LOG_LOG);
 	init_vars();
 	start_hotload_callbacks();
 
-	register_callback(STRING_LIT("src/modules/ui.c"), hotreload_func, NULL);
+	register_callback(STRING_LIT("build/libgame_module.so"), hotreload_func, NULL);
+	hotreload_func(NULL);
 
 	World		world = {};
 	GraphicsContext	gctx = {};
@@ -160,7 +179,7 @@ int	main(void)
 	updateGridProperties(&world);
 
 	startGraphics(world.graphics_ctx);
-	initUi(&ui, gctx.window_width, gctx.window_height, &g_perm_arena);
+	g_module_api.init_ui(&ui, gctx.window_width, gctx.window_height, &g_perm_arena);
 	consoleInit(&g_perm_arena);
 	initEntityRegistry(&world.entity_registry, &g_perm_arena, 4096);
 	initModelCache(&world.model_cache);

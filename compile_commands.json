@@ -1,261 +1,182 @@
 [
   {
-    "file": "src/console.c",
-    "arguments": [
-      "/bin/gcc",
-      "-Iinclude",
-      "-Ideps",
-      "-IMyLib/include",
-      "-Ivcpkg_installed/x64-linux/include",
-      "-Wall",
-      "-Wextra",
-      "-g",
-      "-MMD",
-      "-MP",
-      "-c",
-      "src/console.c",
-      "-o",
-      "obj/c/console.o"
-    ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/trie_implementation",
-    "output": "obj/c/console.o"
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Imsdf_baker.p -I. -I.. -I../include -I../deps -I/usr/include/freetype2 -I/usr/include/libpng16 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -MD -MQ msdf_baker.p/tools_msdf_baker.c.o -MF msdf_baker.p/tools_msdf_baker.c.o.d -o msdf_baker.p/tools_msdf_baker.c.o -c ../tools/msdf_baker.c",
+    "file": "../tools/msdf_baker.c",
+    "output": "msdf_baker.p/tools_msdf_baker.c.o"
   },
   {
-    "file": "src/ui.c",
-    "arguments": [
-      "/bin/gcc",
-      "-Iinclude",
-      "-Ideps",
-      "-IMyLib/include",
-      "-Ivcpkg_installed/x64-linux/include",
-      "-Wall",
-      "-Wextra",
-      "-g",
-      "-MMD",
-      "-MP",
-      "-c",
-      "src/ui.c",
-      "-o",
-      "obj/c/ui.o"
-    ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/trie_implementation",
-    "output": "obj/c/ui.o"
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Imsdf_baker.p -I. -I.. -I../include -I../deps -I/usr/include/freetype2 -I/usr/include/libpng16 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -MD -MQ msdf_baker.p/src_base_layer.c.o -MF msdf_baker.p/src_base_layer.c.o.d -o msdf_baker.p/src_base_layer.c.o -c ../src/base_layer.c",
+    "file": "../src/base_layer.c",
+    "output": "msdf_baker.p/src_base_layer.c.o"
   },
   {
-    "file": "src/input.c",
-    "arguments": [
-      "/bin/gcc",
-      "-Iinclude",
-      "-Ideps",
-      "-IMyLib/include",
-      "-Ivcpkg_installed/x64-linux/include",
-      "-Wall",
-      "-Wextra",
-      "-g",
-      "-MMD",
-      "-MP",
-      "-c",
-      "src/input.c",
-      "-o",
-      "obj/c/input.o"
-    ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/trie_implementation",
-    "output": "obj/c/input.o"
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Imsdf_baker.p -I. -I.. -I../include -I../deps -I/usr/include/freetype2 -I/usr/include/libpng16 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -MD -MQ msdf_baker.p/src_vector.c.o -MF msdf_baker.p/src_vector.c.o.d -o msdf_baker.p/src_vector.c.o -c ../src/vector.c",
+    "file": "../src/vector.c",
+    "output": "msdf_baker.p/src_vector.c.o"
   },
   {
-    "file": "src/hotload_callbacks.c",
-    "arguments": [
-      "/bin/gcc",
-      "-Iinclude",
-      "-Ideps",
-      "-IMyLib/include",
-      "-Ivcpkg_installed/x64-linux/include",
-      "-Wall",
-      "-Wextra",
-      "-g",
-      "-MMD",
-      "-MP",
-      "-c",
-      "src/hotload_callbacks.c",
-      "-o",
-      "obj/c/hotload_callbacks.o"
-    ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/trie_implementation",
-    "output": "obj/c/hotload_callbacks.o"
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Imsdf_baker.p -I. -I.. -I../include -I../deps -I/usr/include/freetype2 -I/usr/include/libpng16 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -MD -MQ msdf_baker.p/src_str.c.o -MF msdf_baker.p/src_str.c.o.d -o msdf_baker.p/src_str.c.o -c ../src/str.c",
+    "file": "../src/str.c",
+    "output": "msdf_baker.p/src_str.c.o"
   },
   {
-    "file": "src/main.c",
-    "arguments": [
-      "/bin/gcc",
-      "-Iinclude",
-      "-Ideps",
-      "-IMyLib/include",
-      "-Ivcpkg_installed/x64-linux/include",
-      "-Wall",
-      "-Wextra",
-      "-g",
-      "-MMD",
-      "-MP",
-      "-c",
-      "src/main.c",
-      "-o",
-      "obj/c/main.o"
-    ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/trie_implementation",
-    "output": "obj/c/main.o"
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Imsdf_baker.p -I. -I.. -I../include -I../deps -I/usr/include/freetype2 -I/usr/include/libpng16 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -MD -MQ msdf_baker.p/src_allocators.c.o -MF msdf_baker.p/src_allocators.c.o.d -o msdf_baker.p/src_allocators.c.o -c ../src/allocators.c",
+    "file": "../src/allocators.c",
+    "output": "msdf_baker.p/src_allocators.c.o"
   },
   {
-    "file": "src/vulkan.c",
-    "arguments": [
-      "/bin/gcc",
-      "-Iinclude",
-      "-Ideps",
-      "-IMyLib/include",
-      "-Ivcpkg_installed/x64-linux/include",
-      "-Wall",
-      "-Wextra",
-      "-g",
-      "-MMD",
-      "-MP",
-      "-c",
-      "src/vulkan.c",
-      "-o",
-      "obj/c/vulkan.o"
-    ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/trie_implementation",
-    "output": "obj/c/vulkan.o"
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Imsdf_baker.p -I. -I.. -I../include -I../deps -I/usr/include/freetype2 -I/usr/include/libpng16 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -MD -MQ msdf_baker.p/src_logging.c.o -MF msdf_baker.p/src_logging.c.o.d -o msdf_baker.p/src_logging.c.o -c ../src/logging.c",
+    "file": "../src/logging.c",
+    "output": "msdf_baker.p/src_logging.c.o"
   },
   {
-    "file": "src/entities.c",
-    "arguments": [
-      "/bin/gcc",
-      "-Iinclude",
-      "-Ideps",
-      "-IMyLib/include",
-      "-Ivcpkg_installed/x64-linux/include",
-      "-Wall",
-      "-Wextra",
-      "-g",
-      "-MMD",
-      "-MP",
-      "-c",
-      "src/entities.c",
-      "-o",
-      "obj/c/entities.o"
-    ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/trie_implementation",
-    "output": "obj/c/entities.o"
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Ilibgame_module.so.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -fPIC -pthread -MD -MQ libgame_module.so.p/src_modules_editor.c.o -MF libgame_module.so.p/src_modules_editor.c.o.d -o libgame_module.so.p/src_modules_editor.c.o -c ../src/modules/editor.c",
+    "file": "../src/modules/editor.c",
+    "output": "libgame_module.so.p/src_modules_editor.c.o"
   },
   {
-    "file": "src/base_layer.c",
-    "arguments": [
-      "/bin/gcc",
-      "-Iinclude",
-      "-Ideps",
-      "-IMyLib/include",
-      "-Ivcpkg_installed/x64-linux/include",
-      "-Wall",
-      "-Wextra",
-      "-g",
-      "-MMD",
-      "-MP",
-      "-c",
-      "src/base_layer.c",
-      "-o",
-      "obj/c/base_layer.o"
-    ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/trie_implementation",
-    "output": "obj/c/base_layer.o"
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Ilibgame_module.so.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -fPIC -pthread -MD -MQ libgame_module.so.p/src_modules_ui.c.o -MF libgame_module.so.p/src_modules_ui.c.o.d -o libgame_module.so.p/src_modules_ui.c.o -c ../src/modules/ui.c",
+    "file": "../src/modules/ui.c",
+    "output": "libgame_module.so.p/src_modules_ui.c.o"
   },
   {
-    "file": "src/fonts.c",
-    "arguments": [
-      "/bin/gcc",
-      "-Iinclude",
-      "-Ideps",
-      "-IMyLib/include",
-      "-Ivcpkg_installed/x64-linux/include",
-      "-Wall",
-      "-Wextra",
-      "-g",
-      "-MMD",
-      "-MP",
-      "-c",
-      "src/fonts.c",
-      "-o",
-      "obj/c/fonts.o"
-    ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/trie_implementation",
-    "output": "obj/c/fonts.o"
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Ilibgame_module.so.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -fPIC -pthread -MD -MQ libgame_module.so.p/src_vector.c.o -MF libgame_module.so.p/src_vector.c.o.d -o libgame_module.so.p/src_vector.c.o -c ../src/vector.c",
+    "file": "../src/vector.c",
+    "output": "libgame_module.so.p/src_vector.c.o"
   },
   {
-    "file": "src/variables.c",
-    "arguments": [
-      "/bin/gcc",
-      "-Iinclude",
-      "-Ideps",
-      "-IMyLib/include",
-      "-Ivcpkg_installed/x64-linux/include",
-      "-Wall",
-      "-Wextra",
-      "-g",
-      "-MMD",
-      "-MP",
-      "-c",
-      "src/variables.c",
-      "-o",
-      "obj/c/variables.o"
-    ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/trie_implementation",
-    "output": "obj/c/variables.o"
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Ilibgame_module.so.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -fPIC -pthread -MD -MQ libgame_module.so.p/src_logging.c.o -MF libgame_module.so.p/src_logging.c.o.d -o libgame_module.so.p/src_logging.c.o -c ../src/logging.c",
+    "file": "../src/logging.c",
+    "output": "libgame_module.so.p/src_logging.c.o"
   },
   {
-    "file": "src/gltf_loading.c",
-    "arguments": [
-      "/bin/gcc",
-      "-Iinclude",
-      "-Ideps",
-      "-IMyLib/include",
-      "-Ivcpkg_installed/x64-linux/include",
-      "-Wall",
-      "-Wextra",
-      "-g",
-      "-MMD",
-      "-MP",
-      "-c",
-      "src/gltf_loading.c",
-      "-o",
-      "obj/c/gltf_loading.o"
-    ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/trie_implementation",
-    "output": "obj/c/gltf_loading.o"
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Ilibgame_module.so.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -fPIC -pthread -MD -MQ libgame_module.so.p/src_allocators.c.o -MF libgame_module.so.p/src_allocators.c.o.d -o libgame_module.so.p/src_allocators.c.o -c ../src/allocators.c",
+    "file": "../src/allocators.c",
+    "output": "libgame_module.so.p/src_allocators.c.o"
   },
   {
-    "file": "cpp_layer/vma.cpp",
-    "arguments": [
-      "/bin/g++",
-      "-Iinclude",
-      "-Ideps",
-      "-IMyLib/include",
-      "-Ivcpkg_installed/x64-linux/include",
-      "-g",
-      "-c",
-      "cpp_layer/vma.cpp",
-      "-o",
-      "obj/cpp/vma.o"
-    ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/trie_implementation",
-    "output": "obj/cpp/vma.o"
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Ilibgame_module.so.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -fPIC -pthread -MD -MQ libgame_module.so.p/src_base_layer.c.o -MF libgame_module.so.p/src_base_layer.c.o.d -o libgame_module.so.p/src_base_layer.c.o -c ../src/base_layer.c",
+    "file": "../src/base_layer.c",
+    "output": "libgame_module.so.p/src_base_layer.c.o"
   },
   {
-    "file": "deps/tiny_gltf_v3.c",
-    "arguments": [
-      "/bin/gcc",
-      "deps/tiny_gltf_v3.c",
-      "-o",
-      "engine.out"
-    ],
-    "directory": "/home/bag/Documents/projects/game_engine/worktrees/trie_implementation",
-    "output": "engine.out"
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Ilibgame_module.so.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -fPIC -pthread -MD -MQ libgame_module.so.p/src_str.c.o -MF libgame_module.so.p/src_str.c.o.d -o libgame_module.so.p/src_str.c.o -c ../src/str.c",
+    "file": "../src/str.c",
+    "output": "libgame_module.so.p/src_str.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/src_console.c.o -MF engine.out.p/src_console.c.o.d -o engine.out.p/src_console.c.o -c ../src/console.c",
+    "file": "../src/console.c",
+    "output": "engine.out.p/src_console.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/src_entities.c.o -MF engine.out.p/src_entities.c.o.d -o engine.out.p/src_entities.c.o -c ../src/entities.c",
+    "file": "../src/entities.c",
+    "output": "engine.out.p/src_entities.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/src_fonts.c.o -MF engine.out.p/src_fonts.c.o.d -o engine.out.p/src_fonts.c.o -c ../src/fonts.c",
+    "file": "../src/fonts.c",
+    "output": "engine.out.p/src_fonts.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/src_gltf_loading.c.o -MF engine.out.p/src_gltf_loading.c.o.d -o engine.out.p/src_gltf_loading.c.o -c ../src/gltf_loading.c",
+    "file": "../src/gltf_loading.c",
+    "output": "engine.out.p/src_gltf_loading.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/src_hotload_callbacks.c.o -MF engine.out.p/src_hotload_callbacks.c.o.d -o engine.out.p/src_hotload_callbacks.c.o -c ../src/hotload_callbacks.c",
+    "file": "../src/hotload_callbacks.c",
+    "output": "engine.out.p/src_hotload_callbacks.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/src_input.c.o -MF engine.out.p/src_input.c.o.d -o engine.out.p/src_input.c.o -c ../src/input.c",
+    "file": "../src/input.c",
+    "output": "engine.out.p/src_input.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/src_main.c.o -MF engine.out.p/src_main.c.o.d -o engine.out.p/src_main.c.o -c ../src/main.c",
+    "file": "../src/main.c",
+    "output": "engine.out.p/src_main.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/src_pipelines.c.o -MF engine.out.p/src_pipelines.c.o.d -o engine.out.p/src_pipelines.c.o -c ../src/pipelines.c",
+    "file": "../src/pipelines.c",
+    "output": "engine.out.p/src_pipelines.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/src_variables.c.o -MF engine.out.p/src_variables.c.o.d -o engine.out.p/src_variables.c.o -c ../src/variables.c",
+    "file": "../src/variables.c",
+    "output": "engine.out.p/src_variables.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/src_vulkan.c.o -MF engine.out.p/src_vulkan.c.o.d -o engine.out.p/src_vulkan.c.o -c ../src/vulkan.c",
+    "file": "../src/vulkan.c",
+    "output": "engine.out.p/src_vulkan.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/deps_tiny_gltf_v3.c.o -MF engine.out.p/deps_tiny_gltf_v3.c.o.d -o engine.out.p/deps_tiny_gltf_v3.c.o -c ../deps/tiny_gltf_v3.c",
+    "file": "../deps/tiny_gltf_v3.c",
+    "output": "engine.out.p/deps_tiny_gltf_v3.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/src_vector.c.o -MF engine.out.p/src_vector.c.o.d -o engine.out.p/src_vector.c.o -c ../src/vector.c",
+    "file": "../src/vector.c",
+    "output": "engine.out.p/src_vector.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/src_logging.c.o -MF engine.out.p/src_logging.c.o.d -o engine.out.p/src_logging.c.o -c ../src/logging.c",
+    "file": "../src/logging.c",
+    "output": "engine.out.p/src_logging.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/src_allocators.c.o -MF engine.out.p/src_allocators.c.o.d -o engine.out.p/src_allocators.c.o -c ../src/allocators.c",
+    "file": "../src/allocators.c",
+    "output": "engine.out.p/src_allocators.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/src_base_layer.c.o -MF engine.out.p/src_base_layer.c.o.d -o engine.out.p/src_base_layer.c.o -c ../src/base_layer.c",
+    "file": "../src/base_layer.c",
+    "output": "engine.out.p/src_base_layer.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "cc -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -Wno-override-init -pthread -MD -MQ engine.out.p/src_str.c.o -MF engine.out.p/src_str.c.o.d -o engine.out.p/src_str.c.o -c ../src/str.c",
+    "file": "../src/str.c",
+    "output": "engine.out.p/src_str.c.o"
+  },
+  {
+    "directory": "/home/bag/Documents/projects/game_engine/worktrees/Editor/build",
+    "command": "c++ -Iengine.out.p -I. -I.. -I../include -I../deps -I../vcpkg_installed/x64-linux/include -I/usr/include/freetype2 -I/usr/include/libpng16 -I/usr/include/harfbuzz -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/usr/include/sysprof-6 -fdiagnostics-color=always -D_GLIBCXX_ASSERTIONS=1 -D_FILE_OFFSET_BITS=64 -Wall -Winvalid-pch -Wextra -O0 -g -pthread -MD -MQ engine.out.p/cpp_layer_vma.cpp.o -MF engine.out.p/cpp_layer_vma.cpp.o.d -o engine.out.p/cpp_layer_vma.cpp.o -c ../cpp_layer/vma.cpp",
+    "file": "../cpp_layer/vma.cpp",
+    "output": "engine.out.p/cpp_layer_vma.cpp.o"
   }
 ]

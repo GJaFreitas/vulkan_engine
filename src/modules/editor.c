@@ -6,6 +6,66 @@ void	_test_func(void) {
 	print("Hi from button\n");
 }
 
+// The __VA_ARGS__ means that any value we pass will be used isntead
+
+#define UI_PANEL_SPEC(...) (PanelSpec){ \
+	.primitive_type	= UI_PRIMITIVE_RECTANGLE, \
+	.layout_type	= UI_LAYOUT_VERTICAL, \
+	.offset		= {0.0f, 0.0f}, \
+	.fixed_size	= {0.0f, 0.0f}, \
+	.inner_color	= {0.2f, 0.2f, 0.2f, 1.0f}, \
+	.outer_color	= {0.0f, 0.0f, 0.0f, 0.0f}, \
+	.padding	= 10.0f, \
+	.spacing	= 4.0f, \
+	.border_width	= 0.0f, \
+	.corner_radius	= 0.0f, \
+	__VA_ARGS__ \
+}
+
+#define UI_BTN_SPEC(...) (ButtonSpec){ \
+	.font		= font, \
+	.font_size	= 14.0f, \
+	.padding	= 6.0f, \
+	.corner_radius	= 2.0f, \
+	.color_idle	= {0.3f, 0.3f, 0.3f, 1.0f}, \
+	.color_hover	= {0.5f, 0.5f, 0.5f, 1.0f}, \
+	.color_active	= {0.2f, 0.2f, 0.2f, 1.0f}, \
+	.text_color	= {1.0f, 1.0f, 1.0f, 1.0f}, \
+	__VA_ARGS__ \
+}
+
+#define UI_TEXT_SPEC(...) (TextSpec){ \
+	.font		= font, \
+	.font_size	= 16.0f, \
+	.text_color	= {1.0f, 1.0f, 1.0f, 1.0f}, \
+	.nudge_x	= 0.0f, \
+	.nudge_y	= 0.0f, \
+	.flags		= 0, \
+	__VA_ARGS__ \
+}
+
+#define UI_MENU_SPEC(...) (MenuSpec){ \
+	.font		= font, \
+	.font_size	= 16.0f, \
+	.item_font_size	= 12.0f, \
+	.padding	= 2.0f, \
+	.spacing	= 2.0f, \
+	.corner_radius	= 0.0f, \
+	.color_idle	= {0.3f, 0.3f, 0.3f, 1.0f}, \
+	.color_hover	= {0.5f, 0.5f, 0.5f, 1.0f}, \
+	.color_active	= {0.2f, 0.2f, 0.2f, 1.0f}, \
+	.text_color	= {1.0f, 1.0f, 1.0f, 1.0f}, \
+	.max_height	= 2, \
+	__VA_ARGS__ \
+}
+
+#define UI_MENU(ctx, pool, name, spec, btn_spec, ...) \
+	imguiMenu(ctx, pool, name, \
+		(String[]){__VA_ARGS__}, \
+		sizeof((String[]){__VA_ARGS__}) / sizeof(String), \
+		btn_spec, \
+		spec)
+
 void	drawEditorUI(EditorContext *ectx, UiContext *uictx, ComponentPool *pool, GraphicsContext *ctx, Font *font)
 {
 	const f32 screen_w = (f32)ctx->swapchain_width;
@@ -20,23 +80,6 @@ void	drawEditorUI(EditorContext *ectx, UiContext *uictx, ComponentPool *pool, Gr
 	ctx->viewport_extent[X] = (uint)(screen_w - left_panel_w - right_panel_w);
 	ctx->viewport_extent[Y] = (uint)(screen_h - toolbar_h);
 
-	const ButtonSpec default_btn_spec = {
-		.font          = font,
-		.font_size     = 14,
-		.padding       = 6.0f,
-		.corner_radius = 2.0f,
-		.color_idle    = {0.3f, 0.3f, 0.3f, 1.0f},
-		.color_hover   = {0.5f, 0.5f, 0.5f, 1.0f},
-		.color_active  = {0.2f, 0.2f, 0.2f, 1.0f},
-		.text_color    = {1.0f, 1.0f, 1.0f, 1.0f}
-	};
-
-	TextSpec header_text = {
-		.font       = font,
-		.font_size  = 16,
-		.text_color = {1.0f, 1.0f, 1.0f, 1.0f}
-	};
-
 	// --- TOP TOOLBAR ---
 	imguiBeginPanel(uictx, pool, (PanelSpec){
 		.primitive_type = UI_PRIMITIVE_RECTANGLE,
@@ -48,8 +91,7 @@ void	drawEditorUI(EditorContext *ectx, UiContext *uictx, ComponentPool *pool, Gr
 		.spacing        = 10.0f
 	});
 	
-	// We can wire this button directly to your game state!
-	if (imguiButton(uictx, pool, STRING_LIT("Play (Game Mode)"), default_btn_spec) == BUTTON_LEFT_CLICK) {
+	if (imguiButton(uictx, pool, STRING_LIT("Play (Game Mode)"), UI_BTN_SPEC()) == BUTTON_LEFT_CLICK) {
 		print("Button clicked\n");
 		gameStateSet(&g_game_state, NoClip, 0);
 		g_engine_mode = ENGINE_MODE_GAME;
@@ -58,50 +100,29 @@ void	drawEditorUI(EditorContext *ectx, UiContext *uictx, ComponentPool *pool, Gr
 	imguiEndPanel(uictx, pool); // Pop Toolbar
 
 	// --- LEFT PANEL ---
-	imguiBeginPanel(uictx, pool, (PanelSpec){
-		.primitive_type = UI_PRIMITIVE_RECTANGLE,
-		.layout_type    = UI_LAYOUT_VERTICAL,
+	imguiBeginPanel(uictx, pool, UI_PANEL_SPEC(
 		.offset         = {0.0f, toolbar_h}, // Start right below the toolbar
 		.fixed_size     = {left_panel_w, screen_h - toolbar_h},
-		.inner_color    = {0.2f, 0.2f, 0.2f, 1.0f},
-		.padding        = 10.0f,
-		.spacing        = 4.0f
-	});
+	));
 	
-	imguiText(uictx, pool, header_text, "LEFT PANEL!!");
+	imguiText(uictx, pool, UI_TEXT_SPEC(), "LEFT PANEL!!");
 
-	static bool	menu_open = false;
-	static f32	scroll_offset = 0;
 
-	MenuSpec	menu_spec = {
-		.font = font,
-		.font_size = 16,
-		.item_font_size = 12,
-		.padding = 2.0f,
-		.corner_radius = 0,
-		.color_idle    = {0.3f, 0.3f, 0.3f, 1.0f},
-		.color_hover   = {0.5f, 0.5f, 0.5f, 1.0f},
-		.color_active  = {0.2f, 0.2f, 0.2f, 1.0f},
-		.text_color    = {1.0f, 1.0f, 1.0f, 1.0f},
-		.spacing = 2.0f,
-		.open = &menu_open,
-		.max_height = 2,
-		.scroll_offset = &scroll_offset,
-	};
-
-	MenuButton	menu_buttons[] = {
-		{default_btn_spec, STRING_LIT("Button 1")},
-		{default_btn_spec, STRING_LIT("Button 2")},
-	};
-
-	MenuState	menu_state = imguiMenu(uictx, pool, STRING_LIT("Menu name!!!11!"), menu_buttons, sizeofarray(menu_buttons), menu_spec);
-	switch (menu_state) {
-		case MENU_NONE: break;
-		case MENU_HOVERED: break;
+	switch (
+		UI_MENU(uictx, pool, STRING_LIT("Menu name"), UI_MENU_SPEC(), UI_BTN_SPEC(),
+			STRING_LIT("Button 0"),
+			STRING_LIT("Button 1"),
+			STRING_LIT("Button 2"),
+		)
+	)
+	{
+		// Nothing was pressed
+		case -1: break;
 
 		// Button clicks:
-		case 0: _test_func();
-		case 1: _test_func();
+		case 0: _test_func(); break;
+		case 1: _test_func(); break;
+		case 2: _test_func(); break;
 
 		default: break;
 	}
@@ -119,7 +140,7 @@ void	drawEditorUI(EditorContext *ectx, UiContext *uictx, ComponentPool *pool, Gr
 		.spacing        = 15.0f
 	});
 
-	imguiText(uictx, pool, header_text, "RIGHT PANEL !11!");
+	imguiText(uictx, pool, UI_TEXT_SPEC(), "RIGHT PANEL !11!");
 	
 	imguiEndPanel(uictx, pool); // Pop Component Block
 	imguiEndPanel(uictx, pool); // Pop Right Panel
