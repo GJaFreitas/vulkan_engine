@@ -51,11 +51,12 @@ void	_test_func(void) {
 	.padding	= 2.0f, \
 	.spacing	= 2.0f, \
 	.corner_radius	= 0.0f, \
+	.outer_color	= {0.0f, 0.0f, 0.0f, 0.0f}, \
+	.inner_color	= {0.0f, 0.0f, 0.0f, 0.0f}, \
 	.color_idle	= {0.3f, 0.3f, 0.3f, 1.0f}, \
 	.color_hover	= {0.5f, 0.5f, 0.5f, 1.0f}, \
 	.color_active	= {0.2f, 0.2f, 0.2f, 1.0f}, \
 	.text_color	= {1.0f, 1.0f, 1.0f, 1.0f}, \
-	.max_height	= 2, \
 	__VA_ARGS__ \
 }
 

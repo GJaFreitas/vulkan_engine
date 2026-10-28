@@ -541,30 +541,32 @@ i32	imguiMenu(UiContext *uictx, ComponentPool *pool, StringView menu_name, Strin
 	UiWidgetState	*state = uiGetWidgetState(uictx, hashString32(menu_name));
 
 	// --- MENU PANEL --- //
-	imguiBeginPanel(uictx, pool, (PanelSpec){
+	PanelSpec	menu_panel_spec = (PanelSpec){
 		.primitive_type	= UI_PRIMITIVE_RECTANGLE,
 		.layout_type	= UI_LAYOUT_VERTICAL,
 		.anchor		= UI_ANCHOR_CENTER,
 		.offset		= {0},
 		.fixed_size	= {0},
-		.outer_color	= {0.0, 0.0, 0.8, 1.0},
-		.inner_color	= {0.7, 0.0, 0.0, 1.0},
 		.border_width	= 1,
-		.corner_radius	= 0,
-		.padding	= 4,
+		.corner_radius	= spec.corner_radius,
+		.padding	= spec.padding,
 		.spacing	= spec.spacing
-	});
+	};
+	glm_vec4_ucopy(spec.outer_color, menu_panel_spec.outer_color);
+	glm_vec4_ucopy(spec.inner_color, menu_panel_spec.inner_color);
+	imguiBeginPanel(uictx, pool, menu_panel_spec);
 
-	if (imguiButton(uictx, pool, menu_name, (ButtonSpec){
+	ButtonSpec	menu_btn = {
 		.font		= spec.font,
 		.font_size	= spec.font_size,
 		.padding	= spec.padding,
-		.corner_radius	= 0,
-		.color_idle	= {0.3f, 0.3f, 0.3f, 1.0f},
-		.color_hover	= {0.5f, 0.5f, 0.5f, 1.0f},
-		.color_active	= {0.1f, 0.1f, 0.1f, 1.0f},
-		.text_color	= {1.0f, 1.0f, 1.0f, 1.0f},
-	})) {
+		.corner_radius	= spec.corner_radius,
+	};
+	glm_vec4_ucopy(spec.color_idle, menu_btn.color_idle);
+	glm_vec4_ucopy(spec.color_hover, menu_btn.color_hover);
+	glm_vec4_ucopy(spec.color_active, menu_btn.color_active);
+	glm_vec4_ucopy(spec.text_color, menu_btn.text_color);
+	if (imguiButton(uictx, pool, menu_name, menu_btn)) {
 		(state->selected) = !(state->selected);
 	}
 
@@ -582,6 +584,7 @@ i32	imguiMenu(UiContext *uictx, ComponentPool *pool, StringView menu_name, Strin
 
 		if (imguiButton(uictx, pool, btn_name, btn_spec)) {
 			pressed = i;
+			// Should this 'break;' be here?
 			break ;
 		}
 	}

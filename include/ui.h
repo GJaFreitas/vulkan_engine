@@ -158,6 +158,8 @@ typedef struct MenuSpec
 	u8	item_font_size;
 	f32	padding;
 	f32	corner_radius;
+	vec4	outer_color;
+	vec4	inner_color;
 	vec4	color_idle;
 	vec4	color_hover;
 	vec4	color_active;
