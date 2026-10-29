@@ -27,12 +27,11 @@ UiRenderInfo	runUi(GraphicsContext *graphics_ctx, UiState *ui, Font *font, doubl
 	return buildUiRenderInfo(pool, ui->rmgui_root);
 }
 
-static inline UiComponent*	uiGet(ComponentPool *pool, u16 index) {
+static inline UiComponent	*uiGet(ComponentPool *pool, u16 index) {
 	return (UiComponent*)&pool->mem[index * sizeof(UiComponent)];
 }
 
-UiWidgetState*	uiGetWidgetState(UiContext* ctx, u32 hash_id)
-{
+static UiWidgetState	*uiGetWidgetState(UiContext* ctx, u32 hash_id) {
 	for (u32 i = 0; i < ctx->widget_state_count; i++) {
 		if (ctx->widget_states[i].hash_id == hash_id) {
 			return &ctx->widget_states[i];
@@ -45,6 +44,10 @@ UiWidgetState*	uiGetWidgetState(UiContext* ctx, u32 hash_id)
 	state->selected = false;
 	state->scroll_offset = 0.0f;
 	return state;
+}
+
+static inline UiLayoutState	*uiGetLayoutState(UiContext *uictx) {
+	return &uictx->layout_stack[uictx->layout_stack_count - 1];
 }
 
 // --- SETUP HELPERS ---
@@ -61,23 +64,6 @@ static inline u32	hashString32(StringView str)
 	}
 
 	return hash;
-}
-
-void	uiSetSize(ComponentPool *pool, u16 node_idx, f32 width, f32 height) {
-	UiComponent* node = uiGet(pool, node_idx);
-	node->fixed_size[X] = width;
-	node->fixed_size[Y] = height;
-}
-
-void	uiSetAbsolute(ComponentPool *pool, u16 node_idx, UiAnchor anchor, f32 offset_x, f32 offset_y) {
-	UiComponent* node = uiGet(pool, node_idx);
-	node->anchor = anchor;
-	node->offset[X] = offset_x;
-	node->offset[Y] = offset_y;
-}
-
-void	uiSetLayout(ComponentPool *pool, u16 node_idx, UiLayoutType type) {
-	uiGet(pool, node_idx)->layout_type = type;
 }
 
 typedef struct TextMeasurement
@@ -249,7 +235,7 @@ void	uiAppendChild(ComponentPool *pool, u16 parent, u16 new_idx)
 static inline void	appendToParent(UiContext *uictx, ComponentPool *pool, u16 idx) {
 	u16		parent_node = uictx->imgui_root;
 	if (uictx->layout_stack_count > 0) {
-		UiLayoutState	*parent_layout = &uictx->layout_stack[uictx->layout_stack_count - 1];
+		UiLayoutState	*parent_layout = uiGetLayoutState(uictx);
 		parent_node = parent_layout->component_idx;
 	}
 	uiAppendChild(pool, parent_node, idx);
@@ -269,7 +255,7 @@ void	imguiText(UiContext *uictx, ComponentPool *pool, TextSpec spec, const char 
 		engine_error(LOG_FILE, "imguiText called without an active panel!");
 		return;
 	}
-	UiLayoutState	*layout = &uictx->layout_stack[uictx->layout_stack_count - 1];
+	UiLayoutState	*layout = uiGetLayoutState(uictx);
 
 	// 1. Format the string dynamically
 	va_list	args;
@@ -283,26 +269,26 @@ void	imguiText(UiContext *uictx, ComponentPool *pool, TextSpec spec, const char 
 	stbsp_vsnprintf((char *)text_data, len + 1, fmt, args);
 	va_end(args);
 
-	// 2. Immediate HarfBuzz Shaping
+	// 2. HarfBuzz Shaping
 	TextMeasurement	measurement = uiShapeText(spec.font, spec.font_size, (const char *)text_data, len);
 
 	// 3. Allocate and populate the UI Component
 	UiComponent	*text;
 	initComponent(uictx, pool, &text);
 
-	text->primitive_type = UI_PRIMITIVE_TEXT_GLYPH;
-	text->font = spec.font;
-	text->font_size = spec.font_size;
-	glm_vec4_copy(spec.text_color, text->text_color);
-	text->text_flags = spec.flags;
+	*text = (UiComponent){
+		.primitive_type = UI_PRIMITIVE_TEXT_GLYPH,
+		.font = spec.font,
+		.font_size = spec.font_size,
+		.text_flags = spec.flags,
+		.text.data = text_data,
+		.text.count = len,
+		.shaped_glyphs = measurement.glyphs,
+		.shaped_glyph_count = measurement.count,
+	};
+	glm_vec4_ucopy(spec.text_color, text->text_color);
 
-	// Link the data
-	text->text.data = text_data;
-	text->text.count = len;
-	text->shaped_glyphs = measurement.glyphs;
-	text->shaped_glyph_count = measurement.count;
-
-	// 4. Calculate Final Screen Position IMMEDIATELY using the layout cursor
+	// 4. Calculate Final Screen Position using the layout cursor
 	text->final_screen_pos[X] = layout->cursor_x + spec.nudge_x;
 	text->final_screen_pos[Y] = layout->cursor_y + spec.nudge_y;
 	text->final_screen_size[X] = measurement.width;
@@ -343,7 +329,7 @@ void	imguiBeginPanel(UiContext *uictx, ComponentPool *pool, PanelSpec spec)
 
 	if (uictx->layout_stack_count > 0) {
 		// We are nested inside another panel! Start at its cursor.
-		UiLayoutState *parent_layout = &uictx->layout_stack[uictx->layout_stack_count - 1];
+		UiLayoutState *parent_layout = uiGetLayoutState(uictx);
 		start_x += parent_layout->cursor_x;
 		start_y += parent_layout->cursor_y;
 	}
@@ -354,7 +340,7 @@ void	imguiBeginPanel(UiContext *uictx, ComponentPool *pool, PanelSpec spec)
 
 	// --- CLIP RECT LOGIC ---
 	if (uictx->layout_stack_count > 0) {
-		UiLayoutState	*parent_layout = &uictx->layout_stack[uictx->layout_stack_count - 1];
+		UiLayoutState	*parent_layout = uiGetLayoutState(uictx);
 		UiComponent	*parent_panel = uiGet(pool, parent_layout->component_idx);
 
 		// 1. Inherit the parent's clip rect
@@ -408,7 +394,7 @@ void	imguiEndPanel(UiContext *uictx, ComponentPool *pool)
 
 	// 3. If we are nested, we must advance our PARENT'S cursor by our total size!
 	if (uictx->layout_stack_count > 0) {
-		UiLayoutState *parent_layout = &uictx->layout_stack[uictx->layout_stack_count - 1];
+		UiLayoutState *parent_layout = uiGetLayoutState(uictx);
 
 		if (parent_layout->layout_type == UI_LAYOUT_VERTICAL) {
 			parent_layout->cursor_y += panel->final_screen_size[Y] + parent_layout->spacing; // 4px margin
@@ -418,13 +404,14 @@ void	imguiEndPanel(UiContext *uictx, ComponentPool *pool)
 	}
 }
 
+// TODO: Text clips out of its box
 ButtonState	imguiButton(UiContext *uictx, ComponentPool *pool, StringView text_view, ButtonSpec spec)
 {
 	if (uictx->layout_stack_count == 0) {
 		engine_error(LOG_FILE, "imguiButton called without an active panel!");
 		return false;
 	}
-	UiLayoutState	*layout = &uictx->layout_stack[uictx->layout_stack_count - 1];
+	UiLayoutState	*layout = uiGetLayoutState(uictx);
 
 	const char	*text_str = (const char *)text_view.data; 
 	const int	len = text_view.count; 
@@ -432,12 +419,21 @@ ButtonState	imguiButton(UiContext *uictx, ComponentPool *pool, StringView text_v
 	// 1. Immediate HarfBuzz Shaping
 	TextMeasurement	measurement = uiShapeText(spec.font, spec.font_size, text_str, len);
 
-	// 2. Calculate Final Screen Bounds
-	const f32	btn_width = measurement.width + (spec.padding * 2.0f);
-	const f32	btn_height = spec.font_size + (spec.padding * 2.0f);
+	// 2. Calculate final screen bounds, if a fixed_size was given use that
+	const f32	btn_width = (spec.fixed_size[X] > 0.0f) ? spec.fixed_size[X] : measurement.width + (spec.padding * 2.0f);
+	const f32	btn_height = (spec.fixed_size[Y] > 0.0f) ? spec.fixed_size[Y] : spec.font_size + (spec.padding * 2.0f);
 
-	f32	pos_x = layout->cursor_x;
-	f32	pos_y = layout->cursor_y;
+	f32 pos_x = layout->cursor_x;
+	f32 pos_y = layout->cursor_y;
+
+	UiComponent *parent_panel = uiGet(pool, layout->component_idx);
+
+	// Create a strict clip rect that cuts the button and text if it exceeds btn_width!
+	vec4 strict_clip;
+	strict_clip[0] = MAX(parent_panel->clip_rect[0], pos_x);              // Left
+	strict_clip[1] = MAX(parent_panel->clip_rect[1], pos_y);              // Top
+	strict_clip[2] = MIN(parent_panel->clip_rect[2], pos_x + btn_width);  // Right
+	strict_clip[3] = MIN(parent_panel->clip_rect[3], pos_y + btn_height); // Bottom
 
 	// 3. Interaction Logic
 	u32	id = hashString32(text_view);
@@ -450,8 +446,8 @@ ButtonState	imguiButton(UiContext *uictx, ComponentPool *pool, StringView text_v
 	bool	mouse_right_down = mouseHeld(SDL_BUTTON_RIGHT);
 	bool	mouse_right_released = mouseReleased(SDL_BUTTON_RIGHT);
 
-	bool	is_hovered = (mx >= pos_x && mx <= pos_x + btn_width && 
-		my >= pos_y && my <= pos_y + btn_height);
+	bool is_hovered = (mx >= strict_clip[0] && mx <= strict_clip[2] && 
+	                   my >= strict_clip[1] && my <= strict_clip[3]);
 
 	// Is mouse inside button?
 	if (is_hovered) 
@@ -485,8 +481,7 @@ ButtonState	imguiButton(UiContext *uictx, ComponentPool *pool, StringView text_v
 	btn->final_screen_size[Y] = btn_height;
 	btn->corner_radius = spec.corner_radius; 
 
-	UiComponent	*parent_panel = uiGet(pool, layout->component_idx);
-	glm_vec4_copy(parent_panel->clip_rect, btn->clip_rect);
+	glm_vec4_copy(strict_clip, btn->clip_rect);
 
 	if (uictx->active_item_hash == id) {
 		glm_vec4_copy(spec.color_active, btn->inner_color); 
@@ -518,7 +513,7 @@ ButtonState	imguiButton(UiContext *uictx, ComponentPool *pool, StringView text_v
 	text->final_screen_pos[Y] = pos_y + spec.padding;
 	text->final_screen_size[X] = measurement.width;
 	text->final_screen_size[Y] = spec.font_size;
-	glm_vec4_copy(parent_panel->clip_rect, text->clip_rect);
+	glm_vec4_copy(strict_clip, text->clip_rect);
 
 	// 6. Advance the Layout Cursor
 	if (layout->layout_type == UI_LAYOUT_VERTICAL) {
@@ -575,22 +570,66 @@ i32	imguiMenu(UiContext *uictx, ComponentPool *pool, StringView menu_name, Strin
 		return -1;
 	}
 
-	UiComponent	*menu;
-	initComponent(uictx, pool, &menu);
+	UiLayoutState	*layout = uiGetLayoutState(uictx);
+
+	assert(btn_count > 0);
+	assert(spec.max_height > 0);
+
+	// Calculate item sizes
+	const f32 item_height = spec.item_font_size + (spec.padding * 2.0f);
+	const u32 visible_count = (spec.max_height < btn_count) ? spec.max_height : btn_count;
+	const f32 total_content_height = (btn_count * item_height) + ((btn_count - 1) * spec.spacing);
+	const f32 visible_panel_height = (visible_count * item_height) + ((visible_count - 1) * spec.spacing) + (spec.padding * 2.0f);
+	const f32 max_scroll = MAX(0.0f, total_content_height - (visible_panel_height - (spec.padding * 2.0f)));
+
+	const f32 panel_start_x = layout->cursor_x;
+	const f32 panel_start_y = layout->cursor_y;
+
+	// Calculate scroll
+	if (g_input_state.mouse_pos[X] >= panel_start_x && g_input_state.mouse_pos[X] <= panel_start_x + spec.width &&
+	    g_input_state.mouse_pos[Y] >= panel_start_y && g_input_state.mouse_pos[Y] <= panel_start_y + visible_panel_height) 
+	{
+		if (g_input_state.mouse_wheel_y != 0.0f) {
+			state->scroll_offset -= g_input_state.mouse_wheel_y * (item_height * 0.5f);
+		}
+	}
+	state->scroll_offset = CLAMP(state->scroll_offset, 0.0f, max_scroll);
+
+	imguiBeginPanel(uictx, pool, (PanelSpec){
+		.primitive_type = UI_PRIMITIVE_RECTANGLE,
+		.layout_type    = UI_LAYOUT_VERTICAL,
+		.fixed_size     = {spec.width, visible_panel_height},
+		.padding        = spec.padding,
+		.spacing        = spec.spacing
+	});
+	UiLayoutState*	inner_layout = uiGetLayoutState(uictx);
+
+	const f32	stride		= item_height + spec.spacing;
+	const u32	first_idx	= (u32)(state->scroll_offset / stride);
+	const u32	last_idx	= MIN(btn_count, first_idx + (u32)(visible_panel_height / stride) + 2);
+
+	// To know if we need a tooltip or not
+	const f32	avail_text_width = spec.width - (spec.padding * 2.0f);
+
+	// 2. Apply scroll, then fast-forward the cursor to the first visible item!
+	inner_layout->cursor_y -= state->scroll_offset;
+	inner_layout->cursor_y += first_idx * stride;
+	
+	btn_spec.fixed_size[X] = spec.width;
 
 	i32	pressed = -1;
-	for (u32 i = 0; i < btn_count; i++) {
+	for (u32 i = first_idx; i < last_idx; i++) {
 		const String		btn_name = btn_list[i];
 
+		// TODO: Implement tooltip for buttons larger than spec.width
 		if (imguiButton(uictx, pool, btn_name, btn_spec)) {
 			pressed = i;
-			// Should this 'break;' be here?
-			break ;
 		}
 	}
 
-	imguiEndPanel(uictx, pool);
-	// --- MENU PANEL END --- //
+	imguiEndPanel(uictx, pool); // Dropdown panel
+	imguiEndPanel(uictx, pool); // Menu panel
+
 	return pressed;
 }
 
@@ -678,7 +717,7 @@ static void pushTextInstances(UiComponent *node, UiRenderInstance *instances, u3
 		cursor_pos += 2;
 	f32	text_cursor_x = -1;
 
-	// Loop over our cached glyphs instead of calling HarfBuzz!
+	// Loop over cached glyphs
 	for (u32 i = 0; i < node->shaped_glyph_count; i++) {
 		UiShapedGlyph *cached = &node->shaped_glyphs[i];
 		const GlyphInfo *g = atlasFindGlyph(atlas, cached->atlas_index);
@@ -695,7 +734,7 @@ static void pushTextInstances(UiComponent *node, UiRenderInstance *instances, u3
 				u32 idx = *count;
 				UiRenderInstance *inst = &instances[idx];
 
-				glm_vec4_copy(node->clip_rect, inst->clip_rect);
+				glm_vec4_ucopy(node->clip_rect, inst->clip_rect);
 				inst->primitive_type = UI_PRIMITIVE_TEXT_GLYPH;
 				inst->stroke_width   = 0.0f;
 				inst->corner_radius  = 0.0f;

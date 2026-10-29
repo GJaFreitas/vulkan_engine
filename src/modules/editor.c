@@ -6,67 +6,6 @@ void	_test_func(void) {
 	print("Hi from button\n");
 }
 
-// The __VA_ARGS__ means that any value we pass will be used isntead
-
-#define UI_PANEL_SPEC(...) (PanelSpec){ \
-	.primitive_type	= UI_PRIMITIVE_RECTANGLE, \
-	.layout_type	= UI_LAYOUT_VERTICAL, \
-	.offset		= {0.0f, 0.0f}, \
-	.fixed_size	= {0.0f, 0.0f}, \
-	.inner_color	= {0.2f, 0.2f, 0.2f, 1.0f}, \
-	.outer_color	= {0.0f, 0.0f, 0.0f, 0.0f}, \
-	.padding	= 10.0f, \
-	.spacing	= 4.0f, \
-	.border_width	= 0.0f, \
-	.corner_radius	= 0.0f, \
-	__VA_ARGS__ \
-}
-
-#define UI_BTN_SPEC(...) (ButtonSpec){ \
-	.font		= font, \
-	.font_size	= 14.0f, \
-	.padding	= 6.0f, \
-	.corner_radius	= 2.0f, \
-	.color_idle	= {0.3f, 0.3f, 0.3f, 1.0f}, \
-	.color_hover	= {0.5f, 0.5f, 0.5f, 1.0f}, \
-	.color_active	= {0.2f, 0.2f, 0.2f, 1.0f}, \
-	.text_color	= {1.0f, 1.0f, 1.0f, 1.0f}, \
-	__VA_ARGS__ \
-}
-
-#define UI_TEXT_SPEC(...) (TextSpec){ \
-	.font		= font, \
-	.font_size	= 16.0f, \
-	.text_color	= {1.0f, 1.0f, 1.0f, 1.0f}, \
-	.nudge_x	= 0.0f, \
-	.nudge_y	= 0.0f, \
-	.flags		= 0, \
-	__VA_ARGS__ \
-}
-
-#define UI_MENU_SPEC(...) (MenuSpec){ \
-	.font		= font, \
-	.font_size	= 16.0f, \
-	.item_font_size	= 12.0f, \
-	.padding	= 2.0f, \
-	.spacing	= 2.0f, \
-	.corner_radius	= 0.0f, \
-	.outer_color	= {0.0f, 0.0f, 0.0f, 0.0f}, \
-	.inner_color	= {0.0f, 0.0f, 0.0f, 0.0f}, \
-	.color_idle	= {0.3f, 0.3f, 0.3f, 1.0f}, \
-	.color_hover	= {0.5f, 0.5f, 0.5f, 1.0f}, \
-	.color_active	= {0.2f, 0.2f, 0.2f, 1.0f}, \
-	.text_color	= {1.0f, 1.0f, 1.0f, 1.0f}, \
-	__VA_ARGS__ \
-}
-
-#define UI_MENU(ctx, pool, name, spec, btn_spec, ...) \
-	imguiMenu(ctx, pool, name, \
-		(String[]){__VA_ARGS__}, \
-		sizeof((String[]){__VA_ARGS__}) / sizeof(String), \
-		btn_spec, \
-		spec)
-
 void	drawEditorUI(EditorContext *ectx, UiContext *uictx, ComponentPool *pool, GraphicsContext *ctx, Font *font)
 {
 	const f32 screen_w = (f32)ctx->swapchain_width;
@@ -110,10 +49,12 @@ void	drawEditorUI(EditorContext *ectx, UiContext *uictx, ComponentPool *pool, Gr
 
 
 	switch (
-		UI_MENU(uictx, pool, STRING_LIT("Menu name"), UI_MENU_SPEC(), UI_BTN_SPEC(),
+		UI_MENU(uictx, pool, STRING_LIT("Menu name"), UI_MENU_SPEC(.width = 100, .max_height = 10), UI_BTN_SPEC(),
 			STRING_LIT("Button 0"),
 			STRING_LIT("Button 1"),
 			STRING_LIT("Button 2"),
+			STRING_LIT("Button with an extremely long name, seriously this is so unecessary"),
+			STRING_LIT("Button 3"),
 		)
 	)
 	{

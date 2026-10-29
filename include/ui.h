@@ -65,6 +65,7 @@ typedef struct UiShapedGlyph
 #define TEXT_IS_DIRTY	(1 << 0)
 #define TEXT_HAS_CURSOR	(1 << 1)
 
+//»speed
 // TODO: Pack this struct... a lot
 typedef struct UiComponent
 {
@@ -137,6 +138,7 @@ typedef struct ButtonSpec
 	u8	font_size;
 	f32	padding;
 	f32	corner_radius;
+	vec2	fixed_size;
 	vec4	color_idle;
 	vec4	color_hover;
 	vec4	color_active;
@@ -166,6 +168,7 @@ typedef struct MenuSpec
 	vec4	text_color;
 	f32	spacing;	// Space between children inside this panel
 	f32	max_height;
+	f32	width;
 }	MenuSpec;
 
 typedef struct ComponentPool
@@ -194,6 +197,7 @@ typedef struct {
 	i32	selected;
 	u32	hash_id;
 	f32	scroll_offset;
+	f32	cached_width;
 }	UiWidgetState;
 
 typedef struct UiContext {
@@ -230,6 +234,69 @@ typedef struct UiState
 	ComponentPool	pool;
 }	UiState;
 
+// The __VA_ARGS__ means that any value we pass will be used isntead
+
+#define UI_PANEL_SPEC(...) (PanelSpec){ \
+	.primitive_type	= UI_PRIMITIVE_RECTANGLE, \
+	.layout_type	= UI_LAYOUT_VERTICAL, \
+	.offset		= {0.0f, 0.0f}, \
+	.fixed_size	= {0.0f, 0.0f}, \
+	.inner_color	= {0.2f, 0.2f, 0.2f, 1.0f}, \
+	.outer_color	= {0.0f, 0.0f, 0.0f, 0.0f}, \
+	.padding	= 10.0f, \
+	.spacing	= 4.0f, \
+	.border_width	= 0.0f, \
+	.corner_radius	= 0.0f, \
+	__VA_ARGS__ \
+}
+
+#define UI_BTN_SPEC(...) (ButtonSpec){ \
+	.font		= font, \
+	.font_size	= 14.0f, \
+	.padding	= 6.0f, \
+	.corner_radius	= 2.0f, \
+	.color_idle	= {0.3f, 0.3f, 0.3f, 1.0f}, \
+	.color_hover	= {0.5f, 0.5f, 0.5f, 1.0f}, \
+	.color_active	= {0.2f, 0.2f, 0.2f, 1.0f}, \
+	.text_color	= {1.0f, 1.0f, 1.0f, 1.0f}, \
+	.fixed_size	= {0.0f, 0.0f}, \
+	__VA_ARGS__ \
+}
+
+#define UI_TEXT_SPEC(...) (TextSpec){ \
+	.font		= font, \
+	.font_size	= 16.0f, \
+	.text_color	= {1.0f, 1.0f, 1.0f, 1.0f}, \
+	.nudge_x	= 0.0f, \
+	.nudge_y	= 0.0f, \
+	.flags		= 0, \
+	__VA_ARGS__ \
+}
+
+#define UI_MENU_SPEC(...) (MenuSpec){ \
+	.font		= font, \
+	.font_size	= 16.0f, \
+	.item_font_size	= 12.0f, \
+	.padding	= 2.0f, \
+	.spacing	= 2.0f, \
+	.corner_radius	= 0.0f, \
+	.outer_color	= {0.0f, 0.0f, 0.0f, 0.0f}, \
+	.inner_color	= {0.0f, 0.0f, 0.0f, 0.0f}, \
+	.color_idle	= {0.3f, 0.3f, 0.3f, 1.0f}, \
+	.color_hover	= {0.5f, 0.5f, 0.5f, 1.0f}, \
+	.color_active	= {0.2f, 0.2f, 0.2f, 1.0f}, \
+	.text_color	= {1.0f, 1.0f, 1.0f, 1.0f}, \
+	.width		= 0.0f, \
+	.max_height	= 1, \
+	__VA_ARGS__ \
+}
+
+#define UI_MENU(ctx, pool, name, spec, btn_spec, ...) \
+	imguiMenu(ctx, pool, name, \
+		(String[]){__VA_ARGS__}, \
+		sizeof((String[]){__VA_ARGS__}) / sizeof(String), \
+		btn_spec, \
+		spec)
 
 void	initUi(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm);
 
