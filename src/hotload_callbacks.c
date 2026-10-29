@@ -1,4 +1,5 @@
 #include "base_layer.h"
+#include <sys/stat.h>
 
 typedef struct CallbackEntry
 {
@@ -8,46 +9,53 @@ typedef struct CallbackEntry
 	FP_HotloadCallback	function;
 	void			*user_data;
 	struct CallbackEntry	*next;
-}	CallbackEntry;
+} CallbackEntry;
 
-static CallbackEntry	callback_entries;
-static CallbackEntry	*current_entry = &callback_entries;
+static CallbackEntry	*callback_list = NULL;
 static Allocator	callback_allocator;
 
 void	start_hotload_callbacks(void)
 {
-	callback_allocator = newArenaAllocator(1 << 19, NULL, DEFAULT_ALIGN);
+	callback_allocator = newArenaAllocator(KB(32), NULL, DEFAULT_ALIGN);
 }
 
 static i64	getLastUpdate(String filename)
 {
-	char	filename_cstring[128];
-	memcpy(filename_cstring, filename.data, filename.count);
-	filename_cstring[filename.count] = 0;
-	i32	fd = open(filename_cstring, O_RDONLY);
+	char		filename_cstring[4096];
+	struct stat	stats;
 
-	if (fd == -1) {
-		engine_warn(LOG_FILE, "Unable to open file: %S", filename);
+	// Prevent buffer overflow for long paths
+	if (filename.count >= sizeof(filename_cstring)) {
+		engine_warn(LOG_FILE, "Filename too long: %S", filename);
 		return (-1);
 	}
 
-	struct stat	stats;
-	fstat(fd, &stats);
+	memcpy(filename_cstring, filename.data, filename.count);
+	filename_cstring[filename.count] = '\0';
 
-	close(fd);
-	return (stats.st_mtim.tv_sec);
+	// Use stat instead of open/fstat/close to reduce syscalls by 66%
+	if (stat(filename_cstring, &stats) == -1) {
+		return (-1);
+	}
+
+	// Combine seconds and nanoseconds to catch rapid consecutive saves
+	return ((i64)stats.st_mtim.tv_sec * 1000000000LL) + (i64)stats.st_mtim.tv_nsec;
 }
 
 void	do_callbacks(void)
 {
-	CallbackEntry	*cur = &callback_entries;
+	CallbackEntry	*cur;
+	i64		last_change;
 
-	while (cur->next != NULL) {
-		i64	last_change = getLastUpdate(cur->filename);
+	cur = callback_list;
+
+	while (cur != NULL) {
+		last_change = getLastUpdate(cur->filename);
 
 		if (last_change != -1 && last_change != cur->last_change) {
 			cur->last_change = last_change;
 			cur->function(cur->user_data);
+			engine_log(LOG_FILE, "Loading file: %S", cur->filename);
 		}
 		cur = cur->next;
 	}
@@ -55,12 +63,17 @@ void	do_callbacks(void)
 
 void	register_callback(String filename, FP_HotloadCallback function, void *user_data)
 {
-	current_entry->filename = strDup(filename, &callback_allocator);
-	current_entry->last_change = getLastUpdate(filename);
-	current_entry->needs_change = 0;
-	current_entry->function = function;
-	current_entry->user_data = user_data;
-	current_entry->next = callback_allocator.fp_allocation(&callback_allocator, sizeof(CallbackEntry), 16);
-	current_entry = current_entry->next;
-	current_entry->next = NULL;
+	CallbackEntry	*new_entry;
+	
+	new_entry = callback_allocator.fp_allocation(&callback_allocator, sizeof(CallbackEntry), 16);
+
+	new_entry->filename = strDup(filename, &callback_allocator);
+	new_entry->last_change = getLastUpdate(filename);
+	new_entry->needs_change = false;
+	new_entry->function = function;
+	new_entry->user_data = user_data;
+	
+	// Standard O(1) head insertion
+	new_entry->next = callback_list;
+	callback_list = new_entry;
 }

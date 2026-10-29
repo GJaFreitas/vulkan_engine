@@ -1,5 +1,5 @@
-import common;
 #include "shared_structs.h"
+#include "include/common.slang"
 
 // --- BINDLESS: Push Constants with BDA ---
 [[vk::push_constant]] ShadowRootConstants root;
@@ -19,7 +19,8 @@ VSOutput vertMain(uint vertexID : SV_VertexID, uint instanceID: SV_InstanceID)
     VSOutput out;
     
     // Transform vertex from local space to world space
-    float4 world_pos = mul(inst.model_mat, float4(v.pos, 1.0));
+    float4x4 model_mat = calculateModelMatrix(inst);
+    float4 world_pos = mul(model_mat, float4(v.pos, 1.0));
     
     // Project directly from world space to the specific cascade's light space
     out.Position = mul(ubo.light_space_matrices[root.cascade_index], world_pos);

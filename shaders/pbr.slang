@@ -1,6 +1,5 @@
-import common;
-
 #include "shared_structs.h"
+#include "include/common.slang"
 
 // --- BINDLESS: SHADOW MAP ---
 // Render targets (like shadow maps) are often kept in a dedicated descriptor set (Set 1)
@@ -26,14 +25,15 @@ VSOutput vertMain(uint vertexID : SV_VertexID, uint instanceID: SV_InstanceID)
 
     Vertex v = root.vertex_addr[vertexID];
     EntityInstanceData inst = root.instance_addr[instanceID];
+    float4x4 model_mat = calculateModelMatrix(inst);
 
     // --- POSITION CALCULATIONS ---
-    float4 world_pos = mul(inst.model_mat, float4(v.pos, 1.0));
+    float4 world_pos = mul(model_mat, float4(v.pos, 1.0));
     float4 camera_pos = mul(root.ubo_addr[0].view, world_pos);
     out.Position = mul(root.ubo_addr[0].proj, camera_pos);
 
     // --- NORMAL CALCULATIONS ---
-    out.Normal = normalize(mul((float3x3)inst.model_mat, v.normal));
+    out.Normal = normalize(mul((float3x3)model_mat, v.normal));
 
     // --- PASSTHROUGH ---
     out.ViewDepth = abs(camera_pos.z);

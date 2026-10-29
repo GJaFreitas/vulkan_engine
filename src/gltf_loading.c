@@ -894,108 +894,156 @@ void	modelLoad(String filename, GraphicsContext *ctx, Model *model)
 	engine_log(LOG_FILE, "Successfully loaded texture %S", filename);
 }
 
-static ModelCache	model_cache;
 // NOTE: Parent to all model allocations
 static Allocator	model_allocator;
 
-u32	getModelCountFromCache()
+u32	modelCacheGetCount(ModelCache *cache)
 {
-	return (model_cache.pool.pool.capacity - model_cache.pool.pool.free_count);
+	return (MAX_MODELS - cache->free_count);
 }
 
-ModelCacheEntry	*modelCacheFind(String path)
+void	initModelCache(ModelCache *cache)
 {
-	ModelCacheEntry	*entries = (ModelCacheEntry *)model_cache.pool.pool.slots;
+	model_allocator = newHeapAllocator(GB(2), NULL, DEFAULT_ALIGN);
+	
+	cache->free_count = MAX_MODELS;
+	for (u32 i = 0; i < MAX_MODELS; i++) {
+		cache->free_handles[i] = (MAX_MODELS - 1) - i;
+		
+		// -1 signifies this handle is completely unused/freed
+		cache->ref_counts[i] = -1; 
+		cache->time_to_unload[i] = 0;
+	}
+}
 
-	for (u32 i = 0; i < model_cache.pool.pool.capacity; i++) {
-		if (strEq(entries[i].path, path)) {
-			return (&entries[i]);
+static u64	secureHashString(String32 str)
+{
+	u64	hash = 0xCBF29CE484222325ull;
+	for (u64 i = 0; i < str.count; i++) {
+		hash ^= str.data[i];
+		hash *= 0x100000001B3ull;
+	}
+	
+	if (hash == HASH_EMPTY || hash == HASH_TOMBSTONE) {
+		hash = 2; 
+	}
+	return hash;
+}
+
+void	modelCacheRelease(ModelCache *cache, ModelHandle handle)
+{
+	assert(cache->ref_counts[handle] > 0);
+	cache->ref_counts[handle]--;
+
+	// If nobody is using it, start the countdown
+	if (cache->ref_counts[handle] == 0) {
+		cache->time_to_unload[handle] = UNLOAD_DELAY_MS;
+	}
+}
+
+void	freeModel(Model *model)
+{
+	// All the models allocations where in there, managed by model
+	model_allocator.fp_free(&model_allocator, model->arena.arena.mem);
+}
+
+void	modelCacheTick(ModelCache *cache, u16 delta_ms)
+{
+	for (u32 i = 0; i < MAX_MODELS; i++) {
+		// Only process models that are marked for deletion
+		if (cache->ref_counts[i] == 0) {
+			
+			if (cache->time_to_unload[i] <= delta_ms) {
+				// Time is up! 
+				freeModel(cache->models[i]);
+				cache->models[i] = NULL;
+
+				// Return to the unallocated state
+				cache->ref_counts[i] = -1;
+				cache->time_to_unload[i] = 0;
+
+				u64	hash = secureHashString(cache->paths[i]);
+				u64	slot = hash & (HASH_TABLE_SIZE - 1);
+				
+				while (cache->hash_table[slot].hash != HASH_EMPTY) {
+					if (cache->hash_table[slot].handle == i) {
+						cache->hash_table[slot].hash = HASH_TOMBSTONE;
+						break;
+					}
+					slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
+				}
+
+				cache->free_handles[cache->free_count] = i;
+				cache->free_count++;
+
+			} else {
+				cache->time_to_unload[i] -= delta_ms;
+			}
 		}
 	}
-
-	return NULL;
 }
 
-void	modelCacheInsert(String path, Model *model)
+static bool	strEq32(String32 s1, String32 s2)
 {
-	ModelCacheEntry	*entry = model_cache.pool.fp_allocation(&model_cache.pool, sizeof(ModelCacheEntry), DEFAULT_ALIGN);
-	entry->path = strDup(path, &model->arena);
-	entry->ref_count = 1;
-	entry->model = model;
+	if (s1.count != s2.count) return false;
+	for (u32 i = 0; i < s1.count; i++) {
+		if (s1.data[i] != s2.data[i]) return false;
+	}
+	return true;
 }
 
-Model	*modelCacheAcquire(GraphicsContext *ctx, String path)
+ModelHandle	modelCacheAcquire(ModelCache *cache, GraphicsContext *ctx, String model_path)
 {
-	// TODO: Fix this since its always returning something
-	ModelCacheEntry	*entry = modelCacheFind(path);
+	assert(model_path.count < 32);
+	String32	path = {.count = model_path.count};
+	memcpy(path.data, model_path.data, model_path.count);
 
-	if (entry) {
-		entry->ref_count++;
-		return (entry->model);
+	u64	hash = secureHashString(path);
+	u64	slot = hash & (HASH_TABLE_SIZE - 1);
+	u64	first_tombstone = HASH_TABLE_SIZE; 
+
+	while (cache->hash_table[slot].hash != HASH_EMPTY) {
+		if (cache->hash_table[slot].hash == HASH_TOMBSTONE) {
+			if (first_tombstone == HASH_TABLE_SIZE) {
+				first_tombstone = slot;
+			}
+		} else if (cache->hash_table[slot].hash == hash) {
+			ModelHandle	handle = cache->hash_table[slot].handle;
+			
+			// We got a collision so check if this is actually the model
+			if (strEq32(cache->paths[handle], path)) {
+				cache->ref_counts[handle]++;
+				cache->time_to_unload[handle] = 0; 
+				return handle;
+			}
+		}
+		slot = (slot + 1) & (HASH_TABLE_SIZE - 1);
 	}
 
+	// Passed tombstone on first look? If so then put model there
+	u64	insert_slot = (first_tombstone != HASH_TABLE_SIZE) ? first_tombstone : slot;
+
+	assert(cache->free_count > 0);
+	cache->free_count--;
+	ModelHandle	new_handle = cache->free_handles[cache->free_count];
+
+	// Models own their own memory
 	Allocator	model_arena = newArenaAllocator(MB(500), &model_allocator, DEFAULT_ALIGN);
-	Model	*model = model_arena.fp_allocation(&model_arena, sizeof(Model), DEFAULT_ALIGN);
-	model->arena = model_arena;
-	modelLoad(path, ctx, model);
-	modelCacheInsert(path, model);
+	cache->models[new_handle] = model_arena.fp_allocation(&model_arena, sizeof(Model), DEFAULT_ALIGN);
+	cache->models[new_handle]->arena = model_arena;
+	modelLoad(model_path, ctx, cache->models[new_handle]);
+	memcpy(&cache->paths[new_handle], &path, sizeof(String32));
 	// Resize the allocation to fit exactly how much it needs
 	model_arena.arena.mem = model_allocator.fp_reallocation(&model_allocator, model_arena.arena.mem, MB(500), model_arena.arena.offset, DEFAULT_ALIGN);
 	const u64	allocation_size = heapGetRealAllocationSize(&model_allocator, model_arena.arena.mem);
 	model_arena.arena.size = allocation_size;
-	return model;
-}
+	
+	// Claim the slot
+	cache->ref_counts[new_handle] = 1;
+	cache->time_to_unload[new_handle] = 0;
 
-void	modelCacheRelease(Model *model)
-{
-	ModelCacheEntry	*entry = modelCacheFind(model->path);
+	cache->hash_table[insert_slot].hash = hash;
+	cache->hash_table[insert_slot].handle = new_handle;
 
-	if (!entry) {
-		engine_warn(LOG_FILE, "Invalid model passed to modelCacheRelease(), path: %S", model->path);
-		return ;
-	}
-
-	entry->ref_count--;
-}
-
-void	modelUnload(ModelCacheEntry *entry)
-{
-	// Free all memory used by model
-	model_allocator.fp_free(&model_allocator, &entry->model->arena);
-	// Make space for next entry
-	model_cache.pool.fp_free(&model_cache.pool, entry);
-}
-
-void	modelCacheSweep()
-{
-	// If at target 60 fps this means around 2 seconds
-	const u32	grace_frames = 120;
-	ModelCacheEntry	*entries = (ModelCacheEntry *)model_cache.pool.pool.slots;
-	for (u32 i = 0; i < model_cache.pool.pool.capacity; i++) {
-		ModelCacheEntry *entry = &entries[i];
-
-		if (!entry->model) continue;
-
-		if (entry->ref_count == 0) {
-			if (entry->pending_unload == false) {
-				entry->pending_unload = true;
-				entry->frames_since_unload = 0;
-			} else {
-				entry->frames_since_unload++;
-				if (entry->frames_since_unload >= grace_frames) {
-					modelUnload(entry);
-				}
-			}
-		} else {
-			// Was reacquired
-			entry->pending_unload = false;
-			entry->frames_since_unload = 0;
-		}
-	}
-}
-
-void	initModelCache(void)
-{
-	model_cache.pool = newPoolAllocator(512, sizeof(ModelCacheEntry), NULL, DEFAULT_ALIGN);
-	model_allocator = newHeapAllocator(GB(2), NULL, DEFAULT_ALIGN);
+	return new_handle;
 }

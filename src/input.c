@@ -1,7 +1,5 @@
 #include "world.h"
 
-void	createPBRPipeline(GraphicsContext *ctx);
-
 // TODO: When a main menu is added remember to change this
 EngineMode	g_engine_mode = ENGINE_MODE_GAME;
 InputState	g_input_state;
@@ -24,13 +22,21 @@ SDL_Scancode	g_keybinds[ACTION_MAX_ENUM] = {
 
 void	inputBeginFrame(void)
 {
-	int		numkeys;
+	int	numkeys;
 	const bool	*state = SDL_GetKeyboardState(&numkeys);
 
 	// 1. Backup the last frame for key_pressed / key_released logic
 	memcpy(g_input_state.last, g_input_state.current, NUM_KEYS);
 	// 2. Overwrite the current frame with the true OS physical state
 	memcpy(g_input_state.current, state, (numkeys < NUM_KEYS) ? numkeys : NUM_KEYS);
+
+	// --- 3. UPDATE MOUSE STATE ---
+	g_input_state.last_mouse_state = g_input_state.mouse_state;
+	float	mx, my;
+	g_input_state.mouse_state = SDL_GetMouseState(&mx, &my);
+	g_input_state.mouse_pos[X] = (f32)mx;
+	g_input_state.mouse_pos[Y] = (f32)my;
+	// -----------------------------
 
 	// Reset scroll every frame so it doesn't spin forever
 	g_input_state.mouse_wheel_y = 0.0f;
@@ -54,8 +60,7 @@ static void resolveMouseState(SDL_Window *window) {
 	} 
 	else if (g_engine_mode == ENGINE_MODE_EDITOR) {
 		// Hybrid Editor Mouse: Lock only while Right Mouse Button is held
-		u32	mouse_state = SDL_GetMouseState(NULL, NULL);
-		if (mouse_state & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) {
+		if (mouseHeld(SDL_BUTTON_RIGHT)) {
 			should_lock = true;
 		} else {
 			should_lock = false;
@@ -165,13 +170,6 @@ void	processEvents(World *world) {
 				if (event.type == SDL_EVENT_KEY_DOWN) {
 					if (event.key.key == SDLK_ESCAPE) {
 						gameStateToggle(&g_game_state, Running);
-					} else if (event.key.key == SDLK_R) {
-						vkDeviceWaitIdle(world->graphics_ctx->device);
-						if (system("make")) {
-							consoleAppend("Error detected recompiling shaders.");
-						} else {
-							createPBRPipeline(world->graphics_ctx);
-						}
 					}
 				}
 				break;

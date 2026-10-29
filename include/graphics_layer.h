@@ -201,22 +201,6 @@ typedef struct GLTFModel
 	Animation	*animations;	u32	animation_count;
 }	Model;
 
-typedef struct ModelCacheEntry
-{
-	Model	*model;
-	String		path;
-
-	// Unloading logic
-	u32		ref_count;
-	bool		pending_unload;
-	u32		frames_since_unload;
-}	ModelCacheEntry;
-
-typedef struct ModelCache
-{
-	Allocator	pool;
-}	ModelCache;
-
 typedef struct FrameResources
 {
 	VkCommandPool	cmd_pool;
@@ -238,6 +222,123 @@ typedef struct CascadedShadowMap
 	VkImageView	cascade_views[SHADOW_MAP_CASCADE_COUNT]; // Individual layer views
 	VkDescriptorSet	descriptor_set;
 }	CascadedShadowMap;
+
+#define MAX_PIPELINES	128
+#define MAX_SHADERS	64
+
+enum PipelineType {
+	PIPELINE_TYPE_GRAPHICS = 0,
+	PIPELINE_TYPE_COMPUTE  = 1
+};
+
+// A lightweight handle to pass around the engine instead of Vulkan pointers.
+typedef u8	PipelineHandle;
+typedef u16	ShaderHandle;
+typedef u64	PipelineState;
+
+// Shifts for the bitmask
+#define SHIFT_SHADER	0	// 16bit	(Bits 0-15)
+#define SHIFT_CULL	16	// 3bit		(Bits 16-18)
+#define SHIFT_BLEND	20	// 3bit		(Bits 20-22)
+#define SHIFT_DEPTH	24	// 3bit		(Bits 24-26)
+#define SHIFT_TOPO	28	// 3bit		(Bits 28-30)
+#define SHIFT_TYPE	31	// 1bit		(Bit 31) 0 = Graphics | 1 = Compute
+#define SHIFT_PASS	32	// 3bit		(Bits 32-34)
+#define SHIFT_DYNAMIC	35	// 1bit		(Bit 35) 0 = Depth bias disabled | 1 = enabled
+#define SHIFT_COMPARE	36	// 3bit		(Bit 36-39)
+
+// ---------------------------------------------------------
+// RENDER STATE ENUMS
+// ---------------------------------------------------------
+enum PassType {
+	PASS_MAIN = 0,		// Color + Depth
+	PASS_SHADOW,		// Depth Only
+	PASS_UI			// Color Only (No Depth)
+};
+
+enum CullMode {
+	CULL_NONE = 0,
+	CULL_BACK,
+	CULL_FRONT
+};
+
+enum BlendMode {
+	BLEND_NONE = 0,
+	BLEND_ALPHA,
+	BLEND_ADDITIVE
+};
+
+enum DepthMode {
+	DEPTH_NONE = 0,
+	DEPTH_READ,
+	DEPTH_RW		// Read and Write
+};
+
+enum TopologyMode {
+	TOPO_TRIANGLES = 0,
+	TOPO_TRIANGLE_STRIP,
+	TOPO_LINES,
+	TOPO_POINTS
+};
+
+enum DynamicMode {
+	DYNAMIC_DEPTH_DISABLE = 0,
+	DYNAMIC_DEPTH_ENABLE
+};
+
+enum CompareMode {
+	COMPARE_LESS = 0,
+	COMPARE_LESS_OR_EQUAL,
+	COMPARE_GREATER,
+	COMPARE_GREATER_OR_EQUAL,
+	COMPARE_EQUAL,
+	COMPARE_ALWAYS
+};
+
+// Helper to pack the state
+static inline PipelineState createPipelineState(u16 shader, u8 cull, u8 blend, u8 depth, u8 compare, u8 topo, u8 type, u8 pass) {
+	return	((u64)shader	<< SHIFT_SHADER)   |
+		((u64)cull	<< SHIFT_CULL)     |
+		((u64)blend	<< SHIFT_BLEND)    |
+		((u64)depth	<< SHIFT_DEPTH)    |
+		((u64)topo	<< SHIFT_TOPO)     |
+		((u64)type	<< SHIFT_TYPE)     |
+		((u64)pass	<< SHIFT_PASS)     |
+		((u64)compare	<< SHIFT_COMPARE);
+}
+
+// All settings off
+static inline PipelineState createComputeState(u16 shader) {
+	return	((u64)shader			<< SHIFT_SHADER) |
+		((u64)PIPELINE_TYPE_COMPUTE	<< SHIFT_TYPE);
+}
+
+#define MAX_SHADER_STAGES 2
+typedef struct {
+	String					filename;
+	u64					last_modified_time;
+
+	u32					stage_count;
+	char					pNames[MAX_SHADER_STAGES][12];
+	VkPipelineShaderStageCreateInfo		stages[MAX_SHADER_STAGES];
+}	ShaderRecord;
+
+typedef struct {
+	// Vulkan context
+	VkDevice			device;
+	VkPipelineLayout		g_layout;
+	VkFormat			main_color_format;
+	VkFormat			main_depth_format;
+	VkFormat			shadow_depth_format;
+
+	// Shader Base Code Storage
+	ShaderRecord			shaders[MAX_SHADERS];
+	u32				shader_count;
+
+	PipelineState			cached_states[MAX_PIPELINES];
+	VkPipeline			cached_pipelines[MAX_PIPELINES];
+	u32				pipeline_count;
+}	PipelineRegistry;
 
 #define BINDLESS_TEXTURE_COUNT 8192
 typedef struct GraphicsContext
@@ -272,6 +373,8 @@ typedef struct GraphicsContext
 	VkSemaphore		*render_complete_sequence_semaphores;
 	u32			swapchain_width;
 	u32			swapchain_height;
+	uint2			viewport_extent;
+	int2			viewport_offset;
 	bool			swapchain_require_recreate;
 
 	VkCommandPool		single_time_pool;
@@ -280,7 +383,8 @@ typedef struct GraphicsContext
 	VkDescriptorSetLayout	shadow_descriptor_layout;
 	VkDescriptorPool	global_descriptor_pool;   // Allocated once for MAX_TEXTURES
 	VkDescriptorSet		global_descriptor_set;    // Bound ONCE at the start of every frame
-	VkPipelineLayout	global_pipeline_layout;   // Shared across ALL pipelines in the engine
+
+	PipelineRegistry	*pipeline_registry;
 
 	// Texture Heap Index Allocators
 	u32			next_free_texture_index;
@@ -292,11 +396,12 @@ typedef struct GraphicsContext
 	// Shadow Pipeline ------------
 	CascadedShadowMap	shadow_maps[MAX_FRAMES_IN_FLIGHT];
 	VkSampler		shadow_sampler;
-	VkPipeline		pipeline_shadow;
+	ShaderHandle		shadow_shader_handle;
+	u64			shadow_pipeline_state;
 	// ---------------------
 
 	// PBR Pipeline ------------
-	VkPipeline		pipeline_pbr;
+	ShaderHandle		pbr_shader_handle;
 
 	Texture			default_base_color_texture;
 	Texture			default_metallic_texture;
@@ -310,12 +415,14 @@ typedef struct GraphicsContext
 	// ---------------------------------
 
 	// Grid Pipeline ------------
-	VkPipeline		pipeline_grid;
+	ShaderHandle		grid_shader_handle;
+	u64			grid_pipeline_state;
 	GridProperties		grid_properties;
 	// --------------------------
 
 	// Text Pipeline ------------
-	VkPipeline		pipeline_text;
+	ShaderHandle		ui_shader_handle;
+	u64			ui_pipeline_state;
 	u32			font_atlas_global_index;
 	// --------------------------
 
@@ -326,24 +433,27 @@ typedef struct GraphicsContext
 	u32			frame_index;
 	u64			next_signal_value;
 
-} GraphicsContext;
+}	GraphicsContext;
 
 // TODO: Test test test, how many instances are needed? Am i gonna use particles like this later? (2026-07-23)
 #define	MAX_INSTANCES	4096
 typedef struct EntityRenderData
 {
-	EntityInstanceData	instance_data;
-	i16		model_idx;
+	i16	model_idx;
+	// TODO: See if this is is needed in the entity struct itself or if i can build it
+	// in buildEntityRenderInfo
+	u64	pipeline_state;
+	vec3	pos;
+	versor	rotation;
+	f32	scale;
 }	EntityRenderData;
 
 typedef struct EntityRenderInfo
 {
-	Model			**models;	i16	model_count;
-	EntityRenderData	*data;		u32	entity_count;
-
+	EntityRenderData	*data;
+	u32			entity_count;
 }	EntityRenderInfo;
 
-// TODO: Change all colors to u32
 #define MAX_GLYPH_INSTANCES 1024
 
 typedef struct UiRenderInfo
@@ -393,17 +503,54 @@ typedef struct Camera
 
 static inline u32	allocateBindlessTexture(GraphicsContext *ctx) 
 {
-	if (ctx->next_free_texture_index >= BINDLESS_TEXTURE_COUNT) {
-		engine_error(LOG_FILE, "Bindless texture heap exhausted!\n");
-		exit(1);
-	}
+	assert(ctx->next_free_texture_index < BINDLESS_TEXTURE_COUNT);
 	return ctx->next_free_texture_index++;
 }
+
+// --- MODEL CACHE --- //
+#define UNLOAD_TIME	3 
+#define MAX_MODELS	(1L << 12)
+#define HASH_TABLE_SIZE	(MAX_MODELS << 1)
+#define HASH_EMPTY	0x0000000000000000ull
+#define HASH_TOMBSTONE	0xFFFFFFFFFFFFFFFFull
+#define UNLOAD_DELAY_MS	10000	// 10 seconds
+
+typedef u16	ModelHandle;
+
+typedef struct ModelHashEntry
+{
+	ModelHandle	handle;
+	u64		hash;
+}	ModelHashEntry;
+
+typedef struct ModelCache
+{
+	// Path -> Handle
+	ModelHashEntry		hash_table[HASH_TABLE_SIZE];
+
+	// Data (Indexed by handle)
+	Model		*models[MAX_MODELS];
+	String32	paths[MAX_MODELS];
+	u32		ref_counts[MAX_MODELS];
+	u16		time_to_unload[MAX_MODELS]; // in ms
+
+	// Recycling
+	ModelHandle	free_handles[MAX_MODELS];
+	u32		free_count;
+}	ModelCache;
+
+void		initModelCache(ModelCache *cache);
+u32		modelCacheGetCount(ModelCache *cache);
+void		modelCacheRelease(ModelCache *cache, ModelHandle handle);
+void		modelCacheTick(ModelCache *cache, u16 delta_ms);
+ModelHandle	modelCacheAcquire(ModelCache *cache, GraphicsContext *ctx, String model_path);
+
+// ------------------- //
 
 void	immediate_submit(GraphicsContext *ctx, void (*fn)(VkCommandBuffer cmd, void *data), void *data);
 void	startGraphics(GraphicsContext *ctx);
 void	endGraphics(GraphicsContext *ctx);
-void	render(GraphicsContext *ctx, Camera *camera, EntityRenderInfo entity_info, UiRenderInfo text_info);
+void	render(GraphicsContext *ctx, ModelCache *cache, Camera *camera, EntityRenderInfo entity_info, UiRenderInfo text_info);
 void	beginSingleTimeCommand(GraphicsContext *ctx, VkCommandBuffer *cmd_buffer);
 void	stagingBufferUpload(GraphicsContext *ctx, u32 img_w, u32 img_h, u32 data_size, void *data_for_upload, ImageObject *gpu_image);
 void	createVkBuffer(GraphicsContext *ctx, const BufferInfo *info, BufferObject *out_buffer);
@@ -413,8 +560,5 @@ void	modelLoad(String filename, GraphicsContext *ctx, Model *model);
 void	gltf_destroy(Model model);
 void	createDefaultTextures(GraphicsContext *ctx);
 
-void	initModelCache(void);
-Model	*modelCacheAcquire(GraphicsContext *ctx, String path);
-void	modelCacheRelease(Model *model);
-void	modelCacheSweep();
-u32	getModelCountFromCache();
+void		initPipelineRegistry(PipelineRegistry **reg_out, GraphicsContext *ctx);
+VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState state);

@@ -26,13 +26,6 @@ enum ComponentShapeFillType
 	TRANSPARENT,
 };
 
-typedef u8	UiSizeMode;
-enum {
-	UI_SIZE_FIXED,
-	UI_SIZE_AUTO,
-};
-
-
 typedef u8	UiPrimitiveType;
 enum {
 	UI_PRIMITIVE_TEXT_GLYPH,
@@ -72,6 +65,7 @@ typedef struct UiShapedGlyph
 #define TEXT_IS_DIRTY	(1 << 0)
 #define TEXT_HAS_CURSOR	(1 << 1)
 
+//»speed
 // TODO: Pack this struct... a lot
 typedef struct UiComponent
 {
@@ -82,7 +76,6 @@ typedef struct UiComponent
 	UiPrimitiveType	primitive_type;
 	UiLayoutType	layout_type;	// How I arrange my children
 	UiAnchor	anchor;		// How I attach to my parent (if absolute)
-	UiSizeMode	size_mode[2];	// X and Y size policies
 
 	vec2		offset;		// My manual X/Y nudge
 	vec2		fixed_size;	// My requested width/height
@@ -110,20 +103,12 @@ typedef struct UiComponent
 
 } UiComponent;
 
-// For the RMGUI
-typedef struct UiState
-{
-	u16	rmgui_root;
-	u16	imgui_root;
-}	UiState;
-
 typedef struct PanelSpec
 {
 	// --- LAYOUT DEFINITION ---
 	UiPrimitiveType	primitive_type;	// Type of panel (Rectangle/Elipse)
 	UiLayoutType	layout_type;	// How I arrange my children
 	UiAnchor	anchor;		// How I attach to my parent (if absolute)
-	UiSizeMode	size_mode[2];	// X and Y size policies
 
 	vec2		offset;		// My manual X/Y nudge
 	vec2		fixed_size;	// My requested width/height (UI_SIZE_FIXED)
@@ -133,6 +118,7 @@ typedef struct PanelSpec
 	f32		border_width;	// Size of border
 	f32		corner_radius;	// Rounded corners
 	f32		padding;	// The padding (left and right)
+	f32		spacing;	// Space between children inside this panel
 }	PanelSpec;
 
 typedef struct TextSpec
@@ -146,23 +132,187 @@ typedef struct TextSpec
 	u32		flags;
 }	TextSpec;
 
+typedef struct ButtonSpec
+{
+	Font	*font;
+	u8	font_size;
+	f32	padding;
+	f32	corner_radius;
+	vec2	fixed_size;
+	vec4	color_idle;
+	vec4	color_hover;
+	vec4	color_active;
+	vec4	text_color;
+}	ButtonSpec;
+
+typedef enum ButtonState {
+	BUTTON_NONE,
+	BUTTON_LEFT_CLICK,
+	BUTTON_RIGHT_CLICK,
+}	ButtonState;
+
+typedef void (*FP_ButtonFunction)(void);
+
+typedef struct MenuSpec
+{
+	Font	*font;
+	u8	font_size;
+	u8	item_font_size;
+	f32	padding;
+	f32	corner_radius;
+	vec4	outer_color;
+	vec4	inner_color;
+	vec4	color_idle;
+	vec4	color_hover;
+	vec4	color_active;
+	vec4	text_color;
+	f32	spacing;	// Space between children inside this panel
+	f32	max_height;
+	f32	width;
+}	MenuSpec;
+
+typedef struct ComponentPool
+{
+	u16	hint;
+	u16	free_count;
+	u16	imgui_count;
+
+	bool	*used;
+	u8	*mem;
+}	ComponentPool;
+
+#define IMGUI_STACK_MAX 64
+
+typedef struct UiLayoutState {
+	u16 component_idx;	// The panel we are currently inside
+	f32 cursor_x;		// Current X pen position
+	f32 cursor_y;		// Current Y pen position
+	f32 start_x;		// Where the pen started (so we can calculate total width/height later)
+	f32 start_y;
+	f32 spacing;		// Space between children inside this panel
+	UiLayoutType layout_type;
+}	UiLayoutState;
+
+typedef struct {
+	i32	selected;
+	u32	hash_id;
+	f32	scroll_offset;
+	f32	cached_width;
+}	UiWidgetState;
+
+typedef struct UiContext {
+	u16 imgui_root;
+	u16 rmgui_root;
+
+	// Cursor Stack
+	UiLayoutState layout_stack[IMGUI_STACK_MAX];
+	u32           layout_stack_count;
+
+	// Interaction State
+	u32 hot_item_hash;
+	u32 active_item_hash;
+
+	// States
+	UiWidgetState	widget_states[256];
+	u32		widget_state_count;
+}	UiContext;
+
+typedef struct
+{
+	f32 toolbar_h;
+	f32 left_panel_w;
+	f32 right_panel_w;
+}	EditorContext;
+
+// For the RMGUI
+typedef struct UiState
+{
+	u16		rmgui_root;
+	u16		imgui_root;
+	UiContext	ctx;
+	EditorContext	editor_ctx;
+	ComponentPool	pool;
+}	UiState;
+
+// The __VA_ARGS__ means that any value we pass will be used isntead
+
+#define UI_PANEL_SPEC(...) (PanelSpec){ \
+	.primitive_type	= UI_PRIMITIVE_RECTANGLE, \
+	.layout_type	= UI_LAYOUT_VERTICAL, \
+	.offset		= {0.0f, 0.0f}, \
+	.fixed_size	= {0.0f, 0.0f}, \
+	.inner_color	= {0.2f, 0.2f, 0.2f, 1.0f}, \
+	.outer_color	= {0.0f, 0.0f, 0.0f, 0.0f}, \
+	.padding	= 10.0f, \
+	.spacing	= 4.0f, \
+	.border_width	= 0.0f, \
+	.corner_radius	= 0.0f, \
+	__VA_ARGS__ \
+}
+
+#define UI_BTN_SPEC(...) (ButtonSpec){ \
+	.font		= font, \
+	.font_size	= 14.0f, \
+	.padding	= 6.0f, \
+	.corner_radius	= 2.0f, \
+	.color_idle	= {0.3f, 0.3f, 0.3f, 1.0f}, \
+	.color_hover	= {0.5f, 0.5f, 0.5f, 1.0f}, \
+	.color_active	= {0.2f, 0.2f, 0.2f, 1.0f}, \
+	.text_color	= {1.0f, 1.0f, 1.0f, 1.0f}, \
+	.fixed_size	= {0.0f, 0.0f}, \
+	__VA_ARGS__ \
+}
+
+#define UI_TEXT_SPEC(...) (TextSpec){ \
+	.font		= font, \
+	.font_size	= 16.0f, \
+	.text_color	= {1.0f, 1.0f, 1.0f, 1.0f}, \
+	.nudge_x	= 0.0f, \
+	.nudge_y	= 0.0f, \
+	.flags		= 0, \
+	__VA_ARGS__ \
+}
+
+#define UI_MENU_SPEC(...) (MenuSpec){ \
+	.font		= font, \
+	.font_size	= 16.0f, \
+	.item_font_size	= 12.0f, \
+	.padding	= 2.0f, \
+	.spacing	= 2.0f, \
+	.corner_radius	= 0.0f, \
+	.outer_color	= {0.0f, 0.0f, 0.0f, 0.0f}, \
+	.inner_color	= {0.0f, 0.0f, 0.0f, 0.0f}, \
+	.color_idle	= {0.3f, 0.3f, 0.3f, 1.0f}, \
+	.color_hover	= {0.5f, 0.5f, 0.5f, 1.0f}, \
+	.color_active	= {0.2f, 0.2f, 0.2f, 1.0f}, \
+	.text_color	= {1.0f, 1.0f, 1.0f, 1.0f}, \
+	.width		= 0.0f, \
+	.max_height	= 1, \
+	__VA_ARGS__ \
+}
+
+#define UI_MENU(ctx, pool, name, spec, btn_spec, ...) \
+	imguiMenu(ctx, pool, name, \
+		(String[]){__VA_ARGS__}, \
+		sizeof((String[]){__VA_ARGS__}) / sizeof(String), \
+		btn_spec, \
+		spec)
+
 void	initUi(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm);
 
+void		imguiBeginPanel(UiContext *uictx, ComponentPool *pool, PanelSpec spec);
+ButtonState	imguiButton(UiContext *uictx, ComponentPool *pool, StringView text_view, ButtonSpec spec);
+void		imguiText(UiContext *uictx, ComponentPool *pool, TextSpec spec, const char *fmt, ...);
+i32		imguiMenu(UiContext *uictx, ComponentPool *pool, StringView menu_name, String *btn_list, u32 btn_count, ButtonSpec btn_spec, MenuSpec spec);
+void		imguiEndPanel(UiContext *uictx, ComponentPool *pool);
+void		imguiResetFrame(UiContext *uictx, ComponentPool *pool);
 
-void	imguiBeginPanel(u16 parent_node, PanelSpec spec);
-bool	imguiButton(StringView text);
-void	imguiEndPanel(void);
-u16	imguiAllocateComponent(void);
-void	imguiResetFrame(void);
-void	imguiText(TextSpec spec, Allocator *frame_arena, const char *fmt, ...);
+UiRenderInfo	buildUiRenderInfo(ComponentPool *pool, u16 rm_root_node);
 
-u16	setShape(enum ComponentShapeType shape);
-u16	setShapeFill(enum ComponentShapeFillType fill);
+void	openConsole(UiContext *uictx, ComponentPool *pool, u32 screen_w, u32 screen_h, Font *font, u8 console_font_size);
+void	showFps(UiContext *uictx, ComponentPool *pool, Font *font, double fps);
+void	drawEditorUI(EditorContext *ectx, UiContext *uictx, ComponentPool *pool, GraphicsContext *ctx, Font *font);
 
-UiRenderInfo	buildUiRenderInfo(u16 rm_root_node, Allocator *frame_arena);
-void		uiCalculateLayout(f32 screen_w, f32 screen_h, Allocator *frame_arena);
-
-void	openConsole(u32 screen_w, u32 screen_h, Font *font, u8 console_font_size, Allocator *frame_arena);
-void	showFps(u16 imgui_root, Font *font, double fps, Allocator *frame_arena);
+UiRenderInfo	runUi(GraphicsContext *graphics_ctx, UiState *ui, Font *font, double fps);
 
 String	consoleBackend(void);

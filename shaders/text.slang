@@ -1,5 +1,5 @@
-import common;
 #include "shared_structs.h"
+#include "include/common.slang"
 
 [[vk::push_constant]] TextRootConstants root;
 
@@ -41,6 +41,7 @@ VSOutput vertMain(uint vertex_id : SV_VertexID, uint instance_id : SV_InstanceID
     output.primitive_type = input.primitive_type;
     output.corner_radius  = input.corner_radius;
     output.stroke_width   = input.stroke_width;
+    output.clip_rect      = input.clip_rect;
 
     output.half_size = input.size * 0.5;
     output.local_pos = (corner - 0.5) * input.size;

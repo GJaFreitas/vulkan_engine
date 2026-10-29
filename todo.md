@@ -28,6 +28,9 @@
 
 [ ] Add a skybox
 
+[ ] Change model matrix calculations (and other pre computing tasks) to a compute shader
+
+
 ### --- STUFF THAT DOESNT WORK ---
 
 Change strViewChr() to strViewUpToChar()

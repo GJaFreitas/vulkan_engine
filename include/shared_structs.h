@@ -1,5 +1,4 @@
-#ifndef SHARED_STRUCTS_H
-#define SHARED_STRUCTS_H
+#pragma once
 
 #define GLOBAL_SAMPLER_PBR	0
 #define GLOBAL_SAMPLER_UI	1
@@ -44,7 +43,11 @@ SHARED_STRUCT(Vertex)
 
 SHARED_STRUCT(EntityInstanceData)
 {
-	float4x4 model_mat;
+	float3	pos;
+	float4	rot;
+	f32	scale;
+
+	float4x4 node_transform;
 };
 
 #define MAX_POINT_LIGHTS 16
@@ -144,5 +147,3 @@ SHARED_STRUCT(GridRootConstants)
 	GridProperties			properties;
 	bool				show_grid;
 };
-
-#endif // SHARED_STRUCTS_H

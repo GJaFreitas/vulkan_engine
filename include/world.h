@@ -4,26 +4,18 @@
 #include "graphics_layer.h"
 #include "fonts.h"
 #include "ui.h"
-
-typedef struct Entity
-{
-	Model	*model;
-	bool	active;
-	vec3	pos;
-	versor	rotation;
-	
-	float	spin;
-}	Entity;
+#include "entity.h"
 
 #define MAX_ORBIT_DIST	15.0f
 #define MIN_ORBIT_DIST	1.5f
 
+
 typedef struct Player
 {
-	Entity	*p_entity;
-	Camera	camera;
-	float	movSpeed;
-	float	orbit_dist;
+	EntityHandle	p_entity;
+	Camera		camera;
+	float		movSpeed;
+	float		orbit_dist;
 }	Player;
 
 typedef u32	GameState;
@@ -50,19 +42,13 @@ static inline bool	gameStateQuery(GameState state, enum GameStateField field) {
 	return (state & (1U << field));
 }
 
-typedef Vector(Entity)	EntityVector;
-
 typedef struct World
 {
 	GraphicsContext	*graphics_ctx;
 
-	// TODO: Implement sim regions?
-	Allocator	entity_allocator;
-	EntityVector	entities;
-
 	Player		*player;
-
-
+	EntityRegistry	entity_registry;
+	ModelCache	model_cache;
 
 	const bool		*key_states;
 
@@ -81,6 +67,9 @@ typedef struct InputState
 	bool		last[NUM_KEYS];
 	SDL_Keymod	mod;
 	float		mouse_wheel_y;
+	vec2		mouse_pos;
+	u32		mouse_state;
+	u32		last_mouse_state;
 }	InputState;
 
 typedef enum {
@@ -124,20 +113,30 @@ extern EngineMode	g_engine_mode;
 extern InputState	g_input_state;
 extern SDL_Scancode	g_keybinds[ACTION_MAX_ENUM];
 
-static inline bool key_held(SDL_Scancode sc)       { return g_input_state.current[sc]; }
-static inline bool key_pressed(SDL_Scancode sc)     { return g_input_state.current[sc] && !g_input_state.last[sc]; }
-static inline bool key_released(SDL_Scancode sc)    { return !g_input_state.current[sc] && g_input_state.last[sc]; }
-static inline bool mod_held(SDL_Keymod m)           { return (g_input_state.mod & m) != 0; }
+static inline bool mouseReleased(SDL_MouseButtonFlags mouse_button)
+{
+	u32	mask = SDL_BUTTON_MASK(mouse_button);
+	bool	was_pressed = g_input_state.last_mouse_state & mask;
+	bool	is_pressed = g_input_state.mouse_state & mask;
+	return (was_pressed && !is_pressed);
+}
+static inline bool mouseHeld(SDL_MouseButtonFlags mouse_button)
+{
+	u32	mask = SDL_BUTTON_MASK(mouse_button);
+	return (g_input_state.mouse_state & mask) != 0;
+}
+
+static inline bool keyHeld(SDL_Scancode sc)			{ return g_input_state.current[sc]; }
+static inline bool keyPressed(SDL_Scancode sc)			{ return g_input_state.current[sc] && !g_input_state.last[sc]; }
+static inline bool keyReleased(SDL_Scancode sc)			{ return !g_input_state.current[sc] && g_input_state.last[sc]; }
+static inline bool modHeld(SDL_Keymod m)			{ return (g_input_state.mod & m) != 0; }
 
 // ------------------------------- //
 // --- Player/Entity Functions --- //
 // ------------------------------- //
 
-void	initPlayer(Player *p, World *world);
-void	updatePlayer(Player *p, double dt, SDL_Window *window);
+void	initPlayer(Player *p, World *world, String player_model);
+void	updatePlayer(Player *p, EntityRegistry *reg, double dt, SDL_Window *window);
 
 void	spawnCommand(int argc, String *argv);
-void	unloadEntity(Entity *e, Allocator *a);
-Entity	*loadEntity(GraphicsContext *ctx, String model_path, Allocator *a);
-void	updateEntities(EntityVector *entities, double dt);
-EntityRenderInfo	buildEntityRenderInfo(EntityVector *entity_vector, u32 model_count, Allocator *a);
+EntityRenderInfo	buildEntityRenderInfo(EntityRegistry *reg, Allocator *a);

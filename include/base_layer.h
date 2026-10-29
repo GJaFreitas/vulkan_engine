@@ -37,6 +37,7 @@ static inline bool	queryFlag32(u32 bitset, u32 flag) {
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define CLAMP(x, low, high) (MIN(MAX(x, low), high))
 
 String	readFile(String filename);
 u8	*readFileData(String filename, u64 *file_size);

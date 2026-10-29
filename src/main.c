@@ -4,11 +4,24 @@
 #include "vars.h"
 #include "fonts.h"
 #include "console.h"
+#include <dlfcn.h>
 
 Allocator	g_frame_arena = {0};
 Allocator	g_perm_arena = {0};
-
 GameState	g_game_state = 0;
+
+typedef	UiRenderInfo	(*ModuleRunUi)(GraphicsContext *graphics_ctx, UiState *ui, Font *font, double fps);
+typedef	void		(*ModuleUiResetFrame)(UiContext *uictx, ComponentPool *pool);
+typedef	void		(*ModuleInitUi)(UiState *ui, u32 screen_w, u32 screen_h, Allocator *perm);
+typedef struct ModuleAPI
+{
+	void			*handle;
+	ModuleRunUi		run_ui;
+	ModuleUiResetFrame	reset_frame;
+	ModuleInitUi		init_ui;
+}	ModuleAPI;
+
+static ModuleAPI	g_module_api;
 
 static inline void	getMsAndFps(double *ms, double *fps, double *fps_avg, u64 *last_time, u64 *frames) {
 	static u32	frame_start = 2000;
@@ -28,57 +41,6 @@ static inline void	getMsAndFps(double *ms, double *fps, double *fps_avg, u64 *la
 	}
 }
 
-const String	models[] = {
-	STRING_LIT("data/models/GlassHurricaneCandleHolder.glb"),
-	STRING_LIT("data/models/DiffuseTransmissionTeacup.glb"),
-};
-
-static void	initializeRandomVec(float *v, u32 count, float min, float max) {
-	for (u32 i = 0; i < count; i++) {
-		v[i] = randomFloat(min, max);
-	}
-}
-
-void	createRandomEntity(World world)
-{
-	u32	model = rand() % sizeofarray(models);
-	Entity	*e = loadEntity(world.graphics_ctx, models[model], &world.entity_allocator);
-	vectorPush(&world.entities, e);
-
-	e->spin = glm_rad(randomFloat(0, 90));
-	initializeRandomVec(e->rotation, 4, 0, 1);
-	glm_quat_normalize(e->rotation);
-	initializeRandomVec(e->pos, 3, -1, 1);
-}
-
-static inline void resolveMouseState(SDL_Window *window) {
-	bool	should_lock = false;
-
-	// 1. Highest Priority: Overlays
-	if (gameStateQuery(g_game_state, ShowConsole)) {
-		should_lock = false; // Free mouse for text selection / UI
-	} 
-	// 2. Base Modes
-	else if (g_engine_mode == ENGINE_MODE_GAME) {
-		should_lock = true;  // Always locked in gameplay
-	} 
-	else if (g_engine_mode == ENGINE_MODE_EDITOR) {
-		// Hybrid Editor Mouse: Lock only while Right Mouse Button is held
-		u32	mouse_state = SDL_GetMouseState(NULL, NULL);
-		if (mouse_state & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT)) {
-			should_lock = true;
-		} else {
-			should_lock = false;
-		}
-	} 
-	else if (g_engine_mode == ENGINE_MODE_MAIN_MENU) {
-		should_lock = false; // Always free in menus
-	}
-
-	// SDL internally checks if the state is already set, so this is safe to call per-frame
-	SDL_SetWindowRelativeMouseMode(window, should_lock);
-}
-
 static inline void beginFrame(World *world) {
 	inputBeginFrame();
 	do_callbacks();
@@ -88,18 +50,14 @@ static inline void beginFrame(World *world) {
 
 static inline void	endFrame(World world) {
 	(void)world;
-	modelCacheSweep();
-	imguiResetFrame();
+	modelCacheTick(&world.model_cache, (u16)world.dt_ms);
+	g_module_api.reset_frame(&world.ui->ctx, &world.ui->pool);
 	inputEndFrame();
 }
 
 int	loop(World world)
 {
-	const u32	screen_w = world.graphics_ctx->window_width;
-	const u32	screen_h = world.graphics_ctx->window_height;
-
 	Font	*font = &world.fonts.fonts[0];
-	Allocator	*frame_arena = &g_frame_arena;
 
 	u64	frames = 0;
 	double	fps = 0;
@@ -107,9 +65,6 @@ int	loop(World world)
 
 	EntityRenderInfo	entity_info = {};
 	UiRenderInfo		ui_info = {};
-
-	// Entity	*e = loadEntity(world.graphics_ctx, STRING_LIT("data/models/test_scene.glb"), &world.entity_allocator);
-	// vectorAppend(world.entities, &e);
 
 	u64	last_time = SDL_GetPerformanceCounter();
 	while (gameStateQuery(g_game_state, Running))
@@ -121,24 +76,16 @@ int	loop(World world)
 		}
 		beginFrame(&world);
 
-		if (gameStateQuery(g_game_state, ShowConsole)) {
-			openConsole(screen_w, screen_h, font, 12, frame_arena);
-		}
-		if (gameStateQuery(g_game_state, ShowFps)) {
-			showFps(world.ui->imgui_root, font, fps, frame_arena);
-		}
-
 		// --- RENDERING ---
-		if (getModelCountFromCache())
-			entity_info = buildEntityRenderInfo(&world.entities, getModelCountFromCache(), &g_frame_arena);
-		uiCalculateLayout(world.graphics_ctx->window_width, world.graphics_ctx->window_height, &g_frame_arena);
-		ui_info = buildUiRenderInfo(world.ui->rmgui_root, &g_frame_arena);
+		ui_info = g_module_api.run_ui(world.graphics_ctx, world.ui, font, fps);
+		if (modelCacheGetCount(&world.model_cache))
+			entity_info = buildEntityRenderInfo(&world.entity_registry, &g_frame_arena);
 
-		render(world.graphics_ctx, &world.player->camera, entity_info, ui_info);
+		render(world.graphics_ctx, &world.model_cache, &world.player->camera, entity_info, ui_info);
 
 		// --- UPDATES ---
-		updatePlayer(world.player, world.dt_ms, world.graphics_ctx->window);
-		updateEntities(&world.entities, world.dt_ms);
+		updatePlayer(world.player, &world.entity_registry, world.dt_ms, world.graphics_ctx->window);
+		// updateEntities(&world.entities, world.dt_ms);
 
 		// --- End of frame ---
 		endFrame(world);
@@ -164,18 +111,63 @@ void	updateGridProperties(void *udata)
 
 #define FONT_PATH "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Bold.ttf"
 
+#define MODULE_PATH "build/libgame_module.so"
+void	hotreload_func(void *data)
+{
+	(void)data;
+	const char* dlsym_err;
+	ModuleAPI	*api = &g_module_api;
+
+	system("meson compile -C build game_module");
+	api->handle = dlopen(MODULE_PATH, RTLD_NOW | RTLD_LOCAL);
+	if (!api->handle) {
+		engine_error(LOG_FILE, "dlopen() failed.");
+		printf("ERROR opening file %s\n", dlerror());
+		return ;
+	}
+
+	if ((api->run_ui = dlsym(api->handle, "runUi")) == NULL) {
+		engine_error(LOG_FILE, "Failed to find symbol runUi in module.");
+		goto symbol_error;
+	}
+	if ((api->init_ui = dlsym(api->handle, "initUi")) == NULL) {
+		engine_error(LOG_FILE, "Failed to find symbol initUi in module.");
+		goto symbol_error;
+	}
+	if ((api->reset_frame = dlsym(api->handle, "imguiResetFrame")) == NULL) {
+		engine_error(LOG_FILE, "Failed to find symbol imguiResetFrame in module.");
+		goto symbol_error;
+	}
+
+	return;
+
+symbol_error:
+	dlsym_err = dlerror();
+	if (dlsym_err) {
+		printf("ERROR loading symbol: %s\n", dlsym_err);
+	}
+	dlclose(api->handle);
+	api->handle = NULL;
+}
+
 int	main(void)
 {
 	start_logs();
-	set_log_severity(LOG_WARN);
+	set_log_severity(LOG_LOG);
 	init_vars();
 	start_hotload_callbacks();
-	initModelCache();
+
+	register_callback(STRING_LIT("build/libgame_module.so"), hotreload_func, NULL);
+	hotreload_func(NULL);
 
 	World		world = {};
 	GraphicsContext	gctx = {};
 	Player		p = {};
-	UiState		ui = {};
+	UiState		ui = {.editor_ctx = {
+		.toolbar_h = 40.0f,
+		.left_panel_w = 250.0f,
+		.right_panel_w = 300.0f,
+	}};
 
 	gameStateToggle(&g_game_state, Running);
 	world.player = &p;
@@ -184,19 +176,16 @@ int	main(void)
 	world.key_states = SDL_GetKeyboardState(NULL);
 	g_frame_arena = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
 	g_perm_arena = newArenaAllocator(MB(32), NULL, DEFAULT_ALIGN);
-	world.entity_allocator = newHeapAllocator(MB(2), NULL, DEFAULT_ALIGN);
-	vectorInit(&world.entities, &world.entity_allocator, 16);
 	updateGridProperties(&world);
 
 	startGraphics(world.graphics_ctx);
-	initUi(&ui, gctx.window_width, gctx.window_height, &g_perm_arena);
+	g_module_api.init_ui(&ui, gctx.window_width, gctx.window_height, &g_perm_arena);
 	consoleInit(&g_perm_arena);
-
-	Entity	*player = loadEntity(world.graphics_ctx, STRING_LIT("data/models/rabbit.glb"), &world.entity_allocator);
-	vectorPush(&world.entities, player);
+	initEntityRegistry(&world.entity_registry, &g_perm_arena, 4096);
+	initModelCache(&world.model_cache);
 
 	register_callback(STRING_LIT("data/All.variables"), vars_callback, &world);
-	initPlayer(world.player, &world);
+	initPlayer(world.player, &world, STRING_LIT("data/models/rabbit.glb"));
 	initFonts(world.graphics_ctx, &world.fonts, &g_perm_arena, &g_frame_arena);
 
 	loop(world);
