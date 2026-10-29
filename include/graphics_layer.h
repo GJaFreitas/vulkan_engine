@@ -258,8 +258,8 @@ enum PassType {
 
 enum CullMode {
 	CULL_NONE = 0,
-	CULL_BACK,
-	CULL_FRONT
+	CULL_FRONT = 1,
+	CULL_BACK = 2,
 };
 
 enum BlendMode {
@@ -275,10 +275,10 @@ enum DepthMode {
 };
 
 enum TopologyMode {
-	TOPO_TRIANGLES = 0,
-	TOPO_TRIANGLE_STRIP,
-	TOPO_LINES,
-	TOPO_POINTS
+	TOPO_POINTS = 0,
+	TOPO_LINES = 1,
+	TOPO_TRIANGLES = 3,
+	TOPO_TRIANGLE_STRIP = 4,
 };
 
 enum DynamicMode {
@@ -287,13 +287,24 @@ enum DynamicMode {
 };
 
 enum CompareMode {
-	COMPARE_LESS = 0,
-	COMPARE_LESS_OR_EQUAL,
-	COMPARE_GREATER,
-	COMPARE_GREATER_OR_EQUAL,
-	COMPARE_EQUAL,
-	COMPARE_ALWAYS
+	COMPARE_LESS = 1,
+	COMPARE_EQUAL = 2,
+	COMPARE_LESS_OR_EQUAL = 3,
+	COMPARE_GREATER = 4,
+	COMPARE_NOT_EQUAL = 5,
+	COMPARE_GREATER_OR_EQUAL = 6,
+	COMPARE_ALWAYS = 7,
 };
+
+// Extraction Macros
+#define PIPELINE_STATE_GET_SHADER(s)	((u16)((s >> SHIFT_SHADER) & 0xFFFF))
+#define PIPELINE_STATE_GET_CULL(s)	((u8) ((s >> SHIFT_CULL)   & 0x000F))
+#define PIPELINE_STATE_GET_BLEND(s)	((u8) ((s >> SHIFT_BLEND)  & 0x000F))
+#define PIPELINE_STATE_GET_DEPTH(s)	((u8) ((s >> SHIFT_DEPTH)  & 0x000F))
+#define PIPELINE_STATE_GET_TOPO(s)	((u8) ((s >> SHIFT_TOPO)   & 0x000F))
+#define PIPELINE_STATE_GET_TYPE(s)	(((s) >> SHIFT_TYPE) & 1U)
+#define PIPELINE_STATE_GET_PASS(s)	((u8) (((s) >> SHIFT_PASS) & 0x000F))
+#define PIPELINE_STATE_GET_COMPARE(s)	((u8) (((s) >> SHIFT_COMPARE) & 0x000F))
 
 // Helper to pack the state
 static inline PipelineState createPipelineState(u16 shader, u8 cull, u8 blend, u8 depth, u8 compare, u8 topo, u8 type, u8 pass) {

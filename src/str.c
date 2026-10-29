@@ -206,7 +206,7 @@ i64	strToLong(StringView _sv)
 }
 
 // Basic implementation
-float32	strToFloat(StringView _sv)
+f32	strToFloat(StringView _sv)
 {
 	StringView	*sv = &_sv;
 	i32	sign = 1;
@@ -227,8 +227,8 @@ float32	strToFloat(StringView _sv)
 		strViewAdvance(sv, 1);
 	}
 
-	float32	total = 0.0f;
-	float32	frac = 1.0f;
+	f32	total = 0.0f;
+	f32	frac = 1.0f;
 	bool	is_decimal = false;
 
 	for (u64 i = 0; i < sv->count; i++) {

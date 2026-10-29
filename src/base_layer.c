@@ -1,7 +1,7 @@
 #include "base_layer.h"
 #include <stdio.h>
 
-float32	randomFloat(float min, float max) {
+f32	randomFloat(float min, float max) {
     return min + (max - min) * ((float)rand() / (float)RAND_MAX);
 }
 

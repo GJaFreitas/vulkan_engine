@@ -1,15 +1,6 @@
 #include "graphics_layer.h"
 #include "world.h"
-
-// Extraction Macros
-#define STATE_GET_SHADER(s)	((u16)((s >> SHIFT_SHADER) & 0xFFFF))
-#define STATE_GET_CULL(s)	((u8) ((s >> SHIFT_CULL)   & 0x000F))
-#define STATE_GET_BLEND(s)	((u8) ((s >> SHIFT_BLEND)  & 0x000F))
-#define STATE_GET_DEPTH(s)	((u8) ((s >> SHIFT_DEPTH)  & 0x000F))
-#define STATE_GET_TOPO(s)	((u8) ((s >> SHIFT_TOPO)   & 0x000F))
-#define STATE_GET_TYPE(s)	(((s) >> SHIFT_TYPE) & 1U)
-#define STATE_GET_PASS(s)	((u8) (((s) >> SHIFT_PASS) & 0x000F))
-#define STATE_GET_COMPARE(s)	((u8) (((s) >> SHIFT_COMPARE) & 0x000F))
+#include <vulkan/vulkan_core.h>
 
 VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState state)
 {
@@ -20,12 +11,12 @@ VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState
 		}
 	}
 
-	u16 shader_id = STATE_GET_SHADER(state);
+	u16 shader_id = PIPELINE_STATE_GET_SHADER(state);
 	ShaderRecord *shader = &registry->shaders[shader_id];
 	VkPipeline new_pipeline = VK_NULL_HANDLE;
 
 	// 2. Branch based on Pipeline Type
-	if (STATE_GET_TYPE(state) == PIPELINE_TYPE_COMPUTE) {
+	if (PIPELINE_STATE_GET_TYPE(state) == PIPELINE_TYPE_COMPUTE) {
 		
 		VkComputePipelineCreateInfo compute_info = {
 			.sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
@@ -43,19 +34,18 @@ VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState
 		);
 
 	} else {
-		enum CullMode		cull_mode = STATE_GET_CULL(state);
-		enum BlendMode		blend_mode = STATE_GET_BLEND(state);
-		enum DepthMode		depth_mode = STATE_GET_DEPTH(state);
-		enum CompareMode	compare_mode = STATE_GET_COMPARE(state);
-		enum TopologyMode	topo_mode = STATE_GET_TOPO(state);
-		enum PassType		pass_type = STATE_GET_PASS(state);
+		enum CullMode		cull_mode = PIPELINE_STATE_GET_CULL(state);
+		enum BlendMode		blend_mode = PIPELINE_STATE_GET_BLEND(state);
+		enum DepthMode		depth_mode = PIPELINE_STATE_GET_DEPTH(state);
+		enum CompareMode	compare_mode = PIPELINE_STATE_GET_COMPARE(state);
+		enum TopologyMode	topo_mode = PIPELINE_STATE_GET_TOPO(state);
+		enum PassType		pass_type = PIPELINE_STATE_GET_PASS(state);
 
 
 		// --- RASTERIZER ---
 		VkPipelineRasterizationStateCreateInfo rasterizer = { .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO };
 		rasterizer.lineWidth = 1.0f;
-		rasterizer.cullMode = (cull_mode == CULL_BACK) ? VK_CULL_MODE_BACK_BIT : 
-			(cull_mode == CULL_FRONT) ? VK_CULL_MODE_FRONT_BIT : VK_CULL_MODE_NONE;
+		rasterizer.cullMode = cull_mode;
 		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 		if (pass_type == PASS_SHADOW) {
@@ -64,15 +54,7 @@ VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState
 
 		// --- DEPTH STENCIL ---
 		VkPipelineDepthStencilStateCreateInfo depth_stencil = { .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO };
-		VkCompareOp vk_compare = VK_COMPARE_OP_LESS;
-		switch (compare_mode) {
-			case COMPARE_LESS:		vk_compare = VK_COMPARE_OP_LESS; break;
-			case COMPARE_LESS_OR_EQUAL:	vk_compare = VK_COMPARE_OP_LESS_OR_EQUAL; break;
-			case COMPARE_GREATER:		vk_compare = VK_COMPARE_OP_GREATER; break;
-			case COMPARE_GREATER_OR_EQUAL:	vk_compare = VK_COMPARE_OP_GREATER_OR_EQUAL; break;
-			case COMPARE_EQUAL:		vk_compare = VK_COMPARE_OP_EQUAL; break;
-			case COMPARE_ALWAYS:		vk_compare = VK_COMPARE_OP_ALWAYS; break;
-		}
+		VkCompareOp vk_compare = (VkCompareOp)compare_mode;
 		if (depth_mode == DEPTH_RW) {
 			depth_stencil.depthTestEnable = VK_TRUE;
 			depth_stencil.depthWriteEnable = VK_TRUE;
@@ -127,15 +109,7 @@ VkPipeline	pipelineRegistryGetOrCreate(PipelineRegistry *registry, PipelineState
 
 		// --- TOPOLOGY ---
 		VkPipelineInputAssemblyStateCreateInfo input_assembly = { .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO };
-		if (topo_mode == TOPO_LINES) {
-			input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-		} else if (topo_mode == TOPO_POINTS) {
-			input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-		} else if (topo_mode == TOPO_TRIANGLE_STRIP) {
-			input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-		} else {
-			input_assembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-		}
+		input_assembly.topology = (VkPrimitiveTopology)topo_mode;
 
 		// --- BINDLESS VERTEX INPUT (Gloriously Empty!) ---
 		VkPipelineVertexInputStateCreateInfo vertex_input = { .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO };

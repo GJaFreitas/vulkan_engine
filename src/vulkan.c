@@ -1450,15 +1450,15 @@ void	PBRPass(GraphicsContext *ctx, ModelCache *cache, EntityRenderInfo entity_in
 		const Model	*model = cache->models[model_idx];
 
 		// Find total number of entities using this EXACT same model sequentially
-		u32	run_start = e_idx;
+		const u32	run_start = e_idx;
 		u32	run_end = e_idx + 1;
-		u64	pipe_state = entity_info.data[e_idx].pipeline_state;
+		const u64	pipe_state = entity_info.data[e_idx].pipeline_state;
 		while (run_end < total_entity_count && 
 			model_idx == entity_info.data[run_end].model_idx && 
 			pipe_state == entity_info.data[run_end].pipeline_state) {
 			run_end++;
 		}
-		u32		run_count = run_end - run_start;
+		const u32		run_count = run_end - run_start;
 
 		for (u32 n = 0; n < model->node_count; n++) {
 			Node	*node = &model->linear_nodes[n];
@@ -1487,9 +1487,9 @@ void	PBRPass(GraphicsContext *ctx, ModelCache *cache, EntityRenderInfo entity_in
 					ctx->pbr_shader_handle,
 					cull_mode,
 					blend_mode,
-					COMPARE_LESS,
-					DEPTH_RW,
-					TOPO_TRIANGLES,
+					PIPELINE_STATE_GET_COMPARE(pipe_state),
+					PIPELINE_STATE_GET_DEPTH(pipe_state),
+					PIPELINE_STATE_GET_TOPO(pipe_state),
 					PIPELINE_TYPE_GRAPHICS,
 					PASS_MAIN
 				);

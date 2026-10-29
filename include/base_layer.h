@@ -46,7 +46,7 @@ void	destroyFile(String file);
 u64	queryTimer(void);
 u64	getFrameDeltaNano(void);
 double	getFrameDelta(void);
-float32	randomFloat(float min, float max);
+f32	randomFloat(float min, float max);
 
 // Callbacks
 // ---------

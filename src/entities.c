@@ -196,7 +196,7 @@ EntityColdData	*getEntityCold(EntityRegistry *reg, EntityHandle handle)
 		return NULL;
 	}
 
-	u32		dense_idx = reg->sparse_to_dense[handle.index];
+	u32	dense_idx = reg->sparse_to_dense[handle.index];
 
 	return &reg->cold_data[dense_idx];
 }
